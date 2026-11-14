@@ -167,9 +167,28 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 				panel.refresh();
 				long micros = (System.nanoTime() - start) / 1000;
 				int rebuilt = panel.rowsBuilt - built;
-				check(rebuilt >= 1 && rebuilt <= 2, "a new play rebuilds only its row (and the cow row if its \"ago\" changed), rebuilt " + rebuilt);
+				check(rebuilt == 1, "a first play rebuilds only its own row, which gains recent columns; rebuilt " + rebuilt);
 				check(panel.list.findRow(VILLAGER).columnTexts().contains("Friendly Mobs"), "the villager row shows its new recent data");
 				System.out.println("SOUNDS refresh, filter off, after one new play: " + micros + " us, " + rebuilt + " rows rebuilt");
+			});
+			// A replay changes the row's values but not its columns or buttons: the row and its buttons stay the very same
+			// objects, so a tooltip on one of them is not hidden and shown again (it flickered every second before).
+			context.runOnClient(mc -> {
+				SoundsPanel panel = sounds(mc);
+				SculptList.Row before = panel.list.findRow(VILLAGER);
+				Object mute = before.buttons().get(SoundsPanel.BUTTON_MUTE);
+				Vec3 listener = mc.getSoundManager().getListenerTransform().position();
+				mc.getSoundManager().play(new SimpleSoundInstance(Identifier.parse(VILLAGER), SoundSource.NEUTRAL, 1.0F, 1.0F, RandomSource.create(),
+						false, 0, SoundInstance.Attenuation.LINEAR, listener.x() + 3, listener.y(), listener.z(), false));
+				int built = panel.rowsBuilt;
+				panel.refresh();
+				SculptList.Row after = panel.list.findRow(VILLAGER);
+				check(panel.rowsBuilt == built, "a replay rebuilds no row, built " + (panel.rowsBuilt - built));
+				check(after == before && after.buttons().get(SoundsPanel.BUTTON_MUTE) == mute, "a replay keeps the row and its buttons");
+				check(after.columnTexts().contains("×2 · <1m ago"), "the kept row shows the new play count, was " + after.columnTexts());
+				String narration = after.narrationText().getString();
+				check(narration.contains("Last played ") && narration.contains("s ago"),
+						"the row narrates the exact time since the last play, was " + narration);
 			});
 		} finally {
 			cleanUp(context);

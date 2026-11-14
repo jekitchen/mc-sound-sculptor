@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +28,7 @@ import soundsculptor.core.outline.ColorError;
 import soundsculptor.core.outline.ZoneColor;
 import soundsculptor.core.recent.DistanceBand;
 import soundsculptor.core.recent.PlayStatus;
+import soundsculptor.core.recent.TimeAgo;
 import soundsculptor.core.sets.PatternError;
 import soundsculptor.core.trace.TraceEditError;
 import soundsculptor.core.trace.EntryWinReason;
@@ -49,7 +51,7 @@ class LangKeysTest {
 
 	/** Keys built from a prefix plus an enum or palette ID, by prefix. */
 	private static Map<String, List<String>> builtKeys() {
-		return Map.of(
+		Map<String, List<String>> keys = new HashMap<>(Map.of(
 				"soundsculptor.color.", Stream.concat(keys(ZoneColor.values(), ZoneColor::translationKey).stream(),
 						Palette.OKABE_ITO.stream().map(s -> "soundsculptor.color." + s.id())).distinct().toList(),
 				"soundsculptor.color.error.", keys(ColorError.values(), ColorError::translationKey),
@@ -60,7 +62,9 @@ class LangKeysTest {
 				"soundsculptor.trace.notice.", keys(TraceNotice.values(), TraceNotice::translationKey),
 				"soundsculptor.trace.edit.error.", keys(TraceEditError.values(), TraceEditError::translationKey),
 				"soundsculptor.trace.rule_reason.", keys(EntryWinReason.values(), EntryWinReason::translationKey),
-				"soundsculptor.trace.zone_reason.", keys(ZoneWinReason.values(), ZoneWinReason::translationKey));
+				"soundsculptor.trace.zone_reason.", keys(ZoneWinReason.values(), ZoneWinReason::translationKey)));
+		keys.put("soundsculptor.sounds.ago.", keys(TimeAgo.Unit.values(), TimeAgo.Unit::translationKey));
+		return keys;
 	}
 
 	private static <T> List<String> keys(T[] values, Function<T, String> key) {

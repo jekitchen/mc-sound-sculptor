@@ -33,6 +33,8 @@ Each release ships one jar that runs on every supported Minecraft version.
 - A save that Windows holds back for a moment (a virus scanner or the search indexer reading the file) is retried, and
   is written at the latest when the game closes.
 - Buttons and choices grow to fit longer text, and long hints and Diagnostics lines wrap instead of being cut off.
+- Recently played rows say how long ago a sound played in minutes ("<1m ago", "2m ago"); hover the time to see
+  it to the second, counting up. A button's tooltip on a recently played row no longer flickers every second.
 - Unmute right after Mute puts the sound's entry back exactly as it was: a "Not muted" entry no longer keeps the Cue
   the Mute added, and an entry's own Cue is no longer dropped.
 - An export larger than 1 MB is saved with a warning that it can't be imported as it is; only a failed write is
