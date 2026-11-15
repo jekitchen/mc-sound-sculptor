@@ -130,8 +130,13 @@ public final class PlayingChannels {
 				playing.update(SoundHook.precedence(), SoundHook.where(), false, true, applyGain);
 			}
 		} catch (RuntimeException | LinkageError e) {
-			// Fail open: stop re-deciding; the sounds keep the volume they have.
+			// Fail open: put every playing sound back to vanilla (silent loops too, FR-13.1), then stop tracking.
 			SoundSculptorClient.LOGGER.error("Sound Sculptor could not update playing sounds", e);
+			try {
+				playing.update(null, null, true, true, applyGain);
+			} catch (RuntimeException | LinkageError ignored) {
+				// Nothing more can be done for these sounds; they keep the volume they have.
+			}
 			clear();
 		} finally {
 			channels = null;

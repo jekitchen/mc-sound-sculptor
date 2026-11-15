@@ -127,8 +127,14 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			check(play(context, WOOD_STEP, SoundSource.BLOCKS), "a 50% sound still plays");
 			check(lastStartFactor == 0.5F, "wood steps should play at 50%");
 			// The volume is applied again whenever vanilla recalculates a playing sound's volume.
-			check(context.computeOnClient(mc -> SoundHook.applyVolume(instance(mc, STONE_STEP, SoundSource.BLOCKS), 0.8F)) == 0.4F,
-					"recalculated volumes get the rule factor too");
+			// A playing sound keeps its own factor (FR-8.8); one that never started through the hook plays as vanilla.
+			check(context.computeOnClient(mc -> {
+				SoundInstance step = instance(mc, STONE_STEP, SoundSource.BLOCKS);
+				mc.getSoundManager().play(step);
+				return SoundHook.applyVolume(step, 0.8F);
+			}) == 0.4F, "recalculated volumes get the rule factor too");
+			check(context.computeOnClient(mc -> SoundHook.applyVolume(instance(mc, STONE_STEP, SoundSource.BLOCKS), 0.8F)) == 0.8F,
+					"a sound the hook never started is not changed");
 
 			// A-2: edit an entry's volume with the keyboard only: the slider moves in 5% steps.
 			String stepId = context.computeOnClient(mc -> QuickEntries.of(ProfileManager.profile()).get(2).id());

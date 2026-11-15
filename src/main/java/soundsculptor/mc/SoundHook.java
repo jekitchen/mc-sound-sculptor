@@ -8,7 +8,6 @@ import soundsculptor.core.start.SoundStart;
 import soundsculptor.core.start.SoundStartDecider;
 import soundsculptor.core.start.SoundStartResult;
 import soundsculptor.core.zones.Precedence;
-import soundsculptor.core.zones.SoundDecision;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
@@ -59,12 +58,16 @@ public final class SoundHook {
 	private static SoundInstance pendingInstance;
 	private static String pendingId;
 	private static boolean pendingTracked;
+	/**
+	 * The factor the sound is tracked with: the decided one, 0 for a muted loop. Only the start uses {@link #SILENT},
+	 * because vanilla skips a sound that starts at exactly 0; tracking 0 keeps it silent when vanilla recalculates it,
+	 * so its subtitle is not refreshed either.
+	 */
+	private static float pendingFactor = 1.0F;
 	/** Start volume factor of a muted looping sound, which may come back while it plays: inaudible, but not zero. */
 	static final float SILENT = 1.0E-6F;
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
-	/** Scratch decision for recalculating an untracked sound's volume. */
-	private static final SoundDecision RECALCULATED = new SoundDecision();
 	private static Precedence deciderProfile;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
@@ -159,7 +162,8 @@ public final class SoundHook {
 		if (loaded && !(handled && result.cancel())) {
 			// Every sound that starts in a world is tracked, so a loop can follow the player and Bypass can reset it
 			// (FR-8.8, FR-13.1). A muted loop starts silently: vanilla skips a sound whose volume is exactly 0.
-			startFactor = !handled ? 1.0F : result.factor() > 0 ? result.factor() : SILENT;
+			pendingFactor = handled ? result.factor() : 1.0F;
+			startFactor = pendingFactor > 0 ? pendingFactor : SILENT;
 			pendingInstance = instance;
 			pendingId = idString;
 			pendingTracked = true;
@@ -254,7 +258,7 @@ public final class SoundHook {
 		float gain = vanillaVolume * factor;
 		if (instance != null && pendingTracked) {
 			try {
-				PlayingChannels.get().start(instance, pendingId, vanillaVolume, factor);
+				PlayingChannels.get().start(instance, pendingId, vanillaVolume, pendingFactor);
 			} catch (RuntimeException | LinkageError e) {
 				failOpen(e);
 			}
@@ -265,8 +269,8 @@ public final class SoundHook {
 	/**
 	 * Called whenever vanilla recalculates a playing sound's volume (every tick for moving sounds, and after a
 	 * slider change). A tracked sound keeps its own factor, so a muted sound stays silent and a one-shot keeps what
-	 * it was decided with at its start (FR-8.8). An untracked sound (the table was full, or it started before the
-	 * profile loaded) gets what the rules say where the player is now, at most 100%.
+	 * it was decided with at its start (FR-8.8). An untracked sound (it started before the profile loaded, or the
+	 * table was full) plays as vanilla: it was never decided, and re-deciding it as the player walks would break FR-8.8.
 	 */
 	public static float applyVolume(SoundInstance instance, float vanillaVolume) {
 		try {
@@ -275,14 +279,8 @@ public final class SoundHook {
 				lastAppliedFactor = vanillaVolume == 0 ? 1.0F : tracked / vanillaVolume;
 				return tracked;
 			}
-			float factor = 1.0F;
-			if (!ProfileManager.isBypassed() && sync(Minecraft.getInstance())) {
-				SoundDecision d = RECALCULATED;
-				deciderProfile.decide(idString(instance.getIdentifier()), DECIDER.where(), d);
-				factor = Math.min(d.volumePercent(), 100) / 100.0F;
-			}
-			lastAppliedFactor = factor;
-			return vanillaVolume * factor;
+			lastAppliedFactor = 1.0F;
+			return vanillaVolume;
 		} catch (RuntimeException | LinkageError e) {
 			failOpen(e);
 			return vanillaVolume;
