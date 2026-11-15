@@ -19,8 +19,6 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,8 +41,6 @@ class ZoneDraftTest {
 		Zone z = d.build();
 		assertEquals(new Shape.Box(10, 10, 10), z.shape());
 		assertEquals(new Point(121, 64, -33), z.anchor());
-		assertEquals(ZoneMode.INSIDE, z.mode());
-		assertEquals(ZoneEdge.DEFAULT, z.edge());
 		assertEquals(WORLD, z.worldKey());
 		assertEquals(PlaceSets.EMPTY, z.sets());
 		assertEquals(ORANGE, d.color());
@@ -66,10 +62,9 @@ class ZoneDraftTest {
 	void existingZonesRoundTrip() {
 		Zone pen = new Zone("z1", "Pen", true, WORLD, OVERWORLD, new Point(1.25, 64, -3), new Shape.Cylinder(12.5, 9.5),
 				quick(RULES));
-		Zone outside = new Zone("z2", "Farm", false, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(20, 8, 30), quick(RULES))
-				.withMode(ZoneMode.OUTSIDE).withEdge(ZoneEdge.fade(8));
+		Zone outside = new Zone("z2", "Farm", false, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(20, 8, 30), quick(RULES));
 		Zone cylinder = new Zone("z3", "Tower", true, WORLD, "minecraft:the_nether", new Point(5, 70, 5),
-				new Shape.Cylinder(6, 40), PlaceSets.EMPTY).withEdge(ZoneEdge.hard());
+				new Shape.Cylinder(6, 40), PlaceSets.EMPTY);
 		for (Zone z : List.of(pen, outside, cylinder)) {
 			ZoneDraft d = ZoneDraft.of(z, SKY, ORANGE);
 			assertTrue(d.canSave(), z.id());
@@ -125,22 +120,6 @@ class ZoneDraftTest {
 	}
 
 	@Test
-	void fadeDistanceIsCheckedOnlyForAFadeEdge() {
-		ZoneDraft d = draft();
-		d.set(Field.FADE, "40");
-		assertNull(d.error(Field.FADE));
-		d.setEdge(ZoneEdge.Mode.FADE);
-		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("0.5", "32")), d.error(Field.FADE));
-		d.set(Field.FADE, "8");
-		d.setMode(ZoneMode.OUTSIDE);
-		Zone z = d.build();
-		assertEquals(ZoneEdge.fade(8), z.edge());
-		assertEquals(ZoneMode.OUTSIDE, z.mode());
-		d.setEdge(ZoneEdge.Mode.HARD);
-		assertEquals(ZoneEdge.hard(), d.build().edge());
-	}
-
-	@Test
 	void colorUsesTheHexFieldRules() {
 		// FR-10 AC: typing #XYZ shows an error; #56B4E9 is accepted.
 		ZoneDraft d = draft();
@@ -189,17 +168,14 @@ class ZoneDraftTest {
 	@Test
 	void resetToDefaultPerValue() {
 		ZoneDraft d = ZoneDraft.of(new Zone("z1", "Pen", false, WORLD, OVERWORLD, new Point(1, 2, 3),
-				new Shape.Cylinder(30, 60), quick(RULES)).withMode(ZoneMode.OUTSIDE).withEdge(ZoneEdge.fade(2)), SKY, ORANGE);
-		for (Field f : List.of(Field.ENABLED, Field.COLOR, Field.SHAPE, Field.RADIUS, Field.HEIGHT, Field.MODE, Field.EDGE,
-				Field.FADE)) {
+				new Shape.Cylinder(30, 60), quick(RULES)), SKY, ORANGE);
+		for (Field f : List.of(Field.ENABLED, Field.COLOR, Field.SHAPE, Field.RADIUS, Field.HEIGHT)) {
 			assertFalse(d.isDefault(f), f.name());
 			d.resetToDefault(f);
 			assertTrue(d.isDefault(f), f.name());
 		}
 		Zone z = d.build();
 		assertEquals(new Shape.Box(10, 10, 10), z.shape());
-		assertEquals(ZoneMode.INSIDE, z.mode());
-		assertEquals(ZoneEdge.DEFAULT, z.edge());
 		assertTrue(z.enabled());
 		assertEquals(quick(RULES), z.sets(), "the zone's own sets are kept");
 	}
@@ -215,8 +191,6 @@ class ZoneDraftTest {
 	void saveShowsEveryError() {
 		ZoneDraft d = draft();
 		d.setShape(ShapeKind.BOX);
-		d.setEdge(ZoneEdge.Mode.FADE);
-		d.set(Field.FADE, "0");
 		d.set(Field.WIDTH, "1000");
 		ZoneDraft fresh = ZoneDraft.blank("z9", "", WORLD, OVERWORLD, new Point(0, 0, 0), ORANGE);
 		assertNull(fresh.shownError(Field.NAME));

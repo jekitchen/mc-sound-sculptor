@@ -22,20 +22,24 @@ public final class LastPlays {
 		}
 	};
 
-	/** Records a play. */
-	public void record(String soundId, boolean positional, String worldKey, String dimension, double x, double y, double z,
-			float volumePercent, boolean dropped, boolean cueShown) {
+	/**
+	 * Records a play.
+	 *
+	 * @param feetKnown whether the player's feet block was known; if not, only Everywhere applied
+	 */
+	public void record(String soundId, boolean feetKnown, String worldKey, String dimension, int feetX, int feetY,
+			int feetZ, float volumePercent, boolean dropped, boolean cueShown) {
 		Slot e = entries.get(soundId);
 		if (e == null) {
 			e = new Slot();
 			entries.put(soundId, e);
 		}
-		e.positional = positional;
+		e.feetKnown = feetKnown;
 		e.worldKey = worldKey;
 		e.dimension = dimension;
-		e.x = x;
-		e.y = y;
-		e.z = z;
+		e.x = feetX;
+		e.y = feetY;
+		e.z = feetZ;
 		e.volumePercent = volumePercent;
 		e.dropped = dropped;
 		e.cueShown = cueShown;
@@ -47,7 +51,7 @@ public final class LastPlays {
 		if (e == null) {
 			return null;
 		}
-		return new LastPlay(e.positional, e.worldKey, e.dimension, e.x, e.y, e.z, e.volumePercent, e.dropped, e.cueShown);
+		return new LastPlay(e.feetKnown, e.worldKey, e.dimension, e.x, e.y, e.z, e.volumePercent, e.dropped, e.cueShown);
 	}
 
 	public int size() {
@@ -69,14 +73,14 @@ public final class LastPlays {
 	}
 
 	private static final class Slot {
-		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 3 * 8 + 4 + 3);
+		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 3 * 4 + 4 + 3);
 
-		boolean positional;
+		boolean feetKnown;
 		String worldKey;
 		String dimension;
-		double x;
-		double y;
-		double z;
+		int x;
+		int y;
+		int z;
 		float volumePercent;
 		boolean dropped;
 		boolean cueShown;

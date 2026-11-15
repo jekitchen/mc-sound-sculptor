@@ -9,7 +9,6 @@ import soundsculptor.core.outline.ZoneColors;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,20 +85,19 @@ public final class ZoneOutlines {
 			String key = ProfileManager.key();
 			String dimension = WorldSession.dimension(minecraft);
 			boolean onTop = AppSettingsManager.get().outlinesThroughBlocks();
-			ZoneEdge edge = profile.settings().defaultEdge();
 			String editingId = editing == null ? null : editing.id();
 			for (Zone zone : profile.zones()) {
 				if (zone.id().equals(editingId)) {
 					continue; // drawn below from the editor's values
 				}
 				if (mode != OutlineMode.NEVER && OutlineVisibility.shouldDraw(zone, mode, editingId, key, dimension, camera.x, camera.y, camera.z)) {
-					Outline outline = CACHE.computeIfAbsent(zone, z -> OutlineGeometry.of(z, edge));
+					Outline outline = CACHE.computeIfAbsent(zone, z -> OutlineGeometry.of(z));
 					drawZone(zone, outline, colorOf(profile, zone), onTop, camera);
 				}
 			}
 			if (editing != null && OutlineVisibility.shouldDraw(editing, OutlineMode.ALWAYS, editingId, key, dimension, camera.x, camera.y, camera.z)) {
 				int color = marking != null ? ZoneMarking.color(minecraft) : ZoneEditorScreen.editingColor(minecraft);
-				drawZone(editing, OutlineGeometry.of(editing, edge), color, onTop, camera);
+				drawZone(editing, OutlineGeometry.of(editing), color, onTop, camera);
 			}
 		} catch (RuntimeException | LinkageError e) {
 			// Never break world rendering: stop drawing outlines for the rest of the session.
@@ -118,10 +116,6 @@ public final class ZoneOutlines {
 	private static void drawZone(Zone zone, Outline outline, int rgb, boolean onTop, Vec3 camera) {
 		int argb = 0xFF000000 | rgb;
 		drawOutline(outline, argb, onTop);
-		if (outline.inner() != null) {
-			// Fade zones (M13): the fainter line where the fade reaches full strength.
-			drawOutline(outline.inner(), 0x80000000 | rgb, onTop);
-		}
 		if (OutlineVisibility.showLabel(zone, camera.x, camera.y, camera.z)) {
 			String name = zone.name() == null || zone.name().isBlank() ? zone.id() : zone.name();
 			Vec3 at = new Vec3(zone.anchor().x(), zone.anchor().y(), zone.anchor().z());

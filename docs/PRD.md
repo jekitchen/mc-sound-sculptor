@@ -2,7 +2,7 @@
 
 Nov 8, 2026 · maxismagical, Sciencode
 
-Sound Sculptor is a client-only Fabric mod that lets a player mute, turn down, boost or rate-limit any Minecraft sound, everywhere or only inside areas they draw, without ever hearing more than vanilla allows. This is draft 1 of the full PRD. Every requirement is tagged **MVP**, **v1** or **Future**, and every FR has in-game acceptance criteria.
+Sound Sculptor is a client-only Fabric mod that lets a player mute, turn down, boost or rate-limit any Minecraft sound, everywhere or only while they stand in areas they draw, without ever hearing more than vanilla allows. This is draft 1 of the full PRD. Every requirement is tagged **MVP**, **v1** or **Future**, and every FR has in-game acceptance criteria.
 
 ## Draft status and working assumptions
 
@@ -15,13 +15,13 @@ maxismagical had not yet answered questions on scope, so this draft picks defaul
 | A3 | Volume in MVP is 0–100%. Boost to 200% arrives in v1. | Boost needs the riskiest engine change (raising the gain clamp without raising range). | 5, 10 |
 | A4 | Each server or world has exactly one profile, created automatically (MVP). Copying settings from another server and import/export are v1. | Fixed zones need a server/world key from day one; full profile management is a lot of UI. | 5, 10 |
 | A5 | Distances in the recently played list are shown as coarse bands (Close, Near, Far), not exact block counts. | Exact distance to an unseen mob is more than vanilla subtitles give. See FR-1.4. | 5, 8 |
-| A6 | Zone checks run when a sound starts, then every client tick (20 times a second) for sounds that are still playing. | Handles minecarts, entity-bound sounds and long sounds without per-frame cost. | 5, 7 |
+| A6 | A sound is decided when it starts, by where the player stands at that moment; looping sounds (minecart rolling, bee buzz, biome ambience) are decided again when the player enters or leaves a zone or edits a set (decided 2026-11-14; until then zones were re-checked every tick for every playing sound). | Simple to predict, and no per-tick cost. | 5, 7 |
 | A7 | The default hotkey that opens Sound Sculptor is **;** (semicolon). | Free in vanilla and in the 36 most-downloaded Fabric mods (K clashed with Iris, checked at M0); rebindable in Controls. | 5 |
 | A8 | English (en\_us) at launch, with every string in a language file ready for community translation. | Keeps launch small; localization is cheap to add later if planned now. | 9 |
 
 ## 1. Summary and problem statement
 
-**Summary.** Sound Sculptor gives players per-sound control over what they hear: mute, volume from 0% to 200%, repeat limits, and visual cues when a muted sound plays. Settings are kept in named, reusable **Sound Sets** ("Farm animals", "Mob farm extras"): each set lists sounds and groups of sounds, each with its own settings. A set is attached to **Everywhere** or to zones placed at fixed coordinates or around the player, and one set can be attached to many places at once. It runs on the client only, so it works on vanilla servers, Realms and singleplayer.
+**Summary.** Sound Sculptor gives players per-sound control over what they hear: mute, volume from 0% to 200%, repeat limits, and visual cues when a muted sound plays. Settings are kept in named, reusable **Sound Sets** ("Farm animals", "Mob farm extras"): each set lists sounds and groups of sounds, each with its own settings. A set is attached to **Everywhere** or to zones the player draws; while the player stands in a zone, its sets decide how every sound they hear plays, and one set can be attached to many places at once. It runs on the client only, so it works on vanilla servers, Realms and singleplayer.
 
 **Problem.** Vanilla Minecraft offers only about ten volume sliders: Master plus one per sound category (Music, Jukebox/Note Blocks, Weather, Blocks, Hostile Creatures, Friendly Creatures, Players, Ambient/Environment, Voice, and others; checked at M0, 26.2 and 26.3 both have Master, Music, Jukebox/Note Blocks (`record`), Weather, Blocks, Hostile Creatures, Friendly Creatures (`neutral`), Players, Ambient/Environment, Voice/Speech and UI). A *category* is a broad bucket; a player cannot silence one sound (villager "hmm") without silencing every friendly mob. This causes three recurring pain points:
 
@@ -50,7 +50,7 @@ Five personas drive the requirements. The accessibility persona is a first-class
 ### 3.1 Goals
 
 - **G1. Per-sound control.** Any sound event, including sounds from other mods and resource packs, can be muted, set from 0% to 200%, or rate-limited.
-- **G2. Per-place control.** The same controls apply inside or outside zones at fixed coordinates or around the player, and one Sound Set can be reused in many places without being rebuilt.
+- **G2. Per-place control.** The same controls apply everywhere or only while the player stands in a zone they drew, and one Sound Set can be reused in many places without being rebuilt.
 - **G3. Find any sound in under 30 seconds.** A player who just heard a sound can find and mute it from the Sounds tab's recently played filter without knowing its ID.
 - **G4. Accessible by default.** Every feature works with keyboard only, at every GUI scale, with narrator support where vanilla has it, and never relies on color alone.
 - **G5. Fair play.** No feature gives information beyond vanilla audio and subtitles (the core principle).
@@ -65,7 +65,7 @@ Five personas drive the requirements. The accessibility persona is a first-class
 - No sound replacement, pitch editing, equalizer, reverb or audio effects.
 - No change to any sound's hearing range (the distance at which it can be heard at all). Loudness can go down or up; range never goes up.
 - No dependency on a config library (Cloth Config, YACL, owo-lib). Screens are built from scratch.
-- No Bedrock Edition support. No controls for vanilla-covered sounds that already have their own slider, such as background music and UI clicks (see section 5).
+- No Bedrock Edition support.
 
 ### 3.3 Success metrics
 
@@ -116,16 +116,14 @@ Two definitions are used throughout:
 - **Vanilla hearing range** of a sound = `max(vanilla volume, 1.0) × attenuation distance` (attenuation distance is 16 blocks for almost every sound). This is the distance vanilla itself uses to decide whether to notify subtitles. It is always computed from the *un-modified* vanilla volume, never from Sound Sculptor's volume. Verify the exact formula against 26.2 at M1.
 - **Positional sound** = a sound instance with linear attenuation that is not relative to the listener. Everything else (music, UI clicks, most sounds attached to the player's own head) is **non-positional**.
 
-**Vanilla-covered sounds are out of scope.** A sound is *vanilla-covered* when a vanilla slider already controls that kind of sound and nothing else. Background and menu music (Music slider) and interface sounds such as button clicks (UI slider; 26.2 and 26.3 both have one) and the Voice/Speech slider's sounds are the excluded set. Sound Sculptor leaves these sounds untouched. They do not appear in the Sounds tab or the entity inspector, no Sound Set entry matches them (not even the group `*`), and they produce no cues. Sounds in a broad category that holds many different sounds stay in scope. Jukebox records and note blocks are one example (shared slider). Mobs, blocks and weather are others. Checked at M1: 26.2 and 26.3 both have separate Music, UI and Voice/Speech categories (see Q8).
-
-How the check works: a sound is excluded by the category it plays in (Music, UI, Voice/Speech). Search cannot know a sound's category in advance, so it hides IDs under `minecraft:music.*` and `minecraft:ui.*`, plus any modded ID that has already played in an excluded category this session.
+**Every sound is in scope** (decided 2026-11-14, replacing the 2026-11-08 rule that left vanilla-covered sounds alone). Background music, interface sounds such as button clicks, and Voice/Speech sounds are handled like any other sound in a world: they appear in the Sounds tab, Sound Set entries match them (including the group `*`), zones apply to them and they can have cues. Vanilla's sliders still apply first; Sound Sculptor's volume multiplies vanilla's result, as for every category. So the Music slider keeps setting music's overall level, and a zone can turn music off only while you stand in your base. A music track is decided when it starts (FR-8.8), so a track already playing when you walk in plays to its end. Outside a world (title screen, server list, loading screens) no profile is loaded and every sound, menu music included, plays as in vanilla.
 
 ### FR-1 Sounds browser: recently played (MVP)
 
 The main entry point. **One Sounds browser is used everywhere**: it is the top-level **Sounds** tab (replacing the separate Recently Played and Search tabs), and the same view opens as the **picker** when sounds are added to a Sound Set (FR-4.7). It shows the full list of sounds, narrowing as the player types (FR-3), with a **Recently played** filter that shows only the sounds the player just heard, with the columns below. FR-1 covers the recently played filter and the quick actions; FR-3 covers the full list and the search syntax.
 
 - **FR-1.0** The browser has one search field, a **Recently played** filter toggle (on by default when the Sounds tab opens; the filter stays as the player left it while the game runs), and a result count. With the filter on, the list holds the recently played sounds that match the search text, with the FR-1.2 columns; with it off, every known sound that matches (FR-3.1). An empty search field shows everything the filter allows.
-- **FR-1.1** Sound Sculptor records every sound the client starts or would have started (including sounds Sound Sculptor muted or limited) **if** it is non-positional, or it is positional and the listener is within its vanilla hearing range at the moment it starts. Vanilla-covered sounds (Music, UI, Voice/Speech) are never recorded.
+- **FR-1.1** Sound Sculptor records every sound the client starts or would have started (including sounds Sound Sculptor muted or limited) **if** it is non-positional, or it is positional and the listener is within its vanilla hearing range at the moment it starts.
 - **FR-1.2** Rows are grouped by sound ID. Each row shows: subtitle text (or the ID if the sound has no subtitle), full ID, category, play count in the last 3 minutes, time since last play in minutes ("<1m ago", "1m ago", "2m ago", then ">1h ago"; hovering it shows the exact time to the second, counting up, which the narrator also reads), distance band (FR-1.4), and a status label: Playing, Muted, Limited, Boosted, or "Zone: \<name>". Status uses text and an icon, never color alone.
 - **FR-1.3** The recently played log keeps the last 3 minutes, up to 200 distinct IDs. With the filter on, sort by most recent (default), play count, or name. A Pause toggle (key **P** while the list is focused) freezes the list for reading.
 - **FR-1.4** Distance is shown as a band, not a number: **Close** (4 blocks or less), **Near** (4 to 16), **Far** (more than 16, only possible for loud sounds). No direction and no coordinates are shown. Non-positional sounds show "Around you".
@@ -174,7 +172,7 @@ Look at a mob or other entity and see the sounds it recently made, with the same
 
 Browse every sound the game knows by name or ID, in the same Sounds browser as FR-1 (with the Recently played filter off). The list narrows as the player types.
 
-- **FR-3.1** The full list covers every sound ID the client knows: the sound event registry plus every ID defined in `sounds.json` files of loaded resource packs and mods. The list is rebuilt after a resource reload (F3+T). Vanilla-covered sounds are hidden.
+- **FR-3.1** The full list covers every sound ID the client knows: the sound event registry plus every ID defined in `sounds.json` files of loaded resource packs and mods. The list is rebuilt after a resource reload (F3+T).
 - **FR-3.2** Each result shows ID, subtitle text in the current language (if any), and "Seen as: \<category>" if the sound has played this session. (A sound event has no fixed category; the code that plays it picks one.)
 - **FR-3.3** Results have the same quick actions as FR-1.5 (or the picker checkboxes of FR-1.7), plus Preview (Future, after 1.0), which plays the sound once at the player's own position at 100%.
 - **FR-3.4** Results update 150 ms after the player stops typing and show a count ("42 sounds"). An empty field lists every known sound.
@@ -213,9 +211,9 @@ A **Sound Set** is a named, reusable bundle of sound settings, such as "Farm ani
 The open questions raised while drafting Sound Sets were decided by the project owner on 2026-11-11 (Decisions Log).
 
 - **FR-4.1 Entries.** An entry targets either **one sound** (an exact sound ID, no `*`) or a **group** (a pattern, below). Each entry has its own settings: Mute, Level, Repeat limit and Cue, and can be turned off without deleting it. A setting left as "Unchanged" means this entry does not set it, so it is left to other entries, sets or places (FR-4.5, FR-9). Level is 0% to 200%: up to 100% in MVP, and above 100% (boost) from v1 with the FR-5.4 safeguards. Repeat limit (FR-6) and Cue (FR-7) are offered once their milestones ship (M11, M9); until then an entry's stored limit and cue are kept unchanged.
-- **FR-4.2 Group patterns.** Format `namespace:path`, where `*` matches any run of characters, including none and including dots. No other special characters. A pattern with no `:` matches any namespace: `block.*.step` is the same as `*:block.*.step`. A pattern must match the whole ID, so `villager` alone matches nothing; use `*villager*`. The group `*` means every sound in scope (in a zone: every positional sound). Allowed characters: `a-z 0-9 _ . - / : *`; uppercase is converted to lowercase; anything else shows an inline error and blocks Save.
+- **FR-4.2 Group patterns.** Format `namespace:path`, where `*` matches any run of characters, including none and including dots. No other special characters. A pattern with no `:` matches any namespace: `block.*.step` is the same as `*:block.*.step`. A pattern must match the whole ID, so `villager` alone matches nothing; use `*villager*`. The group `*` means every sound in scope. Allowed characters: `a-z 0-9 _ . - / : *`; uppercase is converted to lowercase; anything else shows an inline error and blocks Save.
 - **FR-4.3 Set editor.** The set editor shows the set's name, its entries as a list (each row: the sound's name or the group's pattern, a summary such as "✖ Muted" or "▶ Level 30%", and On/Off, Edit and Delete buttons), and **Add sounds…**, which opens the Sounds picker (FR-1.7), and **Type a pattern…**, which opens the entry editor for a new entry with a typed pattern or a plain-word search (FR-4.8). Editing an entry shows Mute (Unchanged, Muted, Not muted), Level (Unchanged or a value, slider in 5% steps, arrows ±5%, Shift+arrow ±1%, typed value), Limit and Cue (when available), and for a group, a live preview "Matches N sounds" with the matching list, from the same ID set as FR-3.1. "Not muted" lets an entry override a broader entry that mutes. The editor uses Save and Cancel (FR-12.4); nothing changes in game until Save.
-- **FR-4.4** Patterns match against the ID of each sound as it plays, so sounds added later by mods or resource packs match without a restart. Vanilla-covered sounds never match.
+- **FR-4.4** Patterns match against the ID of each sound as it plays, so sounds added later by mods or resource packs match without a restart.
 - **FR-4.5 Which entry wins.** Decided per setting: loudness (mute and level together, so an entry that sets either one competes for both), limit, and cue.
   1. **Within one set:** a single-sound entry beats any group. Between groups, more literal (non-`*`) characters beat fewer, then fewer `*` beat more, then the entry higher in the set beats a lower one. Only entries that are on and set the property take part.
   2. **Between sets attached to the same place:** settings layer. The set higher in that place's list wins a property only if it has an entry that sets that property for the sound; every property it leaves unchanged falls through to the next set down, and so on. The place's Quick changes set is always first (FR-4.10).
@@ -275,7 +273,7 @@ Cap how often a sound or group can play, e.g. "at most 3 villager 'hmm' sounds p
 - **FR-6.4** **Shared count (default):** one counter per entry covers every sound the entry matches (all villagers together). Counters are kept per place: a set attached to two places has a separate counter for the same entry in each place, so a limit always applies to what the player hears at that place.
 - **FR-6.5** **Per-source option:** one counter per source position, rounded down to the block the sound starts in. Two villagers in different blocks count separately. Each entry tracks up to 1,024 positions per place; the least recently used is forgotten first.
 - **FR-6.6** Looping and long sounds count once, when they start. A sound that is already playing is never cut off by a limit.
-- **FR-6.7** When Everywhere and a zone (or two zones) both set a limit for a sound, only the winning entry's limit applies (FR-9). Each counter only counts sounds its entry actually decided. A fade zone's limit applies only where the zone's fade weight is 0.5 or more.
+- **FR-6.7** When Everywhere and a zone (or two zones) both set a limit for a sound, only the winning entry's limit applies (FR-9). Each counter only counts sounds its entry actually decided.
 - **FR-6.8** Dropped plays show as "Limited" (with a dropped count) in the recently played list and never produce a cue.
 
 **Fair play.** Limiting only removes sounds.
@@ -292,7 +290,7 @@ Cap how often a sound or group can play, e.g. "at most 3 villager 'hmm' sounds p
 
 When a muted sound plays, the player still sees that it happened.
 
-- **FR-7.1** A cue appears when a sound's final volume is 0 because of a Sound Sculptor setting (mute, 0%, or a fully faded zone), the deciding entry has Cue on, and the sound passes the same range check vanilla uses for subtitles.
+- **FR-7.1** A cue appears when a sound's final volume is 0 because of a Sound Sculptor setting (mute or 0%), the deciding entry has Cue on, and the sound passes the same range check vanilla uses for subtitles.
 - **FR-7.2** Cue text is the sound's vanilla subtitle. Sounds without a subtitle show no cue, unless the setting "Cue sounds without subtitles" is on (default off), which shows the sound ID instead.
 - **FR-7.3** Cues are drawn in their own box directly above the vanilla subtitle box (bottom right), whether vanilla subtitles are on or off. Each line starts with the text "(muted)" and a muted-speaker icon, is drawn in italics, and uses a different text color (default light blue-gray, configurable). The prefix makes the difference clear without color.
 - **FR-7.4** Direction is shown exactly as vanilla subtitles do (`<` or `>` when the source is to the side), nothing more. Lines fade out after 3 seconds, like vanilla.
@@ -311,46 +309,48 @@ When a muted sound plays, the player still sees that it happened.
 - [ ] 10 muted villagers at once: no more than 5 cue lines, with counts.
 - [ ] Turn "Show muted-sound cues" off: a muted explosion with Cue on shows nothing. Turn it back on: the cue returns. Vanilla Subtitles on or off makes no difference either way.
 
-### FR-8 Spatial zones (MVP: fixed box, Inside, hard edge; v1: the rest)
+### FR-8 Spatial zones (MVP: fixed box; v1: cylinder, zone limits and cues)
 
-A zone is a **place**: it applies the Sound Sets attached to it (FR-4) to positional sounds based on where they come from. **Everywhere** (FR-8.10) is the default place with no bounds.
+A zone is a **place where you stand**. While your feet are inside a zone, the Sound Sets attached to it (FR-4) decide how you hear every sound in scope, wherever the sound comes from: a villager 30 blocks outside the zone, rain, your own footsteps. Step out and the zone no longer applies. **Everywhere** (FR-8.10) is the place that applies when no zone does. Edges are hard: you are either in a zone or not, with nothing in between (decided 2026-11-14).
 
 - **FR-8.1 Fixed zones (MVP).** Every zone is fixed. Its anchor is the geometric center of its shape: a point (x, y, z) plus the dimension (e.g. `minecraft:overworld`) and the world key of the server or singleplayer world (FR-11.1). Buttons: "Set to my position" and "Set to the block I'm looking at". A fixed zone is active only in its own world and dimension.
 - **FR-8.1a Drawing a box (MVP).** New zones are boxes. **Mark corners** closes the zone editor; the player left-clicks a block (or presses the Sound Sculptor key; with the crosshair on no block, the block the player stands in counts) for the first corner, then again for the second. While marking, left-click never attacks or breaks anything. The box covering both corner blocks is outlined live from the first corner to the current target, and the editor comes back with it filled in. A two-line hint at the top of the screen gives the corner and the box's size so far ("Second corner · 5 × 2 × 7 blocks"), then the keys; a rebindable "Cancel marking zone corners" key (Backspace) returns unchanged. Only blocks the player can see or reach can be marked. In the editor, **Grow** and **Shrink** move one chosen side (North, South, East, West, Up, Down) by 1 block, or 5 with Shift; the opposite side stays where it is.
 - **FR-8.2** (Removed 2026-11-13: personal bubble zones were dropped; see the decisions log.)
 - **FR-8.3 Shapes.** Axis-aligned box (width, height, depth 1 to 512 whole blocks, every edge on a block boundary: the center is snapped, however it was set) in MVP; vertical cylinder (radius 1 to 256, height 1 to 512) in v1. The anchor is the shape's geometric center, so a box or cylinder extends half its size in each direction from the anchor.
-- **FR-8.4 Affect mode.** Inside (default, MVP): the zone affects sounds inside its shape. Outside (v1): it affects every sound outside its shape in the same dimension.
-- **FR-8.5 Edge (v1 fade; MVP hard).** Hard: weight 1 on the affected side, 0 on the other. Fade: the weight rises from 0 at the boundary to 1 at fade distance F into the affected side (F from 0.5 to 32 blocks, default 4). For Inside zones, F is measured inward from the boundary; for Outside zones, outward. Each zone uses the global default edge setting unless set to Hard or Fade itself.
+- **FR-8.4 Where you are.** You are in a zone when the block your feet are in is inside the zone's shape: the block position of the local player (not the camera, so third person and F5 do not change it). This is the same block the corner marking uses when the crosshair is on no block (FR-8.1a). A box marked only on the floor blocks of a room is 1 block tall and does not contain you while you stand on it; the marking hint says so ("1 block tall: you would stand above it") and Grow Up fixes it. Riding a boat, minecart or horse, your own block position still counts. (The earlier Outside mode was removed 2026-11-14: with zones following where you stand, "everywhere except this box" is Everywhere plus a zone that undoes it.)
+- **FR-8.5 Hard edges only.** A zone applies fully while you are in it and not at all once you leave. (The earlier fade edge was removed 2026-11-14. Fading sounds in or out as you cross a boundary is a Future idea, section 10.3.)
 - **FR-8.6 Attached Sound Sets.** Each place (Everywhere and every zone) has an ordered list of attached Sound Sets, shown in the zone editor and on the Zones tab's Everywhere row. Each line shows the set's name, its entry count and "Also used in N places" when the set is shared, with buttons: On/Off (stops the set applying in this place without detaching it), Edit (opens the set editor, FR-4.3), Move up, Move down, and Detach. The place's Quick changes set, if any, is pinned first and has no move buttons (FR-4.10). **Attach set…** lists the library sets not yet attached here, plus **New set**. The same set cannot be attached twice to one place. A place holds up to 32 attached sets. The earlier "Add existing rule" copy is replaced by attaching the set (linked) or attaching a Duplicate (independent).
-- **FR-8.7 Which sounds.** Only positional sounds are affected. The sound's position is the sound instance's x, y, z.
-- **FR-8.8 Timing.** Zones are evaluated when a sound starts, and again every client tick (20 per second) for every sound still playing, so moving sources and long sounds update. Re-evaluation changes volume only (including mute, which sets volume to 0 without stopping the sound). Repeat limits are decided at start only.
+- **FR-8.7 Which sounds.** Every sound, positional or not (section 5): mobs, blocks, weather, music, UI clicks, your own eating and armor sounds. Where the sound comes from never matters, only where you stand. Vanilla's hearing range still decides which sounds reach you at all; a zone never makes a sound audible from farther away (section 8).
+- **FR-8.8 Timing.** A sound is decided when it starts, by where you stand at that moment, and keeps that result until it ends: a villager mumble, a block breaking or a music track already playing when you walk into or out of a zone plays on as it started, and the next one follows where you are then. **Looping sounds are the exception:** sounds that vanilla starts once and loops for as long as their source exists (a minecart rolling, a bee buzzing, biome ambience, the underwater loop, elytra wind) are decided again whenever you enter or leave a zone, and whenever a Sound Set, entry or zone is edited, so walking into a bee-muting base silences bees that were already buzzing, and Mute on a bee row works at once. This happens on those events only, never every tick. A looping sound muted when it starts therefore still starts, silently, so it can come back; other muted sounds are not started at all. **Bypass** (FR-13.1): turning it on puts every playing sound back to vanilla volume at once, including silent loops; turning it off applies to loops at once and to everything else from the next sound start.
 - **FR-8.9 Size limits.** Up to 64 zones per profile (Everywhere not counted); performance budgets (section 9) must hold at 64.
-- **FR-8.10 Everywhere.** Every profile has exactly one **Everywhere** place. It behaves like every other zone, except that it has no bounds, applies to every sound in scope (positional and non-positional; zones apply to positional sounds only, FR-8.7), and cannot be edited (no name, color, shape, anchor, mode or edge) or removed. It is always the first row of the Zones tab, and its only controls are its attached Sound Sets (FR-8.6). It has no outline. In precedence it is always the lowest place (FR-9). It replaces the earlier global rule list.
+- **FR-8.10 Everywhere.** Every profile has exactly one **Everywhere** place. It behaves like every other zone, except that it has no bounds, so you are always in it, and cannot be edited (no name, color, shape or anchor) or removed. It is always the first row of the Zones tab, and its only controls are its attached Sound Sets (FR-8.6). It has no outline. In precedence it is always the lowest place (FR-9). It replaces the earlier global rule list.
 
-**Fair play.** Zones change loudness of sounds the client already plays in vanilla range. They never make a sound audible that vanilla would not play, and fixed zones are the player's own data.
+**Fair play.** Zones change the loudness of sounds the client already plays in vanilla range. Which zone applies depends only on where the player stands, which the player already knows; it reveals nothing about where a sound came from. Zones never make a sound audible that vanilla would not play, and they are the player's own data.
 
 **Acceptance criteria**
 
-- [ ] Mark the corners of a villager pen as a new zone and attach a set with group `*villager*` Mute: villagers inside are silent; a villager outside the box is audible.
+- [ ] Mark the corners of a villager pen (floor to roof) as a new zone and attach a set with group `*villager*` Mute. Stand inside the pen: every villager is silent, including one 10 blocks outside the pen. Step out of the pen: every villager is audible again, including those inside it.
+- [ ] Stand inside a zone that mutes `minecraft:weather.rain*` while it rains: no rain is heard. Walk out into the rain: the next rain sounds play at full volume.
+- [ ] Stand in a zone that mutes `*`: your own eating, footstep and armor sounds and UI clicks are silent.
+- [ ] Stand in your base zone, which mutes `minecraft:music.*`: the next music track that starts while you are inside is silent; a track that starts after you leave plays at the Music slider's level.
+- [ ] Stand outside a zone that mutes `*minecart*` while a minecart rolls nearby; walk into the zone: the rolling goes silent at once; walk out: it comes back. Press Mute on the minecart's row in the Sounds tab while standing outside: it goes silent at once.
+- [ ] A villager mumble or a music track is playing when you walk into a zone that mutes it: it plays to its end; the next one that starts while you are inside is silent.
+- [ ] Mark only the floor blocks of a room as a zone: the marking hint says the box is 1 block tall; standing on that floor you are not in the zone; Grow Up once and you are.
 - [ ] The Zones tab's first row is Everywhere; it has no shape, edit or delete controls, only its attached sets.
 - [ ] In Creative, left-click the ground while marking: the block is marked as a corner and not broken. While marking, the on-screen hint shows the box's size ("5 × 2 × 7 blocks"); Grow North moves only the north side; the cancel key returns to the editor unchanged.
 - [ ] Leave and rejoin the world: the zone still exists and works. Go to the Nether: it has no effect there.
 - [ ] Join a different server: the zone does not apply.
-- [ ] (v1) Outside-mode zone around your base, attached set with group `*:entity.*` Mute: mobs inside the base are audible, mobs outside are silent.
-- [ ] (v1) Fade 8 blocks on a 20-block cylinder muting cows: walking a cow from the edge toward the center, it gets steadily quieter and is silent from 8 blocks inside.
-- [ ] Music, UI clicks and your own eating sounds are unchanged inside every zone.
+- [ ] In third person (F5), swing the camera outside a zone while standing inside it: the zone still applies.
 
-### FR-9 Precedence (MVP basic; v1 with fade and Outside)
+### FR-9 Precedence (MVP)
 
-When Everywhere and one or more zones all have something to say about a sound, this algorithm decides the result. It runs per property: mute/volume, limit, and cue are decided separately. A place's **value** for a property is what its attached Sound Sets give for the sound, resolved by FR-4.5 (entries within a set, then sets in the place's order). Sets that are off in a place, and entries that are off, take no part.
+When you stand in one or more zones and they, or Everywhere, have something to say about a sound, this algorithm decides the result. It runs per property: mute/volume, limit, and cue are decided separately. A place's **value** for a property is what its attached Sound Sets give for the sound, resolved by FR-4.5 (entries within a set, then sets in the place's order). Sets that are off in a place, and entries that are off, take no part. The sound's own position plays no part (FR-8.7).
 
-1. **Everywhere value.** Resolve Everywhere's attached sets for this sound ID (FR-4.5).
-2. **Affecting zones.** Collect zones in the current world and dimension whose weight w for this sound is above 0 (Inside: sound in shape; Outside: sound not in shape; fade per FR-8.5).
-3. **Zone values.** Resolve each affecting zone's attached sets the same way. A zone takes part for a property only if one of its attached sets has an entry that sets that property for the sound.
-4. **Winner per property.** Among zones that set the property, the winner is the zone whose anchor (center) is closest to the sound's position, measured as straight 3D distance. Outside zones are measured the same way, from their center, so a nearby Inside zone usually beats a broad Outside zone.
-5. **Ties.** If two anchors are within 0.01 blocks of the same distance, the zone with the smaller shape volume wins; if still tied, the zone higher in the zone list wins.
-6. **Blend.** Volume (mute counts as 0%): result = Everywhere value + (winner's value − Everywhere value) × w. Limit and cue: the winner's value applies if w is 0.5 or more, otherwise the Everywhere value.
-7. **Defaults.** A property no entry sets keeps vanilla behavior (100%, no limit, cue off).
+1. **Where you are.** Collect the enabled zones in the current world and dimension that contain your feet block (FR-8.4), and put them in order: **smallest shape volume first**; zones of equal volume in zone-list order (higher in the list first). Everywhere comes last. This list depends only on where you stand, so it is worked out again only when your feet block, dimension, world or profile changes, not for every sound (section 7.4).
+2. **Winner per property.** For each property, the first place in that order whose attached sets have an entry that sets the property for this sound wins. A zone with nothing to say about a property passes it on to the next zone, and finally to Everywhere.
+3. **Defaults.** A property no place sets keeps vanilla behavior (100%, no limit, cue off).
+
+Smallest-first means a more specific place beats a broader one: a room zone inside a base zone wins while you stand in the room (decided 2026-11-14; may be revisited).
 
 Data sketch (pseudocode, not implementation):
 
@@ -362,40 +362,42 @@ placeValue(place, id):          // FR-4.5
       if e: value[prop] = e[prop]; break
   return value
 
-resolve(sound):
-  g = placeValue(everywhere, sound.id)
-  zones = activeZones.where(z => z.weight(sound.pos) > 0)
+whereYouAre(feetBlock):          // on change of feet block, dimension, world or profile
+  zones = activeZones.where(z => z.contains(feetBlock))
+  return zones.sortBy(volume, then listOrder) + [everywhere]
+
+resolve(sound):                  // at sound start
   for prop in [loudness, limit, cue]:
-    setters = zones.where(z => placeValue(z, sound.id).has(prop))
-    if none: result[prop] = g[prop] ?? vanilla
-    else: w = winner(setters by anchorDistance, then smaller volume, then list order)
-          result[prop] = blend(g[prop] ?? vanilla, w.value[prop], w.weight)
+    p = first place in whereYouAre where placeValue(place, sound.id).has(prop)
+    result[prop] = p ? p.value[prop] : vanilla
 ```
 
-Worked examples (also the basis of the test matrix in section 11.4). "Villagers muted" means an attached set has an entry that mutes villagers:
+Worked examples (also the basis of the test matrix in section 11.4). "Villagers muted" means an attached set has an entry that mutes villagers. "You are in" lists the zones containing your feet; where the villager is does not matter in any case.
 
-| Case | Everywhere | Zones affecting the sound | Result |
+| Case | Everywhere | You are in | Result |
 | --- | --- | --- | --- |
-| P1 | Villagers muted | Zone A (Inside, hard) villagers 50% | 50% inside A; muted outside A |
-| P2 | Villagers muted | none | Muted |
-| P3 | nothing | A villagers 20%, anchor 3 blocks away; B villagers 80%, anchor 9 blocks away | 20% (A is closer) |
+| P1 | Villagers muted | Zone A, which sets villagers 50% | 50% while you are in A; muted when you are not |
+| P2 | Villagers muted | no zone | Muted |
+| P3 | nothing | A (villagers 20%, 10 × 5 × 10) inside B (villagers 80%, 40 × 10 × 40) | 20% (A is smaller); 80% once you step out of A but are still in B |
 | P4 | nothing | A mutes villagers; B limits villagers to 2/s | Muted (from A) and limit 2/s (from B): properties combine |
 | P4b | nothing | A sets villagers to 40%; B limits villagers to 2/s | At most 2 villager sounds per second, each at 40%: both properties apply together |
-| P5 | nothing | A 20% and B 80%, both anchors 5.00 blocks away, A smaller | 20% (smaller zone wins the tie) |
-| P6 | Cows 100% | A (Inside, fade 4) cows Mute; sound 2 blocks inside the edge, w = 0.5 | 50% |
-| P7 | nothing | Outside zone O around base mutes `*`, anchor 40 blocks away; Inside zone A sets 70%, anchor 6 blocks away; sound is in both | 70% (A is closer) |
+| P5 | nothing | A (20%) and B (80%), the same size; A higher in the zone list | 20% (equal size: higher in the list wins) |
+| P6 | (Removed 2026-11-14 with fade edges) | | |
+| P7 | (Removed 2026-11-14 with Outside mode) | | |
 | P8 | Villagers 150% | A sets cue on only | 150% with cue setting from A (no cue shows, as the sound is not muted) |
-| P13 | Set S1 (villagers 20%) above set S2 (villagers 80%), both attached to Everywhere | none | 20% (higher set wins) |
-| P14 | One set: group `minecraft:entity.villager.*` muted, single sound `minecraft:entity.villager.ambient` 60% | none | Ambient 60%; other villager sounds muted (single sound beats group) |
-| P15 | Set S1 (villagers muted) above S2 (villagers limited to 2/s) on Everywhere | none | Muted (from S1) and limit 2/s (from S2): S1 sets no limit, so the limit falls through to S2 |
-| P16 | nothing | Zones A and B both have set "Farm animals" (cows 30%) attached; sound in A | 30% in A; editing "Farm animals" to 60% gives 60% in A and in B |
+| P13 | Set S1 (villagers 20%) above set S2 (villagers 80%), both attached to Everywhere | no zone | 20% (higher set wins) |
+| P14 | One set: group `minecraft:entity.villager.*` muted, single sound `minecraft:entity.villager.ambient` 60% | no zone | Ambient 60%; other villager sounds muted (single sound beats group) |
+| P15 | Set S1 (villagers muted) above S2 (villagers limited to 2/s) on Everywhere | no zone | Muted (from S1) and limit 2/s (from S2): S1 sets no limit, so the limit falls through to S2 |
+| P16 | nothing | A, with set "Farm animals" (cows 30%) attached; B has the same set | 30% in A; editing "Farm animals" to 60% gives 60% in A and in B |
+| P17 | nothing | A mutes villagers; the villager is 10 blocks outside A | Muted (you are in A) |
+| P18 | nothing | no zone; the villager is inside zone A, which mutes villagers | 100% (you are not in A) |
 
 **Fair play.** Precedence only chooses between the player's own settings.
 
 **Acceptance criteria**
 
-- [ ] Each case P1 to P16 behaves as in the table when built in a test world (section 11.4).
-- [ ] Swapping two zones' order in the list changes the result only in the tie case P5 variant where sizes are equal.
+- [ ] Each case P1 to P18 (except the removed P6 and P7) behaves as in the table when built in a test world (section 11.4).
+- [ ] Swapping two zones' order in the list changes the result only when they are the same size (P5).
 - [ ] Swapping two sets' order in one place changes the result when both set the same property for the sound (P13).
 - [ ] The Sounds tab row for a sound shows which zone decided it ("Zone: A").
 
@@ -403,7 +405,7 @@ Worked examples (also the basis of the test matrix in section 11.4). "Villagers 
 
 - **FR-10.1** Setting "Show zone outlines": Always, Only while editing (default), or Never. Optional hotkey to toggle (unbound by default).
 - **FR-10.2** Outlines are thin lines: box edges; cylinder as top and bottom circles plus four vertical lines. Only zones in the current dimension within 128 blocks are drawn.
-- **FR-10.3** Not color alone: Inside zones use solid lines and Outside zones dashed lines; a fade zone also draws a fainter inner line where the fade reaches full strength; the zone's name is shown as a label at its anchor when the player is within 32 blocks.
+- **FR-10.3** Not color alone: the zone's name is shown as a label at its anchor when the player is within 32 blocks. (Dashed lines for Outside zones and the inner fade line were removed 2026-11-14 with those features.)
 - **FR-10.4** Each zone has a color. New zones take the next color from a color-blind-safe palette (the 8 Okabe–Ito colors, chosen to stay distinct for the common forms of color blindness). The color picker offers the palette swatches, a hex field (e.g. `#E69F00`) with validation, and Reset to default.
 - **FR-10.5** Setting "Outlines visible through blocks" (default on). This is safe because zones are the player's own data.
 - **FR-10.6** Drawing all outlines and fills costs less than 0.3 ms per frame with 64 zones (diagnostics readout).
@@ -419,7 +421,6 @@ Worked examples (also the basis of the test matrix in section 11.4). "Villagers 
 **Acceptance criteria**
 
 - [ ] Set outlines to Always: each nearby zone is drawn in its color with its name label.
-- [ ] An Outside zone's lines are dashed; an Inside zone's are solid.
 - [ ] Change a zone color by swatch and by hex `#56B4E9`; typing `#XYZ` shows an error.
 - [ ] Outlines render correctly with Sodium installed, and with Iris plus one popular shader pack (or a known-issue note is filed).
 - [ ] (Future) Set a box zone to Fill at 15%: the box shows as a light tint in its color; blocks and mobs inside are clearly visible.
@@ -485,13 +486,13 @@ Each multiplayer server, Realm and singleplayer world has exactly one *profile*:
 
 Tools that let a non-programmer recover from mistakes and check performance in game.
 
-- **FR-13.1** "Bypass Sound Sculptor" turns every effect off at once (vanilla sound) without changing any Sound Set or zone. Available as a header toggle and a rebindable hotkey, default **F10** (unused by vanilla). Many laptop and Mac keyboards send their own system-mute signal on that key, so the key's tooltip and the Settings page say "On laptops you may need Fn+F10". A small HUD label "Sound Sculptor: bypassed" shows while on.
+- **FR-13.1** "Bypass Sound Sculptor" turns every effect off at once (vanilla sound) without changing any Sound Set or zone. Sounds already playing go back to vanilla volume within one tick; turning Bypass off applies at once to playing looping sounds and to everything else from the next sound that starts (FR-8.8). Available as a header toggle and a rebindable hotkey, default **F10** (unused by vanilla). Many laptop and Mac keyboards send their own system-mute signal on that key, so the key's tooltip and the Settings page say "On laptops you may need Fn+F10". A small HUD label "Sound Sculptor: bypassed" shows while on.
 - **FR-13.2** Fail open: if Sound Sculptor hits an error while handling a sound, that sound plays as vanilla and the error is logged once. More than 10 errors in a minute turns on bypass and shows a toast asking the player to report the bug.
 - **FR-13.3** Settings → Diagnostics shows live: sounds per second, average and maximum microseconds Sound Sculptor spends per sound, outline drawing time per frame, Sound Sets, entries and zones active, pattern cache hit rate, and a "Copy report" button for bug reports.
 
 **Acceptance criteria**
 
-- [ ] Press F10 (or Fn+F10 on a laptop) or toggle Bypass in the header: all muted sounds are audible again; toggle it back: they are muted again; no Sound Set changed.
+- [ ] Press F10 (or Fn+F10 on a laptop) or toggle Bypass in the header: a muted minecart's rolling is audible again and a jukebox record playing at 30% jumps to full volume at once; toggle it back: sounds that start from then on are muted again; no Sound Set changed.
 - [ ] During the noisy-farm test, Diagnostics shows the average per-sound cost under 5 microseconds.
 - [ ] Copy report pastes a text block with mod version, Minecraft version, Sound Set, entry and zone counts and timings.
 
@@ -499,14 +500,14 @@ Tools that let a non-programmer recover from mistakes and check performance in g
 
 A player who is confused by what they hear can see every Sound Set entry and zone that affected one sound, and which one won.
 
-- **FR-14.1** Every sound row in the Sounds tab and the entity inspector has a **Why?** button. It opens a trace panel for that sound's most recent play. For a sound not played this session, the panel shows what Everywhere's sets would do and says "Not heard yet; zones depend on where it plays".
+- **FR-14.1** Every sound row in the Sounds tab and the entity inspector has a **Why?** button. It opens a trace panel for that sound's most recent play. For a sound not played this session, the panel shows what it would do where you stand now, labelled "Not heard yet: predicted for where you are".
 - **FR-14.2** The panel lists, in the order FR-9 applies them:
   1. **Everywhere:** each attached set that has a matching entry, with the entry (single sound or group), the winner for each setting (loudness, limit, cue) and the reason it won: single sound beats group, more specific group, fewer `*`, entry order, or higher set in the place's list. Losing entries say "overridden by \<set: entry>".
-  2. **Zones considered:** each zone in the current world and dimension that contains (or, for Outside zones, excludes) the sound, with Inside/Outside, fade weight w, distance from the sound to the zone's anchor, and its matching sets and entries as in step 1.
-  3. **Winner per setting** among the zones, with the tie-break used if any ("tie on distance; smaller zone wins").
+  2. **Where you were:** the zones your feet were in when the sound started, smallest first, ending with Everywhere ("You were in: Pen → Base → Everywhere"), each with its size and its matching sets and entries as in step 1. A zone that contained the sound but not you is not listed.
+  3. **Winner per setting** among those places, with the reason ("smallest zone that sets it", "same size; higher in the zone list", "no zone sets it: Everywhere").
   4. **Final result**: volume %, limit and whether this play was allowed or dropped, cue on/off, and whether a cue was shown.
-- **FR-14.3** Special cases are stated plainly at the top of the panel: "Bypass is on: nothing is changed"; "This sound has its own vanilla slider, so Sound Sculptor does not handle it"; "Non-positional: zones never apply"; "Above 100%: boost applied".
-- **FR-14.4** Inline editing. Every entry line in the panel has inline controls: on/off, Mute, Level slider, Limit (count, window, per source; with M11) and Cue (with M9). Because sets are linked (FR-4.9), a line whose set is used in more than one place says so ("Farm animals · used in 3 places") and its tooltip lists them, so the player knows an edit there changes every one. Every zone line has on/off. If no entry matched at some place, **Add to Quick changes** creates a single-sound entry in the Quick changes set of Everywhere or of any zone shown in the trace (FR-4.10). A place's Quick changes set is always the first set listed for it, and its Mute/Unmute shows the sound's actual state at that place, as in FR-1.5. Edits save immediately (no Save button), show a 5-second Undo toast (Undo puts the edited entry back, in whichever set it is), and recompute the trace at once using the sound's last play position, labelled "Predicted for next play" until the sound plays again. Edits are validated like the full editors (FR-12.7). An "Open full editor" link on each line opens the set editor, entry editor or zone editor for changes the panel does not offer (pattern, shape, anchor), and returning refreshes the trace.
+- **FR-14.3** Special cases are stated plainly at the top of the panel: "Bypass is on: nothing is changed"; "Above 100%: boost applied".
+- **FR-14.4** Inline editing. Every entry line in the panel has inline controls: on/off, Mute, Level slider, Limit (count, window, per source; with M11) and Cue (with M9). Because sets are linked (FR-4.9), a line whose set is used in more than one place says so ("Farm animals · used in 3 places") and its tooltip lists them, so the player knows an edit there changes every one. Every zone line has on/off. If no entry matched at some place, **Add to Quick changes** creates a single-sound entry in the Quick changes set of Everywhere or of any zone shown in the trace (FR-4.10). A place's Quick changes set is always the first set listed for it, and its Mute/Unmute shows the sound's actual state at that place, as in FR-1.5. Edits save immediately (no Save button), show a 5-second Undo toast (Undo puts the edited entry back, in whichever set it is), and recompute the trace at once for where you stood at the sound's last play, labelled "Predicted for next play" until the sound plays again. Edits are validated like the full editors (FR-12.7). An "Open full editor" link on each line opens the set editor, entry editor or zone editor for changes the panel does not offer (pattern, shape, anchor), and returning refreshes the trace.
 - **FR-14.5** A "Copy trace" button copies the panel as plain text, for asking for help or filing a bug.
 - **FR-14.6** Recording a trace costs nothing on the hot path: the engine stores only the last decision per sound ID (set, entry and zone IDs, weights) in a fixed-size table, and the panel rebuilds the text when opened.
 
@@ -516,9 +517,9 @@ A player who is confused by what they hear can see every Sound Set entry and zon
 
 - [ ] On Everywhere, one set with group `*villager*` muted plus single sound `minecraft:entity.villager.ambient` at 60%: Why? on the ambient row shows both entries, the single-sound entry as winner for loudness, and a final volume of 60%.
 - [ ] Two sets on Everywhere, both setting cows: the trace names both, marks the higher set's entry as winner and says "higher in the list".
-- [ ] Stand in two overlapping zones that both set villager volume: the trace names both, shows their anchor distances, and marks the closer one as the winner.
+- [ ] Stand in a small zone inside a bigger one, both setting villager volume: the trace lists both, smallest first, and marks the smaller one as the winner.
 - [ ] Turn on Bypass: the trace leads with "Bypass is on".
-- [ ] Why? on a music track is not offered (vanilla-covered); Why? on your own eating sound says "Non-positional: zones never apply".
+- [ ] Why? on your own eating sound, played while you stand in a zone that mutes it, names that zone as the winner.
 - [ ] In the trace for a villager sound, drag the winning entry's level from 50% to 20%: the final result updates at once, marked "Predicted for next play", and the next villager sound plays at 20%. Undo restores 50%.
 - [ ] An entry from a set attached to two zones says "used in 2 places" in the trace.
 - [ ] Copy trace pastes readable text into a text editor.
@@ -542,9 +543,9 @@ All screens are hand-built on Minecraft's own Screen and widget classes from a s
 | Sounds | Toolbar: search field with "?" help (FR-3.5), Recently played filter toggle, result count, "Apply to" selector; with the filter on, also Pause and Sort. Scrolling list of rows (FR-1.2), each with icon buttons Mute, Volume, Limit, Cue, Edit, Add to set, Why? (FR-14). In picker mode (FR-1.7): checkboxes and Like this… instead, footer "N picked · Add · Cancel". | Hear sound → ; → find row → Mute (2 actions); or type → narrow → act |
 | Inspect (v1) | Left: selected entity name and type, link legend (Linked / Likely / Uncertain). Right: its sound rows with the same buttons. "No sounds linked yet" message when empty. | Look at mob → Inspect key → row → action |
 | Sound Sets | Library list: name, entry count, where used ("Main base, Mob farm · 1 other world"); buttons Edit, Duplicate, Rename, Delete; New set button. Set editor: name; entry list (sound or group, summary, On/Off, Edit, Delete); Add sounds… (opens the picker), Type a pattern…; Attached to panel (places here, other worlds) with Attach to… and Detach; Save/Cancel. Entry editor: Mute, Level, Limit + Per source, Cue, and for a group the pattern with live preview. | New set → Add sounds → pick → set levels → Attach to zone → Save |
-| Zones | First row Everywhere (sets only). Then zones: color swatch + name + shape + mode + "Here / 120 blocks away / Other world". Zone editor: name, color picker, display (Outline; Fill and Both after 1.0) and fill opacity (after 1.0), coordinates with "My position" button, shape and sizes, mode, edge, fade distance, and the zone's attached Sound Sets (FR-8.6: order, on/off, edit, detach, Attach set…). Outlines show while editing. | Mark corners → Attach set → Save |
+| Zones | First row Everywhere (sets only). Then zones: color swatch + name + shape + "You're here / 120 blocks away / Other world". Zone editor: name, color picker, display (Outline; Fill and Both after 1.0) and fill opacity (after 1.0), coordinates with "My position" button, shape and sizes, and the zone's attached Sound Sets (FR-8.6: order, on/off, edit, detach, Attach set…). Outlines show while editing. | Mark corners → Attach set → Save |
 | Profiles | List of servers and worlds with a profile (name, world key, Sound Set and zone counts, last joined) with Rename, Reset, Export, Delete; "Copy from…" button for the current server; Import area ("Drop a file here or choose from the imports folder"). | Copy from another server → confirm |
-| Settings | Pages: General (hotkeys help, cue defaults, show distance), Zones (outline mode, through-blocks, default edge, fade distance), Accessibility (cue color, cue text scale, reduced motion), Diagnostics. | Change → auto-save, with reset buttons |
+| Settings | Pages: General (hotkeys help, cue defaults, show distance), Zones (outline mode, through-blocks), Accessibility (cue color, cue text scale, reduced motion), Diagnostics. | Change → auto-save, with reset buttons |
 
 ### 6.2 Internal UI component kit (required)
 
@@ -596,8 +597,7 @@ flowchart TD
     D --> O1["Drop<br/>over repeat limit"]
     D --> O2["Mute<br/>no channel; cue fired (v1)"]
     D --> O3["Play<br/>with volume multiplier 0 to 200%"]
-    O3 --> T["Per-tick loop<br/>re-check zones and fades, update gain on the sound thread"]
-    T --> T
+    W["Where you are<br/>zones containing your feet, smallest first;<br/>recomputed only when your feet block,<br/>dimension, world or profile changes"] --> D
 ```
 
 The range check always uses the vanilla volume, so Sound Sets and boost can change loudness but never which sounds reach the player.
@@ -609,9 +609,9 @@ The range check always uses the vanilla volume, so Sound Sets and boost can chan
 | Sound hook (Mixins) | Intercept sound start, volume calculation and channel gain; report events to the core | **High** |
 | Range gate | Compute vanilla hearing range from un-modified volume | Medium (formula may change) |
 | Sound Set engine | Flatten each place's attached sets, compile patterns, cache per-ID matches, resolve specificity and precedence | No (pure Java) |
-| Zone index | Store zones, bounding-box pre-check, exact shape tests, fade weight | No |
+| Zone index | Store zones; work out which zones contain the player's feet block, smallest first | No |
 | Repeat limiter | Sliding-window counters, shared and per-source | No |
-| Gain controller | Re-apply volume to playing sounds each tick | **High** (channel internals) |
+| Gain controller | Set new volumes on playing looping sounds when you enter or leave a zone or edit a set; put playing sounds back to vanilla when Bypass turns on | **High** (channel internals) |
 | Recent log and entity linker | Fixed-size ring buffers of recent sounds and entity links | Low |
 | Cue overlay | Draw muted-sound cues on the HUD | **High** (HUD drawing) |
 | Outline renderer | Draw zone wireframes in the world | **High** (world rendering changes often) |
@@ -626,18 +626,18 @@ The range check always uses the vanilla volume, so Sound Sets and boost can chan
 - **Sound start: `SoundEngine.play(SoundInstance)`.** The main decision point. Sound Sculptor reads the sound's ID, category, attenuation, position and vanilla volume, computes vanilla range, logs the sound, then decides: drop (repeat limit), mute (no channel created, cue fired), or play with a volume multiplier.
 - **Volume calculation: `SoundEngine.calculateVolume(...)`.** Vanilla multiplies the instance volume by category and Master sliders and clamps to 0–1. Sound Sculptor applies its multiplier *after* the vanilla value is computed and raises the clamp to 2.0 for boost. The hearing-range calculation, which uses the sound instance's own volume, is left untouched. This is how boost avoids increasing range.
 - **Channel gain (boost, v1).** OpenAL (the audio library Minecraft uses) caps each source's gain at `AL_MAX_GAIN`, default 1.0. Sound Sculptor must raise it to 2.0 when a channel is created. Fallback: if a driver ignores it, boost is disabled with a message and volumes cap at 100%.
-- **Per-tick updates.** Each client tick, the gain controller walks the engine's playing sounds and sets the new volume for any whose zone result changed. Channel changes must run on the sound engine's own executor thread, never directly from the game thread.
+- **No per-tick updates.** A sound's volume multiplier is fixed when it starts (FR-8.8) and reused whenever vanilla recalculates that sound's volume (moving sounds, slider changes). Two events change sounds already playing: when where-you-are changes (you enter or leave a zone) or the profile changes (a set, entry or zone is edited), the gain controller re-decides the playing **looping** sounds (vanilla's looping flag on the sound instance) and sets their new volume; when Bypass turns on, it puts every playing sound back to vanilla volume. Channel changes must run on the sound engine's own executor thread, never directly from the game thread. The tracking of playing sounds stays for these and for the Future transition fades (10.3).
 - **Entity links.** The client packet handler for entity sound packets (which carry an entity ID) and sound instances bound to an entity (minecarts, bees, guardians) give certain links. Everything else is matched by proximity (FR-2.3).
 - **Cues.** Not hooked into the vanilla subtitle overlay: Sound Sculptor draws its own HUD element, which avoids a fragile injection.
 
 ### 7.3 Fabric API usage
 
-Fabric API (confirmed at M0: it has no event that can cancel or modify sounds; its sound module only supplies custom audio streams, so the sound hooks are Mixins) supplies: client lifecycle and tick events (per-tick updates), play connection join/disconnect events (load the server's profile), key mapping registration, HUD element registration (cues, bypass label), world render events (outlines), and a resource reload listener (rebuild the sound ID list and clear caches). The client game-test API is recommended for automated launch and screenshot tests.
+Fabric API (confirmed at M0: it has no event that can cancel or modify sounds; its sound module only supplies custom audio streams, so the sound hooks are Mixins) supplies: client lifecycle and tick events (checking whether the player's feet block changed), play connection join/disconnect events (load the server's profile), key mapping registration, HUD element registration (cues, bypass label), world render events (outlines), and a resource reload listener (rebuild the sound ID list and clear caches). The client game-test API is recommended for automated launch and screenshot tests.
 
 ### 7.4 Hot path design (performance-critical)
 
 - **Sound Sets are flattened before the hot path sees them.** Whenever a set, an attachment or a place changes, each place's attached sets (in order, skipping sets and entries that are off) are flattened into one resolved lookup per place, and patterns compile once to a matcher. A per-ID cache maps each sound ID to its pre-resolved best entry per property for Everywhere and each zone, exactly as the earlier per-list cache did, so a sound start costs the same with Sound Sets as with the earlier rules and the 5 µs (typical) and 10 µs (worst case) budgets of 9.1 still hold. Editing a linked set rebuilds the lookups of every place in the current profile that uses it. A version number on the snapshot invalidates the cache.
-- Zone checks: skip for non-positional sounds; only zones in the current dimension; a cheap axis-aligned bounding-box test before the exact cylinder test.
+- **Where you are, not where the sound is.** Each client tick compares the player's feet block, dimension, world and profile version with the last ones; only when one changed are the zones re-tested (64 box tests at most, a few times a second while walking, never while standing still) and the smallest-first list rebuilt. A sound start then walks that short list (usually 0 to 3 zones), so its cost no longer grows with the number of zones in the profile. What each place's sets say about a sound ID is looked up once and kept, so a sound start only walks that short list.
 - No allocations per sound: reuse one mutable result object on the game thread; ring buffers of primitive arrays for the recent log and limiter timestamps; no string building or lambdas on the path.
 - Threading: the engine reads an immutable snapshot of the profile with its attached sets already flattened, swapped in one step when the player saves. File saving runs on a background thread.
 
@@ -669,7 +669,7 @@ Profile file sketch (schema version 3; earlier development versions are not migr
   "schemaVersion": 3,
   "id": "6f1c…", "name": "play.example.net", "worldKey": "play.example.net",
   "settings": { "cueDefault": true, "showDistance": true,
-                "outlines": "editing", "edge": { "mode": "hard", "fade": 4.0 } },
+                "outlines": "editing" },
   "everywhere": {
     "sets": [ { "set": "quick", "enabled": true }, { "set": "set-4b2e…", "enabled": true } ],
     "quickChanges": { "id": "quick", "entries": [
@@ -680,7 +680,6 @@ Profile file sketch (schema version 3; earlier development versions are not migr
       "anchor": { "type": "fixed", "x": 120.5, "y": 64.0, "z": -33.5,
                   "dimension": "minecraft:overworld", "worldKey": "play.example.net" },
       "shape": { "type": "box", "width": 20, "height": 8, "depth": 30 },
-      "mode": "inside", "edge": { "mode": "default" },
       "sets": [ { "set": "set-4b2e…", "enabled": true } ] }
   ]
 }
@@ -710,7 +709,7 @@ Profile file sketch (schema version 3; earlier development versions are not migr
 | Performance | Regex or string building per sound, new objects per sound | Diagnostics under 5 µs per sound at 300 sounds/s |
 | UI drawing | Copying GUI code from older versions (drawing APIs changed in 1.21.x) | Screens render at GUI scale 1–4 with no missing text |
 | World rendering | Outline code tied to an old render event or pipeline | Outlines visible with and without Sodium/Iris |
-| Precedence | Choosing the zone by list order instead of anchor distance | Test matrix 11.4 |
+| Precedence | Testing the sound's position against zones instead of the player's feet, or choosing by list order instead of size | Test matrix 11.4 |
 | Range check | Using the boosted volume or the listener's camera in third person inconsistently | Recent list and cues stop at the same distance as vanilla subtitles |
 
 ## 8. Compatibility and fair play
@@ -751,10 +750,12 @@ Sound Sculptor must coexist with common client mods and be defensible to server 
 
 | Measure | Budget | Measured with |
 | --- | --- | --- |
-| Average added cost per sound start, typical profile (20 entries in the sets on Everywhere, 8 zones each with sets attached, about half of them around the player) | under 5 µs | Diagnostics (FR-13.3) |
-| Average added cost per sound start, worst case: 50 entries in the sets on Everywhere + 64 zones with sets attached that all cover every sound | under 10 µs | Diagnostics (FR-13.3) |
+| Average added cost per sound start, typical profile (20 entries in the sets on Everywhere, 8 zones each with sets attached, the player in 2 of them) | under 5 µs | Diagnostics (FR-13.3) |
+| Average added cost per sound start, worst case: 50 entries in the sets on Everywhere + 64 zones with sets attached that all contain the player and all cover every sound | under 10 µs | Diagnostics (FR-13.3) |
 | Worst single sound start | under 100 µs, excluding the first sight of a new ID | Diagnostics max |
-| Per-tick re-evaluation of playing sounds | under 0.2 ms per tick | Diagnostics |
+| Working out where you are (64 zones), when the feet block changes | under 0.1 ms each time; nothing on ticks where it did not change | Diagnostics |
+| Re-deciding playing looping sounds when you enter or leave a zone or edit a set | under 0.2 ms each time | Diagnostics |
+| Bypass putting playing sounds back to vanilla | within one tick of turning it on | Diagnostics |
 | Added frame time, noisy farm at 300 sounds/s, list closed | under 1 ms | F3 frame graph and diagnostics |
 | FPS with Recently Played open vs closed | within 5% | F3 FPS |
 | Outline drawing, 64 zones | under 0.3 ms per frame | Diagnostics |
@@ -800,7 +801,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M8 | MVP hardening | M8a: noisy-farm stress and soak tests. M8b: accessibility checklist, Mod Menu entry, mod page with fair-play section, release preparation | Performance |
 | M8c | Sound Sets | FR-4: set library and Sound Sets tab, set editor with single-sound and group entries (mute, level 0–100%; limit and cue fields kept for M9/M11), linked sets with the Attached to panel, Duplicate, delete; Everywhere as a place (FR-8.10) and attached sets on every place in order (FR-8.6); Quick changes sets (FR-4.10); precedence in set terms (FR-4.5, FR-9, P1–P5, P13–P16); trace in set terms (FR-14); profile schema 3 and library storage (7.5, FR-11.8); profiles tab, Copy from, export and import carrying sets (FR-11) | Linked-edit bookkeeping; keeping the hot-path budgets |
 | M8d | Sounds browser | FR-1 and FR-3 in one Sounds tab (full list narrowing as you type, Recently played filter, Apply to), replacing the Recently Played and Search tabs; picker mode for adding sounds to a set (FR-1.7); Like this groups (FR-4.8) | Layout at 854 × 480 |
-| M8e | Alpha release | Re-run 11.2 stress and soak and the 11.5 checklist with Sound Sets; update the mod page, changelog and screenshots; one jar for 26.2 and 26.3; release 0.1 on Modrinth and CurseForge | Regressions from the rework |
+| M8e | Alpha release | Zones follow where you stand (FR-8, FR-9 and FR-14 reworked on 2026-11-14: the player's feet, smallest zone first, decided at sound start, every sound in scope, Outside mode and fade removed), then re-run 11.2 stress and soak and the 11.5 checklist with Sound Sets; update the mod page, changelog and screenshots; one jar for 26.2 and 26.3; release 0.1 on Modrinth and CurseForge | Regressions from the rework |
 
 ### 10.2 v1 milestones (1.0)
 
@@ -810,7 +811,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M10 | Volume boost to 200% | FR-5.4–5.6 with warning and range-safe gain | OpenAL gain cap; range leak |
 | M11 | Repeat limiting | FR-6 shared and per-source | Counter correctness |
 | M12 | Entity inspector | FR-2 with Linked/Likely labels | Proximity accuracy |
-| M13 | Full zones | Cylinder, Outside mode, fade, zone limits and cues, P6–P8, dashed and fade outlines, color picker | Fade maths, per-tick cost |
+| M13 | Full zones | Cylinder, zone limits and cues, P8, color picker (Outside mode and fade were removed 2026-11-14) | Cylinder shape test at block precision |
 | M14 | Profile management | FR-11.2–11.3 copy settings from another server, rename, reset, delete. Built before the alpha; reworked for Sound Sets in M8c | Link bookkeeping |
 | M15 | Import/export | FR-11.4–11.7 with validation and migrations. Built before the alpha; sets travel with exports from M8c | Validation gaps |
 | M16 | 1.0 polish | Localization pass, full compatibility pass, accessibility audit. (Trace inline editing, Undo toasts and Apply to were built before the alpha and ship in it.) | Scope creep |
@@ -828,6 +829,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 - Filled zone display (FR-10.7), moved from v1 in the feature review.
 - Regex search (FR-3), moved from v1 in the feature review.
 - Preview: play a search result once at 100% (FR-3.3), moved from v1 in the feature review.
+- **Transition fades** (Q9). Walking into a zone, sounds already playing that the zone would have muted fade out; walking out, sounds the zone muted fade in (rain returns gently instead of at once). A strength setting (Low / Medium / High, or 1 to 10) sets how quick the fade is. Hard edges (FR-8.5) stay: the fade is over time as you cross, not over distance.
 - Search synonyms: everyday words that are not in a sound's subtitle or ID find it too ("moo" finds the cow sounds, whose subtitle is "Cow moos"), from a word list that ships with the mod and can be translated. Needs upkeep as Minecraft adds sounds.
 
 ### 10.4 Working with Claude Code per milestone
@@ -868,12 +870,12 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 | M8e | 11.2 stress and soak, 11.5 checklist, and every MVP AC on 26.2 and 26.3 |
 | M9 | FR-7 AC |
 | M10 | 11.3 boost-range test; FR-5 v1 AC |
-| M11–M16 | AC of the FRs each milestone covers; full matrix P1–P8 at M13 |
+| M11–M16 | AC of the FRs each milestone covers; full matrix at M13 |
 
 ### 11.2 Noisy farm stress test
 
 1. Build a 9 × 9 pen with 40 villagers, 40 chickens and 20 cows, plus 8 hoppers on a fast redstone clock, and 4 iron golems. Aim for 300 or more sounds per second (diagnostics readout).
-2. Load the "stress" profile: Sound Sets on Everywhere with 50 entries (mix of single sounds and groups), 64 zones overlapping the pen (boxes, cylinders, some fade, some Outside), each with sets attached, some sets shared by several zones.
+2. Load the "stress" profile: Sound Sets on Everywhere with 50 entries (mix of single sounds and groups), 64 zones that all contain the spot where the player stands by the pen (boxes and cylinders of different sizes), each with sets attached, some sets shared by several zones. Walk in and out of the zones during the run, so where-you-are is recomputed too.
 3. Record FPS (F3) with Sound Sculptor bypassed, then active, then active with Recently Played open.
 4. **Pass:** average cost under 10 µs per sound in this worst case (under 5 µs with the typical profile, 9.1); added frame time under 1 ms; FPS with list open within 5% of closed; no stutters visible in the F3 frame graph beyond those present when bypassed.
 5. **Soak:** leave it running 30 minutes. **Pass:** no crash, memory readout stable (under 8 MB for Sound Sculptor data), no "AL error" lines in the log.
@@ -888,35 +890,39 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 
 ### 11.4 Zone precedence test matrix
 
-Build each case in AZ Test using a cow or villager in a boat as the source, then check the Sounds tab row (status shows the deciding zone) and the trace (FR-14), and listen. "Global" in the cases below means a Sound Set attached to Everywhere.
+Build each case in AZ Test using a cow or villager in a boat as the source, stand where the case says, then check the Sounds tab row (status shows the deciding zone) and the trace (FR-14), and listen. Where the source is does not matter unless the case says so. "Global" in the cases below means a Sound Set attached to Everywhere.
 
 | Case | Setup | Expected | Release |
 | --- | --- | --- | --- |
-| P1 | Global mute villagers; Inside box A sets villagers 50% | 50% inside A, muted outside | MVP |
+| P1 | Global mute villagers; box A sets villagers 50% | 50% while you stand in A, muted when you step out | MVP |
 | P2 | Global mute villagers; no zones | Muted | MVP |
-| P3 | A (20%) anchor 3 blocks from source; B (80%) anchor 9 blocks | 20% | MVP |
-| P4 | A mutes villagers; B limits villagers 2/s; both contain source | Muted, limit from B | v1 |
-| P4b | A sets villagers to 40%; B limits villagers to 2/s; both contain source; 10 villagers in the pen | Villagers audibly quieter, and diagnostics shows no more than 2 villager sounds starting in any second | v1 |
-| P5 | A and B anchors both exactly 5 blocks from source, A smaller | A's value | MVP |
-| P5b | Same as P5 with equal sizes; swap list order | Higher-in-list zone's value; swaps with order | MVP |
-| P6 | Global cows 100%; A Inside fade 4 mutes cows; source 2 blocks inside edge | About 50% | v1 |
-| P7 | Outside zone O mutes all, anchor 40 away; Inside A 70%, anchor 6 away | 70% | v1 |
+| P3 | A (20%, small) inside B (80%, large); stand in A, then step into the part of B outside A | 20%, then 80% | MVP |
+| P4 | A mutes villagers; B limits villagers 2/s; you stand in both | Muted, limit from B | v1 |
+| P4b | A sets villagers to 40%; B limits villagers to 2/s; you stand in both; 10 villagers in the pen | Villagers audibly quieter, and diagnostics shows no more than 2 villager sounds starting in any second | v1 |
+| P5 | A (20%) and B (80%), the same size, overlapping; stand in both | Higher-in-list zone's value | MVP |
+| P5b | Same as P5; swap the two zones' list order | Swaps with the order | MVP |
+| P6 | (Removed 2026-11-14 with fade edges) | | |
+| P7 | (Removed 2026-11-14 with Outside mode) | | |
 | P8 | Global villagers 150%; A sets cue only | 150% | v1 |
 | P9 | (Removed 2026-11-13 with the personal bubble) | | | |
 | P10 | Fixed zone in Overworld; same coordinates in the Nether | No effect in the Nether | MVP |
-| P11 | Zone mutes all; music and UI clicks | Unchanged | MVP |
-| P12 | Source minecart rolls out of a mute zone while playing | Becomes audible within 0.5 s of leaving | MVP |
+| P11 | Zone mutes `*`; stand in it; a music track starts, click a button, eat | All silent | MVP |
+| P12 | A minecart rolls while you stand outside zone A, which mutes minecarts; walk into A, then out | Silent within one tick of entering; audible again within one tick of leaving | MVP |
+| P20 | Zone A mutes `minecraft:music.*`; a music track is playing; walk into A | The track plays to its end; the next track that starts while you are in A is silent | MVP |
 | P13 | Everywhere: set S1 (villagers 20%) above set S2 (villagers 80%); swap them | 20%, then 80% after the swap | MVP |
 | P14 | One set: group villagers muted, single sound villager ambient 60% | Ambient 60%; other villager sounds muted | MVP |
 | P15 | Everywhere: S1 mutes villagers, S2 below it limits villagers to 2/s | Muted, limit from S2 | v1 |
-| P16 | Zones A and B both attach "Farm animals" (cows 30%); edit it to 60% from B's editor | Cows in A play at 60% | MVP |
+| P16 | Zones A and B both attach "Farm animals" (cows 30%); edit it to 60% from B's editor; stand in A | Cows play at 60% | MVP |
+| P17 | A mutes villagers; stand in A; villager 10 blocks outside A | Muted | MVP |
+| P18 | A mutes villagers; stand outside A; villager inside A | Audible (Everywhere's value) | MVP |
+| P19 | A sets `minecraft:music_disc.*` to 30%; stand in A while a jukebox record plays; turn Bypass on, then off | On: the record goes to vanilla volume within one tick; off: it stays at vanilla volume to its end (a record is not a loop), and the next record started in A plays at 30% | MVP |
 
 ### 11.5 Release checklist (accessibility and compatibility)
 
 - [ ] The seven core tasks (6.4 A-2) done keyboard-only.
 - [ ] All screens correct at GUI scales 1, 2, 3, 4 and Auto at 854 × 480 and 1920 × 1080.
 - [ ] Narrator reads every control on the Sounds, Sound Sets and Zones tabs and in the set editor.
-- [ ] Grayscale screenshot check: statuses, zone modes and cues still distinguishable.
+- [ ] Grayscale screenshot check: statuses, zone labels and cues still distinguishable.
 - [ ] Sodium; Iris with a shader pack; Sound Physics Remastered; Mod Menu present and absent.
 - [ ] Vanilla server, Realms (if available) and singleplayer all work with nothing on the server.
 - [ ] Pseudo-language build: no clipped text. For the alpha (English only) this check is reported, not required: controls and hints already fit text 40% longer, and the remaining list rows at the narrowest widths are fixed in M16, before any translation ships.
@@ -967,7 +973,6 @@ The biggest risks are boost leaking range, Minecraft UI/render changes between v
 | Everywhere | The default place: no bounds, cannot be edited or removed, lowest in precedence. Replaces the earlier global rules. |
 | Fabric / Fabric Loader | The mod loader that loads Sound Sculptor into Minecraft. |
 | Fabric API | A shared library of hooks (events) that most Fabric mods use. Sound Sculptor's only required dependency. |
-| Fade weight (w) | How strongly a zone applies at a point, from 0 (not at all) to 1 (fully). |
 | Group | A Sound Set entry that targets several sounds through a pattern with `*`, e.g. `minecraft:entity.villager.*`. |
 | Hot path | Code that runs for every sound and must be very cheap. |
 | Library | The shared collection of Sound Sets, used by every world and server. |
@@ -996,7 +1001,7 @@ The biggest risks are boost leaking range, Minecraft UI/render changes between v
 | Vanilla | Unmodified Minecraft. |
 | Vanilla hearing range | The farthest distance at which vanilla would play a sound or show its subtitle. |
 | World key | Sound Sculptor's ID for a server, Realm or singleplayer world, used to identify each profile and its fixed zones. |
-| Zone | An area (box or cylinder) with its own attached Sound Sets, affecting sounds inside or outside it. A place. |
+| Zone | An area (box or cylinder) with its own attached Sound Sets, which decide how every sound plays while the player's feet are inside it. A place. |
 
 ## Open questions
 
@@ -1006,10 +1011,11 @@ In priority order. Answers will update the decisions log and the affected sectio
 - [ ] **Q2.** Resolved: distance bands (Close, Near, Far) are shown by default, with a setting to hide them (A5, FR-1.4).
 - [ ] **Q3.** Resolved: cues have their own master switch, "Show muted-sound cues", on by default and independent of vanilla Subtitles; per-rule Cue toggles apply underneath (FR-7.7).
 - [ ] **Q4.** Resolved: singleplayer worlds are identified by a small ID file (soundsculptor\_id.txt) in the save folder, with the folder name as fallback (FR-11.1).
-- [ ] **Q5.** Resolved: Outside zones measure distance from their center, the same as every other zone (FR-9 step 4).
+- [ ] **Q5.** Resolved, then made moot on 2026-11-14: Outside zones were removed, and zones are chosen by size, not distance (FR-9).
 - [ ] **Q6.** Resolved: ; opens the screen by default (K clashed with Iris in the M0 check of popular mods' keys); Bypass is F10, which no checked mod uses (FR-12.2, FR-13.1).
 - [ ] **Q7.** Resolved: the initial build supports 26.2 and 26.3; later versions follow Mojang's release schedule with releases on or shortly after each official Minecraft release (sections 7.6 and 10.5).
-- [ ] **Q8.** Resolved: Music, UI and Voice/Speech count as vanilla-covered and are excluded. Confirmed at M1: 26.2 and 26.3 both have these as separate categories (`music`, `ui`, `voice`).
+- [ ] **Q8.** Resolved: Music, UI and Voice/Speech were excluded as vanilla-covered (2026-11-08); since 2026-11-14 every sound is in scope (section 5).
+- [ ] **Q9.** Open (Future): transition fades. When you walk into a zone, should sounds already playing that the zone would have muted fade out, and when you leave, should sounds the zone muted fade in (rain coming back gently instead of at full volume at once)? This needs a fade strength setting (Low / Medium / High, or 1 to 10) and brings back some per-tick work for playing sounds (10.3).
 
 ## Decisions log
 
@@ -1130,3 +1136,5 @@ In priority order. Answers will update the decisions log and the affected sectio
 | 2026-11-14 | One jar for Minecraft 26.2 and 26.3 instead of one per version. Each version is still built and tested on its own, and CI requires both builds to be the same jar byte for byte; version differences go through helpers that look them up when the game starts (key codes, `RenderPipeline`, opening a folder). Replaces the M0 decision of one jar per version | Project owner |
 | 2026-11-14 | The 11.5 pseudo-language item is reported, not required, for the English-only alpha, as decided on 2026-11-09. Controls and hints now fit text 40% longer (#101); 38 list-row problems at the narrowest widths remain, held by a test ceiling, and are fixed in M16 before any translation ships | Project owner |
 | 2026-11-14 | Recently played rows show the time since the last play in minutes ("<1m ago", "2m ago", ">1h ago") instead of seconds, so the row stays still while it is read (the compact form fits 854 × 480); hovering the time shows the exact time to the second, counting up. A new play updates a row in place, so a tooltip on its buttons no longer flickers each second | Project owner |
+| 2026-11-14 | Zones follow where the player stands, not where a sound comes from. While the player's feet block is inside a zone, its sets decide how every sound plays, from any source; Everywhere applies when no zone does. A sound is decided at its start, by where the player stands then; walking in or out does not change one-shot sounds or music tracks already playing, but looping sounds (minecart rolling, bee buzz, biome ambience) are decided again when the player enters or leaves a zone or edits a set, and Bypass resets every playing sound at once. Nothing is re-checked every tick. When the player is in several zones, the smallest wins, then list order. Outside mode and fade edges are removed; old profile fields for them are ignored, with no migration, since nothing has been released. Fading playing sounds in and out as the player crosses a boundary is kept as a Future idea (Q9) | Project owner |
+| 2026-11-14 | Every sound is in scope, including background music, UI clicks and Voice/Speech, which the 2026-11-08 rule left alone. Vanilla's sliders still apply first and Sound Sculptor's volume multiplies the result, so a zone can, for example, silence music only in the player's base | Project owner |

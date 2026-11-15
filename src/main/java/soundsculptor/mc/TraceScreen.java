@@ -9,7 +9,6 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetUsage;
 import soundsculptor.core.sets.SoundSet;
 import soundsculptor.core.sets.Workspace;
-import soundsculptor.core.search.SoundSearch;
 import soundsculptor.core.trace.EntryEdit;
 import soundsculptor.core.trace.EntryLocation;
 import soundsculptor.core.trace.LastPlay;
@@ -73,7 +72,6 @@ public final class TraceScreen extends SculptScreen {
 	private static final Component LEVEL = Component.translatable("soundsculptor.trace.edit.volume");
 
 	private final String soundId;
-	private final boolean vanillaCovered;
 	/** The play the trace is worked out from; a new play of the sound replaces it and ends the prediction. */
 	private LastPlay play;
 	/** The profile and library the shown trace was worked out from. */
@@ -102,7 +100,6 @@ public final class TraceScreen extends SculptScreen {
 	public TraceScreen(Screen parent, String soundId) {
 		super(Component.translatable("soundsculptor.trace.title"), parent);
 		this.soundId = soundId;
-		this.vanillaCovered = SoundSearch.isVanillaCovered(soundId) || KnownSounds.seenExcluded().contains(soundId);
 		this.play = SoundHook.lastPlays().get(soundId);
 		recompute();
 	}
@@ -183,7 +180,7 @@ public final class TraceScreen extends SculptScreen {
 	private TraceEditContext context() {
 		SetUsage usage = SetUsageIndex.current();
 		String key = ProfileManager.key();
-		return new TraceEditContext(soundId, play, ProfileManager.isBypassed(), vanillaCovered,
+		return new TraceEditContext(soundId, play, SoundHook.standingNow(), ProfileManager.isBypassed(),
 				setId -> usage == null ? 0 : usage.otherPlaceCount(setId, key));
 	}
 

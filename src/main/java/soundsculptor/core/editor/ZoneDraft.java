@@ -10,14 +10,12 @@ import soundsculptor.core.zones.BoxEdit;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 /**
- * The zone editor's values (PRD 6.1): name, color, coordinates, shape and sizes, mode, edge and fade distance. The
- * zone's own rule list is edited in its own rule editors and kept here as it is.
+ * The zone editor's values (PRD 6.1): name, color, coordinates, shape and sizes. The zone's attached sets are edited
+ * in their own editors and kept here as they are.
  *
- * <p>Only the fields in use are checked: the sizes of the current shape, and the fade distance with a fade edge.
+ * <p>Only the fields in use are checked: the sizes of the current shape.
  * The color is kept beside the zone (it belongs to the profile model): read it with {@link #color()}.
  */
 public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
@@ -41,11 +39,7 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		/** Box and cylinder. */
 		HEIGHT(true),
 		/** Box. */
-		DEPTH(true),
-		MODE(false),
-		EDGE(false),
-		/** Blocks, with a fade edge. */
-		FADE(true);
+		DEPTH(true);
 
 		private final boolean text;
 
@@ -78,8 +72,8 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 	}
 
 	/**
-	 * A new fixed Inside zone (FR-8.1a, FR-8.3): a {@value #DEFAULT_SIZE}-block box around {@code position} (normally
-	 * "my position"), with the profile's default edge and no sets yet. The fields show the position as given; the
+	 * A new fixed zone (FR-8.1a, FR-8.3): a {@value #DEFAULT_SIZE}-block box around {@code position} (normally
+	 * "my position"), with no sets yet. The fields show the position as given; the
 	 * saved box is snapped to the block grid like every box.
 	 *
 	 * @param rgb the next palette color ({@link ZoneColors#next}), also the color's reset value
@@ -124,9 +118,6 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 				values.put(Field.HEIGHT, Numbers.format(c.height()));
 			}
 		}
-		values.put(Field.MODE, zone.mode().name());
-		values.put(Field.EDGE, zone.edge().mode().name());
-		values.put(Field.FADE, Numbers.format(zone.edge().fadeDistance()));
 
 		// Name, coordinates, world and dimension have no app-wide default: reset puts back the value at opening.
 		EnumMap<Field, String> defaults = new EnumMap<>(values);
@@ -136,9 +127,6 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		for (Field f : List.of(Field.RADIUS, Field.WIDTH, Field.HEIGHT, Field.DEPTH)) {
 			defaults.put(f, size);
 		}
-		defaults.put(Field.MODE, ZoneMode.INSIDE.name());
-		defaults.put(Field.EDGE, ZoneEdge.Mode.DEFAULT.name());
-		defaults.put(Field.FADE, Numbers.format(ZoneEdge.DEFAULT_FADE));
 		return new ZoneDraft(zone.id(), zone.sets(), values, defaults);
 	}
 
@@ -176,22 +164,6 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		put(Field.SHAPE, value.name());
 	}
 
-	public ZoneMode mode() {
-		return ZoneMode.valueOf(text(Field.MODE));
-	}
-
-	public void setMode(ZoneMode value) {
-		put(Field.MODE, value.name());
-	}
-
-	public ZoneEdge.Mode edge() {
-		return ZoneEdge.Mode.valueOf(text(Field.EDGE));
-	}
-
-	public void setEdge(ZoneEdge.Mode value) {
-		put(Field.EDGE, value.name());
-	}
-
 	/** The color as {@code 0xRRGGBB}. Valid only while the color field has no error. */
 	public int color() {
 		return ZoneColors.parseHex(text(Field.COLOR)).rgb();
@@ -212,7 +184,6 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 					? Numbers.checkWhole(text, (int) Shape.Box.MIN_SIDE, (int) Shape.Box.MAX_SIDE)
 					: Numbers.checkDecimal(text, Shape.Cylinder.MIN_HEIGHT, Shape.Cylinder.MAX_HEIGHT);
 			case WIDTH, DEPTH -> Numbers.checkWhole(text, (int) Shape.Box.MIN_SIDE, (int) Shape.Box.MAX_SIDE);
-			case FADE -> Numbers.checkDecimal(text, ZoneEdge.MIN_FADE, ZoneEdge.MAX_FADE);
 			default -> null;
 		};
 	}
@@ -222,7 +193,6 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		return switch (field) {
 			case RADIUS -> shape() == ShapeKind.CYLINDER;
 			case WIDTH, DEPTH -> shape() == ShapeKind.BOX;
-			case FADE -> edge() == ZoneEdge.Mode.FADE;
 			default -> true;
 		};
 	}
@@ -236,7 +206,7 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 				ZoneColors.Parsed pb = ZoneColors.parseHex(b);
 				yield pa.error() == null && pb.error() == null ? pa.rgb() == pb.rgb() : a.trim().equals(b.trim());
 			}
-			case X, Y, Z, RADIUS, WIDTH, HEIGHT, DEPTH, FADE -> Numbers.same(a, b);
+			case X, Y, Z, RADIUS, WIDTH, HEIGHT, DEPTH -> Numbers.same(a, b);
 			default -> a.equals(b);
 		};
 	}
@@ -247,18 +217,13 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 			case BOX -> new Shape.Box(number(Field.WIDTH), number(Field.HEIGHT), number(Field.DEPTH));
 			case CYLINDER -> new Shape.Cylinder(number(Field.RADIUS), number(Field.HEIGHT));
 		};
-		ZoneEdge edge = switch (edge()) {
-			case DEFAULT -> ZoneEdge.DEFAULT;
-			case HARD -> ZoneEdge.hard();
-			case FADE -> ZoneEdge.fade(number(Field.FADE));
-		};
 		Point anchor = new Point(number(Field.X), number(Field.Y), number(Field.Z));
 		if (shape instanceof Shape.Box box) {
 			// Every edge on a block boundary, however the center was set (typed, My position, Looking at).
 			anchor = BoxEdit.snap(anchor, box).center();
 		}
 		return new Zone(id, text(Field.NAME).trim(), enabled(), text(Field.WORLD_KEY), text(Field.DIMENSION), anchor, shape,
-				sets, mode(), edge);
+				sets);
 	}
 
 	private double number(Field field) {

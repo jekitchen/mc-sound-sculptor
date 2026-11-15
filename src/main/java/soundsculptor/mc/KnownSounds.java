@@ -2,11 +2,9 @@ package soundsculptor.mc;
 
 import soundsculptor.core.search.SoundEntry;
 import soundsculptor.core.search.SoundNames;
-import soundsculptor.core.search.SoundSearch;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.network.chat.Component;
@@ -26,18 +24,14 @@ public final class KnownSounds {
 	}
 
 	/**
-	 * Sorted IDs, without the vanilla-covered ones (FR-4.4). Rebuilt when the sound manager's list changes (after a
-	 * resource reload).
+	 * Sorted IDs (FR-4.4). Rebuilt when the sound manager's list changes (after a resource reload).
 	 */
 	public static synchronized List<String> ids() {
 		Collection<Identifier> current = Minecraft.getInstance().getSoundManager().getAvailableSounds();
 		if (current != source || current.size() != sourceSize) {
 			List<String> fresh = new ArrayList<>(current.size());
 			for (Identifier id : current) {
-				String text = id.toString();
-				if (!SoundSearch.isVanillaCovered(text)) {
-					fresh.add(text);
-				}
+				fresh.add(id.toString());
 			}
 			fresh.sort(null);
 			source = current;
@@ -67,10 +61,5 @@ public final class KnownSounds {
 		WeighedSoundEvents events = id == null ? null : Minecraft.getInstance().getSoundManager().getSoundEvent(id);
 		Component subtitle = events == null ? null : events.getSubtitle();
 		return subtitle != null ? subtitle.getString() : SoundNames.readable(soundId);
-	}
-
-	/** IDs that played in a vanilla-covered category this session, which no rule matches either. */
-	public static Set<String> seenExcluded() {
-		return RecentLog.get().sounds().seenExcludedIds();
 	}
 }

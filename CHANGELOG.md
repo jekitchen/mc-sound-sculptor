@@ -6,6 +6,13 @@ Each release ships one jar that runs on every supported Minecraft version.
 ## Unreleased (1.0)
 
 ### Changes
+- **Zones follow where you stand.** While your feet are in a zone, its Sound Sets decide how every sound you hear
+  plays, wherever the sound comes from: mute rain, music and thunder in your base, and they come back as you walk
+  out. Where zones overlap, the smallest one you stand in wins (equal sizes: the one higher in the list). A sound is
+  decided when it starts; looping sounds (a minecart rolling, bees, biome ambience) follow you in and out of zones and
+  follow your edits at once. Bypass puts every playing sound back to vanilla at once. Music, UI clicks and
+  Voice/Speech sounds can now be changed too; vanilla's sliders still apply first. The trace shows where you stood
+  ("You were in: Pen → Base → Everywhere"). Outside mode and fade edges are gone; old profiles load without them.
 - **One jar for Minecraft 26.2 and 26.3**: `soundsculptor-<version>+mc26.2-26.3.jar` replaces the separate jar for each
   version.
 - **One Sounds tab** replaces Recently Played and Search. It lists every sound the game knows and narrows as you
@@ -85,7 +92,7 @@ First public alpha, for Minecraft Java Edition 26.2 and 26.3 with Fabric.
   is partly overridden. Type plain words in the pattern field (`villager hurt`) to find a sound, then pick **This sound** or
   **Like this** for its family.
 - **Zones:** boxes you draw by marking two corners in the world, then fine-tune side by side (Grow, Shrink), with the
-  size shown on screen while you mark. Each zone has its own rules (new or copied from existing ones). Where zones overlap, the closest center wins. Outlines in the zone's color with its name, shown always,
+  size shown on screen while you mark. Each zone has its own rules (new or copied from existing ones), which apply while you stand in it. Where zones overlap, the smallest wins. Outlines in the zone's color with its name, shown always,
   only while editing, or never.
 - **Why does it sound like this?** For any sound: every rule and zone that touched it, which one won and why, and the
   final volume. Copy as text.
@@ -100,5 +107,4 @@ Sound Sculptor only changes how loud sounds are on your own computer, and never 
 do. It sends nothing to servers. See "For server admins" in the README.
 
 ### Not yet included (planned for 1.0)
-Volume boost above 100%, on-screen cues for muted sounds, repeat limits, the point-at-a-mob inspector, Outside zones,
-fade edges, cylinders and personal bubbles, copying settings between servers, and import/export.
+Volume boost above 100%, on-screen cues for muted sounds, repeat limits, the point-at-a-mob inspector, cylinders and personal bubbles, copying settings between servers, and import/export.

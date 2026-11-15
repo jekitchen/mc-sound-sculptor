@@ -76,11 +76,6 @@ public final class M3ClientGameTest implements FabricClientGameTest {
 			List<String> again = rowTexts(context, VILLAGER);
 			check(again.stream().anyMatch(t -> t.startsWith("×2 ·")) && again.contains("Near"), "second play at 10 blocks: ×2 and Near, was " + again);
 
-			// Vanilla-covered sounds (UI) are never listed.
-			context.runOnClient(mc -> mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F)));
-			context.waitTicks(SETTLE);
-			check(rowTexts(context, "minecraft:ui.button.click") == null, "UI sounds must never be listed");
-
 			// Pause freezes the list; P (with the list focused) resumes it.
 			context.runOnClient(mc -> sounds(mc).setPaused(true));
 			play(context, ANVIL, SoundSource.BLOCKS, 2.0);
@@ -99,10 +94,16 @@ public final class M3ClientGameTest implements FabricClientGameTest {
 
 			// Keyboard focus and narration of a read-only row.
 			String narration = context.computeOnClient(mc -> NarrationCompat.collect(sounds(mc).list::updateNarration));
-			// Focus stays on the same sound when newer rows arrive above it, so the position can be 1 or 2.
-			check(narration.matches("(?s).*row [12] out of 2.*") && (narration.contains("Anvil landed") || narration.contains("Villager mumbles"))
+			// Focus stays on the same sound when newer rows arrive above it, so the position can vary; background music can
+			// start at any moment and is listed too (every sound is in scope), so there may be a third row.
+			check(narration.matches("(?s).*row [123] out of [23].*") && (narration.contains("Anvil landed") || narration.contains("Villager mumbles"))
 					&& narration.contains("Friendly Mobs") == narration.contains("Villager mumbles"),
 					"the focused row should be narrated with its text and position, was: " + narration);
+
+			// Every sound is in scope (section 5, decided 2026-11-14): a UI click is listed like any other.
+			context.runOnClient(mc -> mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F)));
+			context.waitTicks(SETTLE);
+			check(rowTexts(context, "minecraft:ui.button.click") != null, "UI sounds are listed too");
 
 			// Refresh at most 4 times per second (FR-1.6).
 			int refreshesBefore = context.computeOnClient(mc -> sounds(mc).refreshCount);

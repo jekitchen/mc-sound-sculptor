@@ -14,7 +14,6 @@ public final class SoundDecision {
 	float volumePercent;
 	SetEntry loudnessRule;
 	Zone loudnessZone;
-	float loudnessWeight;
 	Limit limit;
 	SetEntry limitRule;
 	String limitSet;
@@ -27,7 +26,6 @@ public final class SoundDecision {
 		volumePercent = 100;
 		loudnessRule = null;
 		loudnessZone = null;
-		loudnessWeight = 0;
 		limit = null;
 		limitRule = null;
 		limitSet = null;
@@ -52,11 +50,6 @@ public final class SoundDecision {
 
 	public Zone loudnessZone() {
 		return loudnessZone;
-	}
-
-	/** The deciding zone's fade weight for loudness, 0 to 1; 0 when no zone decided (FR-14 trace). */
-	public float loudnessWeight() {
-		return loudnessWeight;
 	}
 
 	/** The repeat limit to apply, or {@code null} for none. */

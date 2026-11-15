@@ -1,34 +1,34 @@
 package soundsculptor.core.playing;
 
-import soundsculptor.core.boost.Gain;
 import soundsculptor.core.diag.MemoryEstimate;
-import soundsculptor.core.sets.EntryResolution;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.SoundDecision;
+import soundsculptor.core.zones.WhereYouAre;
 
 /**
- * The positional sounds that are playing right now, re-decided every client tick (PRD FR-8.8), so moving sources and
- * long sounds change volume while they play.
+ * The sounds playing right now, and the volume factor each one plays at (PRD FR-8.8, FR-13.1). Nothing here runs every
+ * tick: a sound keeps the factor it was decided with at its start, except on three events.
+ * <ul>
+ *   <li><b>Where you are or the profile changed</b> (you walked into or out of a zone, or a set, entry or zone was
+ *       edited): every <em>looping</em> sound is decided again; one-shots and music tracks play on as they started.</li>
+ *   <li><b>Bypass turned on:</b> every sound goes back to vanilla volume (factor 1), silent loops included.</li>
+ *   <li><b>Bypass turned off:</b> loops are decided again; everything else stays at vanilla until it ends.</li>
+ * </ul>
  *
  * <p>How the sound hook uses it, all on the game thread:
  * <ol>
- *   <li>When a positional sound starts and is allowed to play, {@link #start} it with the handle the sound hook uses
- *       for that channel, the vanilla gain and the gain it was started with. A sound dropped by a repeat limit never
- *       starts, so it is never tracked.</li>
- *   <li>Each tick, {@link #move} sounds whose source moved, then call {@link #update}. It re-runs
- *       {@link Precedence#decide} and calls the listener only for sounds whose gain changed. Apply that gain to the
- *       channel; never stop a sound because its gain became 0 (mute re-evaluates to silence, FR-8.8).</li>
+ *   <li>When a sound starts while a profile is loaded, {@link #start} it with its handle, whether it loops, vanilla's
+ *       gain and the factor it was started with. A sound that does not start (dropped, or a muted one-shot) is never
+ *       tracked.</li>
+ *   <li>When vanilla recalculates a playing sound's volume (a slider change, a moving sound), use
+ *       {@link #recalculated}: vanilla's new gain times the sound's own factor.</li>
+ *   <li>Each client tick, after working out where the player is, call {@link #update}. It does nothing unless one of
+ *       the events above happened, and calls the listener only for sounds whose gain changed. Never stop a sound
+ *       because its gain became 0: a muted loop plays on silently.</li>
  *   <li>{@link #stop} a sound when its channel stops.</li>
  * </ol>
  *
  * <p>Only the volume is re-decided. Repeat limits are decided at start only, and cues are shown at start only.
- *
- * <p>Range-safe: the new gain comes from {@link Gain#finalGain}, which scales the gain vanilla computed and never
- * touches the hearing range (FR-5.6).
- *
- * <p>A sound whose inputs did not change since the last tick is not re-decided: same position, same profile snapshot,
- * same world and dimension. Zones have fixed anchors, so the player moving changes nothing. That keeps quiet ticks
- * almost free.
  *
  * <p>Allocates nothing once created. Not thread-safe.
  */
@@ -55,15 +55,10 @@ public final class PlayingSounds {
 	// Dense arrays of tracked sounds, indexes 0 to size - 1.
 	private final long[] handles = new long[CAPACITY];
 	private final String[] soundIds = new String[CAPACITY];
-	private final double[] xs = new double[CAPACITY];
-	private final double[] ys = new double[CAPACITY];
-	private final double[] zs = new double[CAPACITY];
+	private final boolean[] looping = new boolean[CAPACITY];
 	private final float[] vanillaGains = new float[CAPACITY];
+	private final float[] factors = new float[CAPACITY];
 	private final float[] gains = new float[CAPACITY];
-	private final boolean[] dirty = new boolean[CAPACITY];
-	/** Per sound, what each rule list resolves its ID to, for the current snapshot; see {@link Precedence#resolve}. */
-	private final EntryResolution[][] resolved = new EntryResolution[CAPACITY][Precedence.MAX_ZONES + 1];
-	private final boolean[] isResolved = new boolean[CAPACITY];
 	private int size;
 
 	// Open-addressing hash from handle to dense index.
@@ -74,11 +69,9 @@ public final class PlayingSounds {
 	private long rejected;
 	private long decisions;
 
-	// Inputs of the last update, to skip sounds nothing could have changed.
+	// The inputs of the last update: re-decide only when one changed.
 	private Precedence lastPrecedence;
-	private String lastWorldKey;
-	private String lastDimension;
-	private boolean lastBoostSupported;
+	private long lastWhereVersion = -1;
 	private boolean lastBypassed;
 
 	public PlayingSounds() {
@@ -86,14 +79,15 @@ public final class PlayingSounds {
 	}
 
 	/**
-	 * Starts tracking a playing positional sound.
+	 * Starts tracking a playing sound.
 	 *
 	 * @param handle      the sound hook's ID for the playing channel; unique among playing sounds
+	 * @param looping     whether vanilla loops it ({@code SoundInstance.isLooping}); only loops are re-decided
 	 * @param vanillaGain vanilla's gain for the channel, including the Master and category sliders
-	 * @param startGain   the gain the sound started with, after Sound Sculptor's decision
+	 * @param factor      what Sound Sculptor multiplied that gain by at the start (1 when it changed nothing)
 	 * @return false if the table is full or the handle is already tracked; the sound then just plays on unchanged
 	 */
-	public boolean start(long handle, String soundId, double x, double y, double z, float vanillaGain, float startGain) {
+	public boolean start(long handle, String soundId, boolean looping, float vanillaGain, float factor) {
 		if (size == CAPACITY || indexOf(handle) != EMPTY) {
 			rejected++;
 			return false;
@@ -101,36 +95,26 @@ public final class PlayingSounds {
 		int i = size++;
 		handles[i] = handle;
 		soundIds[i] = soundId;
-		xs[i] = x;
-		ys[i] = y;
-		zs[i] = z;
+		this.looping[i] = looping;
 		vanillaGains[i] = vanillaGain;
-		gains[i] = startGain;
-		dirty[i] = true;
-		isResolved[i] = false;
+		factors[i] = factor;
+		gains[i] = vanillaGain * factor;
 		putSlot(handle, i);
 		return true;
 	}
 
-	/** The source moved (a mob, a minecart). Ignored for a sound that is not tracked. */
-	public void move(long handle, double x, double y, double z) {
+	/**
+	 * Vanilla recalculated a playing sound's volume (a slider change, a moving sound). Returns the gain to give it:
+	 * vanilla's new gain times the sound's own factor, or {@code NaN} if the sound is not tracked.
+	 */
+	public float recalculated(long handle, float vanillaGain) {
 		int i = indexOf(handle);
-		if (i == EMPTY || (xs[i] == x && ys[i] == y && zs[i] == z)) {
-			return;
+		if (i == EMPTY) {
+			return Float.NaN;
 		}
-		xs[i] = x;
-		ys[i] = y;
-		zs[i] = z;
-		dirty[i] = true;
-	}
-
-	/** Vanilla's gain for the channel changed, for example the player moved a volume slider. */
-	public void setVanillaGain(long handle, float vanillaGain) {
-		int i = indexOf(handle);
-		if (i != EMPTY && vanillaGains[i] != vanillaGain) {
-			vanillaGains[i] = vanillaGain;
-			dirty[i] = true;
-		}
+		vanillaGains[i] = vanillaGain;
+		gains[i] = vanillaGain * factors[i];
+		return gains[i];
 	}
 
 	/** The channel stopped. Ignored for a sound that is not tracked. */
@@ -144,16 +128,10 @@ public final class PlayingSounds {
 		if (i != last) {
 			handles[i] = handles[last];
 			soundIds[i] = soundIds[last];
-			xs[i] = xs[last];
-			ys[i] = ys[last];
-			zs[i] = zs[last];
+			looping[i] = looping[last];
 			vanillaGains[i] = vanillaGains[last];
+			factors[i] = factors[last];
 			gains[i] = gains[last];
-			dirty[i] = dirty[last];
-			isResolved[i] = isResolved[last];
-			EntryResolution[] row = resolved[i]; // swap the rows, so no array is ever allocated
-			resolved[i] = resolved[last];
-			resolved[last] = row;
 			slotIndexes[findSlot(handles[i])] = i;
 		}
 		soundIds[last] = null;
@@ -167,68 +145,60 @@ public final class PlayingSounds {
 		size = 0;
 		java.util.Arrays.fill(slotIndexes, EMPTY);
 		lastPrecedence = null;
+		lastWhereVersion = -1;
+		lastBypassed = false;
 	}
 
 	/**
-	 * Re-decides every tracked sound and reports the ones whose gain changed.
+	 * Applies whatever changed since the last call (see the class comment) and reports the sounds whose gain changed.
+	 * With Bypass on, {@code precedence} and {@code where} are not used and may be {@code null}.
 	 *
-	 * @param precedence     the current profile snapshot
-	 * @param worldKey       the current server or world
-	 * @param dimension      the current dimension
-	 * @param boostSupported whether volumes above 100% can play (FR-5.5)
+	 * @param where          where the player is, worked out for {@code precedence}
+	 * @param bypassed       whether Bypass Sound Sculptor is on
+	 * @param boostSupported whether factors above 1 can play (FR-5.5); otherwise loops stop at 100%
 	 * @return how many sounds changed gain
 	 */
-	public int update(Precedence precedence, String worldKey, String dimension, boolean boostSupported,
+	public int update(Precedence precedence, WhereYouAre where, boolean bypassed, boolean boostSupported,
 			GainListener listener) {
-		if (precedence != lastPrecedence) {
-			java.util.Arrays.fill(isResolved, 0, size, false);
+		if (bypassed) {
+			if (lastBypassed) {
+				return 0;
+			}
+			lastBypassed = true;
+			lastPrecedence = null;
+			int changed = 0;
+			for (int i = 0; i < size; i++) {
+				if (setFactor(i, 1F, listener)) {
+					changed++;
+				}
+			}
+			return changed;
 		}
-		boolean everything = lastBypassed || precedence != lastPrecedence || boostSupported != lastBoostSupported
-				|| !worldKey.equals(lastWorldKey) || !dimension.equals(lastDimension);
-		lastPrecedence = precedence;
-		lastWorldKey = worldKey;
-		lastDimension = dimension;
-		lastBoostSupported = boostSupported;
+		if (!lastBypassed && precedence == lastPrecedence && where.version() == lastWhereVersion) {
+			return 0;
+		}
 		lastBypassed = false;
-
+		lastPrecedence = precedence;
+		lastWhereVersion = where.version();
 		int changed = 0;
 		SoundDecision out = scratch;
+		float cap = boostSupported ? 200F : 100F;
 		for (int i = 0; i < size; i++) {
-			if (!everything && !dirty[i]) {
+			if (!looping[i]) {
 				continue;
 			}
-			dirty[i] = false;
-			if (!isResolved[i]) {
-				// A playing sound's ID never changes, so look its rules up once per snapshot, not every tick.
-				precedence.resolve(soundIds[i], resolved[i]);
-				isResolved[i] = true;
-			}
 			decisions++;
-			precedence.decideResolved(resolved[i], true, worldKey, dimension, xs[i], ys[i], zs[i], out);
-			if (report(i, Gain.finalGain(vanillaGains[i], out.volumePercent(), boostSupported), listener)) {
+			precedence.decide(soundIds[i], where, out);
+			if (setFactor(i, Math.min(out.volumePercent(), cap) / 100F, listener)) {
 				changed++;
 			}
 		}
 		return changed;
 	}
 
-	/**
-	 * Bypass is on (FR-13.1): every tracked sound goes back to its vanilla gain. The next {@link #update} re-decides
-	 * everything.
-	 */
-	public int updateBypassed(GainListener listener) {
-		lastBypassed = true;
-		int changed = 0;
-		for (int i = 0; i < size; i++) {
-			dirty[i] = false;
-			if (report(i, vanillaGains[i], listener)) {
-				changed++;
-			}
-		}
-		return changed;
-	}
-
-	private boolean report(int i, float gain, GainListener listener) {
+	private boolean setFactor(int i, float factor, GainListener listener) {
+		factors[i] = factor;
+		float gain = vanillaGains[i] * factor;
 		if (Math.abs(gain - gains[i]) < GAIN_EPSILON) {
 			return false;
 		}
@@ -254,17 +224,13 @@ public final class PlayingSounds {
 
 	/**
 	 * Estimated bytes this table keeps, for the Diagnostics memory readout (PRD 9.1). The arrays have a fixed size;
-	 * it walks the tracked IDs, so call it on demand through {@code MemoryMeter}, not per tick. The resolutions it
-	 * points at belong to the rule lists' caches and are counted there.
+	 * it walks the tracked IDs, so call it on demand through {@code MemoryMeter}, not per tick.
 	 */
 	public long estimatedBytes() {
-		long bytes = MemoryEstimate.object(18 * MemoryEstimate.REFERENCE + 4 + 2 * 8 + 2)
-				+ MemoryEstimate.object(16 * MemoryEstimate.REFERENCE + 8 * 4)
+		long bytes = MemoryEstimate.object(11 * MemoryEstimate.REFERENCE + 4 + 3 * 8 + 1)
+				+ MemoryEstimate.object(10 * MemoryEstimate.REFERENCE + 8 * 4)
 				+ MemoryEstimate.array(8, CAPACITY) + MemoryEstimate.array(MemoryEstimate.REFERENCE, CAPACITY)
-				+ 3 * MemoryEstimate.array(8, CAPACITY) + 2 * MemoryEstimate.array(4, CAPACITY)
-				+ 2 * MemoryEstimate.array(1, CAPACITY)
-				+ MemoryEstimate.array(MemoryEstimate.REFERENCE, CAPACITY)
-				+ CAPACITY * MemoryEstimate.array(MemoryEstimate.REFERENCE, Precedence.MAX_ZONES + 1)
+				+ MemoryEstimate.array(1, CAPACITY) + 3 * MemoryEstimate.array(4, CAPACITY)
 				+ MemoryEstimate.array(8, SLOTS) + MemoryEstimate.array(4, SLOTS);
 		for (int i = 0; i < size; i++) {
 			bytes += MemoryEstimate.string(soundIds[i]);
@@ -277,7 +243,7 @@ public final class PlayingSounds {
 		return rejected;
 	}
 
-	/** Sounds re-decided so far (skipped sounds do not count), for diagnostics. */
+	/** Loops re-decided so far, for diagnostics. */
 	public long decisionCount() {
 		return decisions;
 	}

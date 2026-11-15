@@ -141,7 +141,10 @@ public final class ZoneMarking {
 		return minecraft.player == null ? null : minecraft.player.blockPosition();
 	}
 
-	/** The on-screen hint: which corner is next with the box's size so far, then the keys. */
+	/**
+	 * The on-screen hint: which corner is next with the box's size so far, then the keys. A box 1 block tall (both
+	 * corners on the floor) is flagged: the player would stand above it, not in it (FR-8.4).
+	 */
 	private static List<Component> hint() {
 		Component key = SoundSculptorClient.openKey.getTranslatedKeyMessage();
 		Component cancel = SoundSculptorClient.cancelMarkingKey.getTranslatedKeyMessage();
@@ -151,7 +154,9 @@ public final class ZoneMarking {
 		} else {
 			Zone preview = preview(Minecraft.getInstance());
 			Shape.Box box = preview == null ? null : (Shape.Box) preview.shape();
-			status = Component.translatable("soundsculptor.marking.second", box == null ? "" : ZoneOutlines.size(box));
+			String size = box == null ? "" : ZoneOutlines.size(box);
+			boolean oneTall = box != null && box.height() == 1;
+			status = Component.translatable(oneTall ? "soundsculptor.marking.second.one_tall" : "soundsculptor.marking.second", size);
 		}
 		return List.of(status, Component.translatable("soundsculptor.marking.controls", key, cancel));
 	}

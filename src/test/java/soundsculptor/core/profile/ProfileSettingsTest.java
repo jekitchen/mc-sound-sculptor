@@ -9,14 +9,13 @@ import java.util.EnumSet;
 import java.util.Set;
 
 import soundsculptor.core.outline.OutlineMode;
-import soundsculptor.core.zones.ZoneEdge;
 
 import org.junit.jupiter.api.Test;
 
-/** PRD FR-11: profile settings (cue default, outline mode, default edge, show distance); FR-12.6 reset to default. */
+/** PRD FR-11: profile settings (cue default, outline mode, show distance); FR-12.6 reset to default. */
 class ProfileSettingsTest {
 	private static final ProfileSettings CHANGED = ProfileSettings.DEFAULTS.withShowDistance(false).withCueDefault(false)
-			.withOutlines(OutlineMode.ALWAYS).withDefaultEdge(ZoneEdge.fade(8));
+			.withOutlines(OutlineMode.ALWAYS);
 
 	@Test
 	void defaultsMatchThePrd() {
@@ -24,7 +23,6 @@ class ProfileSettingsTest {
 		assertTrue(d.showDistance(), "FR-1.4: distance band on");
 		assertTrue(d.cueDefault(), "FR-7.6: new mute rules have Cue on");
 		assertEquals(OutlineMode.EDITING, d.outlines(), "FR-10.1: only while editing");
-		assertEquals(ZoneEdge.hard(), d.defaultEdge(), "FR-8: hard edge");
 	}
 
 	@Test
@@ -36,13 +34,11 @@ class ProfileSettingsTest {
 
 	@Test
 	void withersChangeOneValue() {
-		assertEquals(new ProfileSettings(false, false, OutlineMode.ALWAYS, ZoneEdge.fade(8)), CHANGED);
+		assertEquals(new ProfileSettings(false, false, OutlineMode.ALWAYS), CHANGED);
 	}
 
 	@Test
-	void theProfileEdgeMustBeHardOrFade() {
-		assertThrows(IllegalArgumentException.class, () -> ProfileSettings.DEFAULTS.withDefaultEdge(ZoneEdge.DEFAULT),
-				"\"use the profile default\" cannot be the profile default");
+	void outlinesAreRequired() {
 		assertThrows(NullPointerException.class, () -> ProfileSettings.DEFAULTS.withOutlines(null));
 	}
 
@@ -51,9 +47,6 @@ class ProfileSettingsTest {
 		assertEquals(Set.of(), ProfileSettings.DEFAULTS.changed());
 		assertEquals(EnumSet.allOf(ProfileSetting.class), CHANGED.changed());
 		assertEquals(EnumSet.of(ProfileSetting.OUTLINES), ProfileSettings.DEFAULTS.withOutlines(OutlineMode.NEVER).changed());
-		assertEquals(EnumSet.of(ProfileSetting.DEFAULT_EDGE),
-				ProfileSettings.DEFAULTS.withDefaultEdge(ZoneEdge.fade(ZoneEdge.DEFAULT_FADE)).changed(),
-				"Fade at 4 blocks is not the default Hard edge");
 	}
 
 	@Test
@@ -69,7 +62,6 @@ class ProfileSettingsTest {
 		assertEquals(CHANGED.withShowDistance(true), CHANGED.reset(ProfileSetting.SHOW_DISTANCE));
 		assertEquals(CHANGED.withCueDefault(true), CHANGED.reset(ProfileSetting.CUE_DEFAULT));
 		assertEquals(CHANGED.withOutlines(OutlineMode.EDITING), CHANGED.reset(ProfileSetting.OUTLINES));
-		assertEquals(CHANGED.withDefaultEdge(ZoneEdge.hard()), CHANGED.reset(ProfileSetting.DEFAULT_EDGE));
 	}
 
 	@Test

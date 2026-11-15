@@ -2,7 +2,6 @@ package soundsculptor.mc;
 
 import soundsculptor.SoundSculptorClient;
 import soundsculptor.core.playing.PlayingSounds;
-import soundsculptor.core.zones.Precedence;
 import soundsculptor.mc.mixin.SoundEngineAccessor;
 import soundsculptor.mc.mixin.SoundManagerAccessor;
 import java.util.IdentityHashMap;
@@ -13,13 +12,14 @@ import net.minecraft.client.sounds.ChannelAccess;
 import net.minecraft.util.Util;
 
 /**
- * Re-decides playing positional sounds every client tick (PRD FR-8.8), so a sound changes volume when it moves into
- * or out of a zone, when the player edits a zone, or when Bypass changes. Only the volume changes; a sound muted by a
- * zone keeps playing silently and comes back when it leaves the zone.
+ * Keeps the volume of sounds that are already playing right (PRD FR-8.8, FR-13.1): looping sounds follow the player
+ * into and out of zones and follow edits to sets and zones; Bypass puts every playing sound back to vanilla at once.
+ * Only the volume changes; a muted loop keeps playing silently and comes back when the player walks out.
  *
  * <p>The core {@link PlayingSounds} table does the deciding; this class connects it to vanilla's channels. Each tracked
  * sound gets a handle: its slot in a fixed pool, so tracking allocates nothing per sound. Each tick, sounds whose
- * channel is gone are dropped, moved sources are updated, and changed gains are sent to their channels.
+ * channel is gone are dropped, and changed gains are sent to their channels; on a tick where nothing changed (where
+ * you are, the profile, Bypass) no sound is re-decided.
  *
  * <p>Everything runs on the game thread.
  */
@@ -47,13 +47,13 @@ public final class PlayingChannels {
 		return INSTANCE;
 	}
 
-	/** A positional sound Sound Sculptor decided is starting with {@code startGain}. Returns false if it is not tracked. */
-	boolean start(SoundInstance instance, String soundId, float vanillaGain, float startGain) {
+	/** A sound is starting at {@code factor} times vanilla's gain. Returns false if it is not tracked. */
+	boolean start(SoundInstance instance, String soundId, float vanillaGain, float factor) {
 		if (freeCount == 0 || handles.containsKey(instance)) {
 			return false;
 		}
 		int handle = free[--freeCount];
-		if (!playing.start(handle, soundId, instance.getX(), instance.getY(), instance.getZ(), vanillaGain, startGain)) {
+		if (!playing.start(handle, soundId, instance.isLooping(), vanillaGain, factor)) {
 			free[freeCount++] = handle;
 			return false;
 		}
@@ -74,15 +74,14 @@ public final class PlayingChannels {
 
 	/**
 	 * Vanilla recalculated a playing sound's volume (a moving sound's tick, a slider change). Returns the gain to use:
-	 * the tracked gain for a sound this class manages, or {@code NaN} if it is not tracked.
+	 * vanilla's gain times the sound's own factor, or {@code NaN} if it is not tracked.
 	 */
 	float recalculated(SoundInstance instance, float vanillaGain) {
 		Integer handle = handles.get(instance);
 		if (handle == null) {
 			return Float.NaN;
 		}
-		playing.setVanillaGain(handle, vanillaGain);
-		return playing.gain(handle);
+		return playing.recalculated(handle, vanillaGain);
 	}
 
 	public boolean isTracked(SoundInstance instance) {
@@ -118,8 +117,6 @@ public final class PlayingChannels {
 				Integer handle = handles.get(entry.getKey());
 				if (handle != null) {
 					seenTick[handle] = tick;
-					SoundInstance instance = entry.getKey();
-					playing.move(handle, instance.getX(), instance.getY(), instance.getZ());
 				}
 			}
 			for (int handle = 0; handle < instances.length; handle++) {
@@ -127,15 +124,19 @@ public final class PlayingChannels {
 					release(handle);
 				}
 			}
-			if (ProfileManager.isBypassed() || !ProfileManager.isLoaded()) {
-				playing.updateBypassed(applyGain);
+			if (ProfileManager.isBypassed() || !SoundHook.sync(minecraft)) {
+				playing.update(null, null, true, true, applyGain);
 			} else {
-				Precedence precedence = ProfileManager.precedence();
-				playing.update(precedence, ProfileManager.key(), WorldSession.dimension(minecraft), false, applyGain);
+				playing.update(SoundHook.precedence(), SoundHook.where(), false, true, applyGain);
 			}
 		} catch (RuntimeException | LinkageError e) {
-			// Fail open: stop re-deciding; the sounds keep the volume they have.
+			// Fail open: put every playing sound back to vanilla (silent loops too, FR-13.1), then stop tracking.
 			SoundSculptorClient.LOGGER.error("Sound Sculptor could not update playing sounds", e);
+			try {
+				playing.update(null, null, true, true, applyGain);
+			} catch (RuntimeException | LinkageError ignored) {
+				// Nothing more can be done for these sounds; they keep the volume they have.
+			}
 			clear();
 		} finally {
 			channels = null;

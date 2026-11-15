@@ -102,7 +102,7 @@ public final class M7bClientGameTest implements FabricClientGameTest {
 			// The zone works: a villager where the player stands is muted; the row shows color, place and set count.
 			check(play(context, feet.x + 2, feet.y, feet.z) <= SILENT, "a villager inside the new zone should be muted");
 			List<String> row = context.computeOnClient(mc -> main(mc).zonesPanel().list.findRow(zoneId).columnTexts());
-			check(row.get(0).equals("Zone 1") && row.contains("Here") && row.contains("1 Sound Set") && row.contains("Box 8 × 10 × 10, Inside"), "the zone row should describe it, was " + row);
+			check(row.get(0).equals("Zone 1") && row.contains("Here") && row.contains("1 Sound Set") && row.contains("Box 8 × 10 × 10"), "the zone row should describe it, was " + row);
 			check(context.computeOnClient(mc -> main(mc).zonesPanel().list.findRow(zoneId).swatch()) == 0x56B4E9, "the row shows the zone color");
 			context.takeScreenshot("m7b-zones-list");
 

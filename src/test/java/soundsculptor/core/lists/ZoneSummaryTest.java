@@ -6,11 +6,10 @@ import java.util.List;
 
 import soundsculptor.core.sets.PlaceSets;
 import soundsculptor.core.TestEnglish;
+import soundsculptor.core.zones.FeetBlock;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,14 +18,14 @@ class ZoneSummaryTest {
 	private static final TestEnglish EN = new TestEnglish();
 	private static final String WORLD = "play.example.net";
 	private static final String OVERWORLD = "minecraft:overworld";
-	private static final ZoneEdge HARD = ZoneEdge.hard();
 
 	private static Zone cylinder(double radius) {
 		return new Zone("z", "Hall", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Cylinder(radius, 2 * radius), PlaceSets.EMPTY);
 	}
 
-	private static String where(Zone zone, String world, String dimension, double x) {
-		return ZoneSummary.location(zone, world, dimension, new Point(x, 64, 0), HARD).text(EN);
+	/** With the player's feet in block {@code (x, 64, 0)}. */
+	private static String where(Zone zone, String world, String dimension, int x) {
+		return ZoneSummary.location(zone, world, dimension, new FeetBlock(x, 64, 0)).text(EN);
 	}
 
 	@Test
@@ -35,17 +34,22 @@ class ZoneSummaryTest {
 	}
 
 	@Test
-	void roundedBlocksFromTheAnchorWhenOutside() {
-		assertEquals("120 blocks away", where(cylinder(10), WORLD, OVERWORLD, 120.4));
-		assertEquals("121 blocks away", where(cylinder(10), WORLD, OVERWORLD, 120.6));
-		assertEquals(LocationKind.AWAY, ZoneSummary.location(cylinder(10), WORLD, OVERWORLD, new Point(50, 64, 0), HARD).kind());
+	void roundedBlocksFromTheFeetBlockCenterToTheAnchorWhenOutside() {
+		assertEquals("120 blocks away", where(cylinder(10), WORLD, OVERWORLD, 119));
+		assertEquals("121 blocks away", where(cylinder(10), WORLD, OVERWORLD, 120));
+		assertEquals(LocationKind.AWAY, ZoneSummary.location(cylinder(10), WORLD, OVERWORLD, new FeetBlock(50, 64, 0)).kind());
 	}
 
 	@Test
-	void outsideZoneIsHereWhenThePlayerIsOutsideItsShape() {
-		Zone base = cylinder(20).withMode(ZoneMode.OUTSIDE);
-		assertEquals("Here", where(base, WORLD, OVERWORLD, 50));
-		assertEquals("5 blocks away", where(base, WORLD, OVERWORLD, 5));
+	void theEdgeBlockIsHereAndTheNextIsNot() {
+		// Radius 10 from x = 0: block 9's center (9.5) is inside, block 10's (10.5) is not.
+		assertEquals("Here", where(cylinder(10), WORLD, OVERWORLD, 9));
+		assertEquals("11 blocks away", where(cylinder(10), WORLD, OVERWORLD, 10));
+	}
+
+	@Test
+	void aZoneThatIsOffIsStillHere() {
+		assertEquals("Here", where(cylinder(10).withEnabled(false), WORLD, OVERWORLD, 3));
 	}
 
 	@Test
@@ -56,27 +60,19 @@ class ZoneSummaryTest {
 
 
 	@Test
-	void fadeEdgeCountsAsHereOnlyOnceTheWeightIsAboveZero() {
-		Zone fade = cylinder(20).withEdge(ZoneEdge.fade(8));
-		assertEquals("Here", where(fade, WORLD, OVERWORLD, 15));
-		assertEquals("20 blocks away", where(fade, WORLD, OVERWORLD, 20));
-	}
-
-	@Test
-	void shapeAndModeChips() {
-		assertEquals(List.of("Cylinder, radius 10, height 20", "Inside", "Here"), chips(cylinder(10)));
-		Zone box = new Zone("b", "Farm", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Box(20, 8, 30.5), PlaceSets.EMPTY)
-				.withMode(ZoneMode.OUTSIDE);
-		assertEquals(List.of("Box 20 × 8 × 30.5", "Outside", "5 blocks away"), chipsAt(box, 5));
+	void shapeAndWhereChips() {
+		assertEquals(List.of("Cylinder, radius 10, height 20", "Here"), chips(cylinder(10)));
+		Zone box = new Zone("b", "Farm", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Box(20, 8, 30.5), PlaceSets.EMPTY);
+		assertEquals(List.of("Box 20 × 8 × 30.5", "51 blocks away"), chipsAt(box, 50));
 		Zone tower = new Zone("c", "Tower", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Cylinder(6, 40), PlaceSets.EMPTY);
-		assertEquals(List.of("Cylinder, radius 6, height 40", "Inside", "Here"), chips(tower));
+		assertEquals(List.of("Cylinder, radius 6, height 40", "Here"), chips(tower));
 	}
 
 	private static List<String> chips(Zone zone) {
 		return chipsAt(zone, 0);
 	}
 
-	private static List<String> chipsAt(Zone zone, double x) {
-		return ZoneSummary.parts(zone, WORLD, OVERWORLD, new Point(x, 64, 0), HARD).stream().map(p -> p.text(EN)).toList();
+	private static List<String> chipsAt(Zone zone, int x) {
+		return ZoneSummary.parts(zone, WORLD, OVERWORLD, new FeetBlock(x, 64, 0)).stream().map(p -> p.text(EN)).toList();
 	}
 }

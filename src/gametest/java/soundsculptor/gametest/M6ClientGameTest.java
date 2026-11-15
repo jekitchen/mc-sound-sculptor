@@ -51,9 +51,9 @@ public final class M6ClientGameTest implements FabricClientGameTest {
 			});
 			int all = context.computeOnClient(mc -> sounds(mc).count());
 			check(all > 500, "an empty search should list every known sound, was " + all);
-			check(context.computeOnClient(mc -> sounds(mc).list.children().stream()
-					.noneMatch(row -> String.valueOf(row.key()).startsWith("minecraft:music.") || String.valueOf(row.key()).startsWith("minecraft:ui."))),
-					"vanilla-covered sounds (music, UI) must be hidden");
+			check(context.computeOnClient(mc -> soundsculptor.mc.KnownSounds.ids().contains("minecraft:music.game")
+					&& soundsculptor.mc.KnownSounds.ids().contains("minecraft:ui.button.click")),
+					"music and UI sounds are listed too (every sound is in scope, decided 2026-11-14)");
 
 			// FR-3 AC 1: type villager: only villager-related sounds, with a count. Results wait for typing to pause.
 			context.runOnClient(mc -> main(mc).setFocused(sounds(mc).searchField));

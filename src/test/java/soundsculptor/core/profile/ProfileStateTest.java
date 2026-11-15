@@ -17,7 +17,6 @@ import soundsculptor.core.outline.OutlineMode;
 import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetLibrary;
 import soundsculptor.core.zones.Shape;
-import soundsculptor.core.zones.ZoneEdge;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +26,7 @@ import org.junit.jupiter.api.Test;
  */
 class ProfileStateTest {
 	private static final Instant JOINED = Instant.parse("2026-11-09T13:37:46Z");
-	private static final ProfileSettings SETTINGS = ProfileSettings.DEFAULTS.withOutlines(OutlineMode.ALWAYS)
-			.withDefaultEdge(ZoneEdge.fade(6));
+	private static final ProfileSettings SETTINGS = ProfileSettings.DEFAULTS.withOutlines(OutlineMode.ALWAYS);
 
 	private static Profile joinedAndConfirmed(String name) {
 		return new Profile(name, SETTINGS, quick(List.of(SetEntry.of("r1", "x:a").withVolume(150))), List.of(fixed("b", new Shape.Box(8, 8, 8))), Map.of())

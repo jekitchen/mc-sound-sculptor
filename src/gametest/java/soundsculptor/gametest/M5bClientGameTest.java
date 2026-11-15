@@ -91,12 +91,12 @@ public final class M5bClientGameTest implements FabricClientGameTest {
 			});
 			context.waitForScreen(SoundSculptorScreen.class);
 
-			// FR-14 AC: your own eating sound is non-positional.
+			// Your own eating sound has no position; it is traced like any other (FR-8.7), with where you stood.
 			play(context, EAT, true);
 			context.runOnClient(mc -> mc.gui.setScreen(new TraceScreen(main(mc), EAT)));
 			context.waitForScreen(TraceScreen.class);
 			String eating = context.computeOnClient(mc -> trace(mc).text());
-			check(eating.contains("Non-positional: zones never apply"), "eating should be non-positional:\n" + eating);
+			check(eating.contains("You were in: Everywhere"), "eating should show where you stood:\n" + eating);
 			context.runOnClient(mc -> trace(mc).onClose());
 			context.waitForScreen(SoundSculptorScreen.class);
 
@@ -104,7 +104,8 @@ public final class M5bClientGameTest implements FabricClientGameTest {
 			context.runOnClient(mc -> mc.gui.setScreen(new TraceScreen(main(mc), NEVER_PLAYED)));
 			context.waitForScreen(TraceScreen.class);
 			String notHeard = context.computeOnClient(mc -> trace(mc).text());
-			check(notHeard.contains("Not heard yet; zones depend on where it plays") && notHeard.contains("No entry matches this sound"),
+			check(notHeard.contains("Not heard yet: predicted for where you are.") && notHeard.contains("You are in: Everywhere")
+					&& notHeard.contains("No entry matches this sound"),
 					"an unheard sound should say so:\n" + notHeard);
 			context.runOnClient(mc -> trace(mc).onClose());
 			context.waitForScreen(SoundSculptorScreen.class);

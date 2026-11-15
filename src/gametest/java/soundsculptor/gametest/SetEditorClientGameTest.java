@@ -407,11 +407,14 @@ public final class SetEditorClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	/** The volume a positional sound at {@code at} gets in this world now, in percent (0 when muted). */
+	/** The volume a sound gets in this world now while the player's feet are in the block at {@code at}, in percent. */
 	private static float volumeAt(ClientGameTestContext context, String soundId, String key, Point at) {
 		return context.computeOnClient(mc -> {
 			SoundDecision out = new SoundDecision();
-			ProfileManager.precedence().decide(soundId, true, key, "minecraft:overworld", at.x(), at.y(), at.z(), out);
+			soundsculptor.core.zones.Precedence p = ProfileManager.precedence();
+			soundsculptor.core.zones.WhereYouAre where = new soundsculptor.core.zones.WhereYouAre();
+			where.update(p, key, "minecraft:overworld", (int) Math.floor(at.x()), (int) Math.floor(at.y()), (int) Math.floor(at.z()));
+			p.decide(soundId, where, out);
 			return out.volumePercent();
 		});
 	}

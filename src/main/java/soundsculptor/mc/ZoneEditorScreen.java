@@ -35,8 +35,7 @@ import net.minecraft.world.phys.Vec3;
  * The zone editor (PRD 6.1 Zones, FR-8 MVP, FR-10.4): name, on/off, color, the center with "My position" and "Block
  * I'm looking at" (FR-8.1), and the box's size (FR-8.3), drawn by marking two corners in the world or moved one side at
  * a time (M8 review). The zone's attached Sound Sets are edited on their own screen ("Sound Sets…", FR-8.6). Save and Cancel with the unsaved-changes dialog (FR-12.4), errors under the fields that
- * disable Save (FR-12.7). Outside mode, fade edges and cylinders arrive in M13; a zone's existing settings for them
- * are kept.
+ * disable Save (FR-12.7). Cylinders arrive in M13; an existing cylinder keeps its shape.
  */
 public final class ZoneEditorScreen extends SculptScreen {
 	private static final int NAME_WIDTH = 200;

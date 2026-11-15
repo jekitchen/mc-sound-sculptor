@@ -484,7 +484,7 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 			context.waitForScreen(TraceScreen.class);
 			context.runOnClient(mc -> {
 				TraceScreen t = trace(mc);
-				check(!t.text().contains("Pen (Inside)"), "the smaller zone no longer holds the sound:\n" + t.text());
+				check(!t.text().contains("  Pen (Cylinder"), "the smaller zone no longer holds you:\n" + t.text());
 				check(t.trace().volumePercent() == 100 && t.isPredicted(), "the trace should be recomputed as a prediction");
 			});
 			closeTrace(context);
