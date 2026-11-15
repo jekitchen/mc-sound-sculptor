@@ -460,6 +460,7 @@
 	"soundsculptor.settings.no_world": "The other settings belong to a world or server; join one to change them.",
 	"soundsculptor.marking.first": "Marking zone corners: first corner",
 	"soundsculptor.marking.second": "Second corner · %s blocks",
+	"soundsculptor.marking.second.one_tall": "Second corner · %s blocks · 1 block tall: you would stand above it",
 	"soundsculptor.zone_editor.mark_corners": "Mark corners",
 	"soundsculptor.zone_editor.mark_corners.tip": "Close this editor, then left-click a block (or press %s) for each of the two corners; looking at nothing marks the block you stand in. The box between them becomes the zone.",
 	"soundsculptor.zone_editor.side": "Side",

@@ -8,6 +8,7 @@ import soundsculptor.core.start.SoundStart;
 import soundsculptor.core.start.SoundStartDecider;
 import soundsculptor.core.start.SoundStartResult;
 import soundsculptor.core.zones.Precedence;
+import soundsculptor.core.zones.SoundDecision;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
@@ -62,6 +63,8 @@ public final class SoundHook {
 	static final float SILENT = 1.0E-6F;
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
+	/** Scratch decision for recalculating an untracked sound's volume. */
+	private static final SoundDecision RECALCULATED = new SoundDecision();
 	private static Precedence deciderProfile;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
@@ -262,8 +265,8 @@ public final class SoundHook {
 	/**
 	 * Called whenever vanilla recalculates a playing sound's volume (every tick for moving sounds, and after a
 	 * slider change). A tracked sound keeps its own factor, so a muted sound stays silent and a one-shot keeps what
-	 * it was decided with at its start (FR-8.8). An untracked sound (started outside a world, or the table was full)
-	 * plays as vanilla.
+	 * it was decided with at its start (FR-8.8). An untracked sound (the table was full, or it started before the
+	 * profile loaded) gets what the rules say where the player is now, at most 100%.
 	 */
 	public static float applyVolume(SoundInstance instance, float vanillaVolume) {
 		try {
@@ -272,8 +275,14 @@ public final class SoundHook {
 				lastAppliedFactor = vanillaVolume == 0 ? 1.0F : tracked / vanillaVolume;
 				return tracked;
 			}
-			lastAppliedFactor = 1.0F;
-			return vanillaVolume;
+			float factor = 1.0F;
+			if (!ProfileManager.isBypassed() && sync(Minecraft.getInstance())) {
+				SoundDecision d = RECALCULATED;
+				deciderProfile.decide(idString(instance.getIdentifier()), DECIDER.where(), d);
+				factor = Math.min(d.volumePercent(), 100) / 100.0F;
+			}
+			lastAppliedFactor = factor;
+			return vanillaVolume * factor;
 		} catch (RuntimeException | LinkageError e) {
 			failOpen(e);
 			return vanillaVolume;

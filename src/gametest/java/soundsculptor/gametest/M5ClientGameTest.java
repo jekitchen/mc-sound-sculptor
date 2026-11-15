@@ -162,13 +162,13 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			editQuick(context, e -> e.setEntryEnabled(wildcardId, true));
 			check(!play(context, VILLAGER_HURT, SoundSource.NEUTRAL), "with the entry on again, villager hurt is muted");
 
-			// Vanilla-covered sounds are never changed, not even by *.
+			// Every sound is in scope (P11, decided 2026-11-14): * mutes a UI click too.
 			context.runOnClient(mc -> ProfileManager.update(p -> QuickEntries.put(p, SetEntry.of(QuickEntries.newId(p), "*").withMute(true))));
-			check(context.computeOnClient(mc -> {
+			check(!context.computeOnClient(mc -> {
 				SoundInstance click = SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvent.createVariableRangeEvent(Identifier.parse(UI_CLICK)), 1.0F);
 				mc.getSoundManager().play(click);
 				return mc.getSoundManager().isActive(click);
-			}), "a UI click must not be muted by *");
+			}), "* mutes a UI click");
 			check(!play(context, TRADER_AMBIENT, SoundSource.NEUTRAL), "* mutes ordinary sounds");
 
 			// Move and remove in the Quick changes editor.
