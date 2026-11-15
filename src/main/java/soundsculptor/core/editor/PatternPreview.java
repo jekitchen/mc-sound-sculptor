@@ -11,8 +11,8 @@ import soundsculptor.core.sets.SoundPattern;
 /**
  * The rule editor's live preview, "Matches N sounds" with an expandable list (PRD FR-4.3).
  *
- * <p>Uses the same ID set as search (FR-3.1) and never counts vanilla-covered sounds, which no rule can match
- * (FR-4.4). Runs while the player types, over a few thousand IDs, so it is not on the sound hot path.
+ * <p>Uses the same ID set as search (FR-3.1), so Music, UI and Voice/Speech sounds count like any other (every sound
+ * is in scope). Runs while the player types, over a few thousand IDs, so it is not on the sound hot path.
  *
  * @param normalizedPattern the pattern as it will be saved, or {@code null} when invalid
  * @param error             why the pattern is invalid, or {@code null}
