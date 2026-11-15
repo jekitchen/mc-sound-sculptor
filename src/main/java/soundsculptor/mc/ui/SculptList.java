@@ -256,8 +256,15 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		 * @param shrinks the column shows something the player named (a zone), which may be longer than its width: it is
 		 *                cut with "…" like the rest column, and in a narrow row it gives way (down to
 		 *                {@value #SHRINK_MIN_WIDTH} px) so the rest column keeps {@value #REST_MIN_WIDTH} px
+		 * @param hint    shown while the mouse is over this column, or {@code null}; asked for every frame, so it can
+		 *                change while shown (a live timer) without the row being rebuilt. The narrator reads it after
+		 *                the column's text, so keyboard users get it too
 		 */
-		public record Column(Supplier<String> text, int width, int line, boolean shrinks) {
+		public record Column(Supplier<String> text, int width, int line, boolean shrinks, Supplier<Component> hint) {
+			public Column(Supplier<String> text, int width, int line, boolean shrinks) {
+				this(text, width, line, shrinks, null);
+			}
+
 			public Column(Supplier<String> text, int width, int line) {
 				this(text, width, line, false);
 			}
@@ -314,8 +321,9 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		}
 
 		/**
-		 * A tooltip for the row's text, shown on hover (a cut-off column's full text takes precedence). Keyboard and
-		 * narrator users need the same text on one of the row's buttons, e.g. as that button's tooltip.
+		 * A tooltip for the row's text, shown on hover (a cut-off column's full text, or a column's own
+		 * {@linkplain Column#hint hint}, takes precedence). Keyboard and narrator users need the same text on one of the
+		 * row's buttons, e.g. as that button's tooltip.
 		 */
 		public Row tooltip(Component text) {
 			this.tooltip = text;
@@ -336,6 +344,9 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 				String text = column.text().get();
 				if (!text.isEmpty()) {
 					parts.add(text);
+				}
+				if (column.hint() != null) {
+					parts.add(column.hint().get().getString());
 				}
 			}
 			return Component.literal(String.join(", ", parts));
@@ -401,7 +412,7 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 				Draw.fill(g, x + 1, sy + 1, size - 2, size - 2, 0xFF000000 | swatch);
 			}
 			boolean twoLines = columns.stream().anyMatch(column -> column.line() == 1);
-			boolean cutShown = false;
+			boolean columnTooltipShown = false;
 			for (Placed placed : layout.columns()) {
 				int line = placed.column().line();
 				int textY = twoLines
@@ -411,13 +422,17 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 				int cx = placed.x();
 				String text = placed.column().text().get();
 				boolean cut = Draw.truncatedText(g, font, text, cx, textY, placed.width(), color);
-				if (cut && hovered && mouseX >= cx && mouseX < cx + placed.width()
-						&& mouseY >= textY && mouseY < textY + font.lineHeight) {
+				boolean over = hovered && !columnTooltipShown && mouseX >= cx && mouseX < cx + placed.width()
+						&& mouseY >= textY && mouseY < textY + font.lineHeight;
+				if (over && cut) {
 					Draw.tooltip(g, font, Component.literal(text), mouseX, mouseY);
-					cutShown = true;
+					columnTooltipShown = true;
+				} else if (over && placed.column().hint() != null) {
+					g.setTooltipForNextFrame(font, Tooltip.splitTooltip(Minecraft.getInstance(), placed.column().hint().get()), mouseX, mouseY);
+					columnTooltipShown = true;
 				}
 			}
-			if (tooltip != null && !cutShown && hovered && mouseX >= layout.textLeft() && mouseX < layout.textRight()) {
+			if (tooltip != null && !columnTooltipShown && hovered && mouseX >= layout.textLeft() && mouseX < layout.textRight()) {
 				g.setTooltipForNextFrame(font, Tooltip.splitTooltip(Minecraft.getInstance(), tooltip), mouseX, mouseY);
 			}
 		}

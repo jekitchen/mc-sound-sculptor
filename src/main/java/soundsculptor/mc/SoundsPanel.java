@@ -26,6 +26,7 @@ import soundsculptor.core.recent.PlayStatus;
 import soundsculptor.core.recent.RecentRow;
 import soundsculptor.core.recent.RecentSounds;
 import soundsculptor.core.recent.SortOrder;
+import soundsculptor.core.recent.TimeAgo;
 import soundsculptor.core.search.SearchQuery;
 import soundsculptor.core.search.SoundEntry;
 import soundsculptor.core.search.SoundNames;
@@ -85,7 +86,7 @@ public final class SoundsPanel {
 	private static final int MIN_APPLY_TO_WIDTH = 120;
 	/** The most a recent row's "Zone: <name>" gets; a long zone name is cut, and gives way in a narrow row. */
 	private static final int ZONE_WIDTH = 110;
-	/** The play count the plays column is measured for ("×999 · 59s ago"). */
+	/** The play count the plays column is measured for ("×999 · 2m ago"). */
 	private static final int PLAYS_MEASURED = 999;
 	private static final int HELP_WIDTH = 360;
 	private static final int HELP_LINES = 7;
@@ -388,10 +389,13 @@ public final class SoundsPanel {
 	 * <p>The full list has about 2,000 rows, so a refresh does only what changed (PRD 9.1, 11.2). It does nothing when
 	 * the log's {@linkplain RecentSounds#generation generation}, the workspace, the query, the filter, the sort, Apply to
 	 * and Show distance are as they were, and the clock has not reached the next second while a row shows recent data
-	 * (its "2s ago" or play count may change). Otherwise each row is rebuilt only if what it shows changed (its recent
-	 * values to the "ago" granularity, or its "Seen as" category); the others are reused, and the list is replaced only if
-	 * a row or the order changed. A new workspace, Apply to choice or Show distance setting rebuilds every row, because
-	 * the Mute buttons and the columns depend on them. Does nothing while a pop-up is open, so focus stays in it.
+	 * (a row may have left the last 3 minutes). Otherwise each row is rebuilt only if its columns or buttons change
+	 * (whether it has recent data, its zone, or its "Seen as" category). A row whose recent values changed (a new play,
+	 * a new status) keeps its buttons and only has those values updated, which its columns read when drawn: so a
+	 * tooltip the player is reading on one of its buttons stays up, and "2m ago" follows the clock with no refresh.
+	 * The list is replaced only if a row or the order changed. A new workspace, Apply to choice or Show distance setting
+	 * rebuilds every row, because the Mute buttons and the columns depend on them. Does nothing while a pop-up is open,
+	 * so focus stays in it.
 	 *
 	 * <p>In picker mode a tick or untick also counts as a change, and a row's inputs include whether it is picked and
 	 * whether the set has it, so a tick rebuilds only its own row.
@@ -431,7 +435,7 @@ public final class SoundsPanel {
 		boolean anyRecent = false;
 		List<SculptList.Row> rows = new ArrayList<>(found.size());
 		for (BrowserRow row : found) {
-			Object inputs = rowInputs(row, now, log);
+			Object inputs = rowInputs(row, log);
 			if (picker != null) {
 				inputs = new PickInputs(inputs, picker.inSet(row.soundId()), picker.picked(row.soundId()));
 			}
@@ -440,9 +444,12 @@ public final class SoundsPanel {
 				if (muted == null && picker == null) {
 					muted = mutedAtApplyTarget();
 				}
-				cached = new CachedRow(inputs, toListRow(row, now, muted));
+				LiveRecent live = row.recent() == null ? null : new LiveRecent(row.recent(), recentMark(row.soundId()));
+				cached = new CachedRow(inputs, toListRow(row, live, muted), live);
 				rowCache.put(row.soundId(), cached);
 				rowsBuilt++;
+			} else if (cached.live() != null) {
+				cached.live().update(row.recent());
 			}
 			anyRecent |= row.recent() != null;
 			rows.add(cached.row());
@@ -454,21 +461,18 @@ public final class SoundsPanel {
 		}
 	}
 
-	/** What a row shows besides its name and ID: equal inputs mean the row would be built the same. */
-	private static Object rowInputs(BrowserRow row, long now, RecentSounds log) {
+	/**
+	 * What a row is built from besides its name and ID: equal inputs mean the row would be built with the same columns
+	 * and buttons. A recent row's changing values (plays, time, status, category, band) are not inputs: its
+	 * {@link LiveRecent} is updated instead.
+	 */
+	private static Object rowInputs(BrowserRow row, RecentSounds log) {
 		RecentRow recent = row.recent();
 		if (recent == null) {
 			String category = log.seenCategory(row.soundId());
 			return category == null ? "" : category;
 		}
-		return new RecentInputs(recent.category(), recent.count(), agoBucket(now - recent.lastPlayedMs()), recent.band(),
-				recent.status(), recent.zoneName());
-	}
-
-	/** The time since the last play as {@link #ago} shows it: seconds up to a minute, then minutes. */
-	private static long agoBucket(long millis) {
-		long seconds = Math.max(0, millis / 1000);
-		return seconds < 60 ? seconds : 60 + seconds / 60;
+		return new RecentInputs(recent.zoneName());
 	}
 
 	private static boolean sameRows(List<SculptList.Row> a, List<SculptList.Row> b) {
@@ -483,35 +487,104 @@ public final class SoundsPanel {
 		return true;
 	}
 
-	/** A row with recent data, by what it shows (FR-1.2). */
-	private record RecentInputs(String category, int count, long ago, DistanceBand band, PlayStatus status, String zoneName) {
+	/** A row with recent data: its zone decides whether it has a zone column, and that column's width. */
+	private record RecentInputs(String zoneName) {
 	}
 
 	/** A picker row's inputs: what it shows, whether the set has the sound, and whether it is ticked. */
 	private record PickInputs(Object shown, boolean inSet, boolean picked) {
 	}
 
-	/** A built row and what it was built from. */
-	private record CachedRow(Object inputs, SculptList.Row row) {
+	/** A built row, what it was built from, and its recent values ({@code null} for a row without recent data). */
+	private record CachedRow(Object inputs, SculptList.Row row, LiveRecent live) {
 	}
 
-	/** @param muted which sounds are muted at the Apply to place; {@code null} in picker mode */
-	private SculptList.Row toListRow(BrowserRow row, long now, Predicate<String> muted) {
+	/**
+	 * A recent row's latest values (FR-1.2), which its columns read each time they are drawn; a refresh updates them
+	 * without rebuilding the row. Each text is made once per change (the plays text when the play count or the minute
+	 * label changes), so drawing a row makes no new text.
+	 */
+	private static final class LiveRecent {
+		/** "✔ In this set" in picker mode for a sound the set has, shown instead of the status; else {@code null}. */
+		private final String mark;
+		private RecentRow row;
+		private String category;
+		private String status;
+		private String band;
+		private TimeAgo ago;
+		private String plays;
+
+		LiveRecent(RecentRow row, String mark) {
+			this.mark = mark;
+			update(row);
+		}
+
+		void update(RecentRow latest) {
+			if (latest.equals(row)) {
+				return;
+			}
+			row = latest;
+			category = latest.category() == null ? "?" : categoryName(latest.category()).getString();
+			status = mark != null ? mark : statusText(latest.status()).getString();
+			band = Component.translatable(latest.band().translationKey()).getString();
+			plays = null;
+		}
+
+		String category() {
+			return category;
+		}
+
+		String status() {
+			return status;
+		}
+
+		String band() {
+			return band;
+		}
+
+		String id() {
+			return row.id();
+		}
+
+		/** "×3 · 2m ago", following the clock: the label changes once a minute, with no refresh needed. */
+		String plays() {
+			TimeAgo now = TimeAgo.of(Util.getMillis() - row.lastPlayedMs());
+			if (plays == null || !now.equals(ago)) {
+				ago = now;
+				plays = Component.translatable("soundsculptor.sounds.plays", row.count(), agoText(now)).getString();
+			}
+			return plays;
+		}
+
+		/** "Last played 1m 23s ago", to the second, for the plays column's tooltip. */
+		Component exact() {
+			return exactAgo(Util.getMillis() - row.lastPlayedMs());
+		}
+	}
+
+	/** Picker mode (FR-1.7): a sound the set has says so where its status would be; else {@code null}. */
+	private String recentMark(String soundId) {
+		return picker != null && picker.inSet(soundId) ? IN_SET.getString() : null;
+	}
+
+	/**
+	 * @param live  the row's recent values, or {@code null} for a row without recent data
+	 * @param muted which sounds are muted at the Apply to place; {@code null} in picker mode
+	 */
+	private SculptList.Row toListRow(BrowserRow row, LiveRecent live, Predicate<String> muted) {
 		String id = row.soundId();
 		String name = row.subtitle() == null ? SoundNames.readable(id) : row.subtitle();
 		boolean inSet = picker != null && picker.inSet(id);
-		// Picker mode (FR-1.7): a sound the set has says so where its status would be.
-		String mark = inSet ? IN_SET.getString() : null;
+		String mark = recentMark(id);
 		Widths widths = widths();
 		List<SculptList.Row.Column> columns = new ArrayList<>();
 		columns.add(new SculptList.Row.Column(() -> name, 0, 0));
-		RecentRow recent = row.recent();
-		if (recent == null) {
+		if (live == null) {
 			String seen = mark != null ? mark : seenText(id);
 			columns.add(new SculptList.Row.Column(() -> seen, widths.seen(), 0));
 			columns.add(new SculptList.Row.Column(() -> id, 0, 1));
 		} else {
-			recentColumns(columns, recent, now, mark, widths);
+			recentColumns(columns, row.recent().zoneName(), live, widths);
 		}
 		if (picker != null) {
 			return new SculptList.Row(id, columns, pickButtons(id, inSet));
@@ -528,24 +601,23 @@ public final class SoundsPanel {
 	 * <p>The zone name may be long: its column is at most {@value #ZONE_WIDTH} px, cut with "…", and gives way in a
 	 * narrow row so the ID stays readable.
 	 *
-	 * @param mark shown instead of the status in picker mode ("In this set"), or {@code null}
+	 * <p>The columns read {@code live}, so a new play or status shows without rebuilding the row. Hovering the plays
+	 * column shows the exact time since the last play, to the second, counting up while it is shown.
+	 *
+	 * @param zoneName the zone that decided the latest play, or {@code null}; a row whose zone changes is rebuilt
 	 */
-	private static void recentColumns(List<SculptList.Row.Column> columns, RecentRow row, long now, String mark, Widths widths) {
-		String category = row.category() == null ? "?" : categoryName(row.category()).getString();
-		String status = mark != null ? mark : statusText(row.status()).getString();
-		String plays = Component.translatable("soundsculptor.sounds.plays", row.count(), ago(now - row.lastPlayedMs())).getString();
-		columns.add(new SculptList.Row.Column(() -> category, widths.category(), 0));
-		columns.add(new SculptList.Row.Column(() -> status, widths.status(), 0));
-		columns.add(new SculptList.Row.Column(row::id, 0, 1));
-		if (row.zoneName() != null) {
-			Component zone = Component.translatable("soundsculptor.sounds.zone", row.zoneName());
+	private static void recentColumns(List<SculptList.Row.Column> columns, String zoneName, LiveRecent live, Widths widths) {
+		columns.add(new SculptList.Row.Column(live::category, widths.category(), 0));
+		columns.add(new SculptList.Row.Column(live::status, widths.status(), 0));
+		columns.add(new SculptList.Row.Column(live::id, 0, 1));
+		if (zoneName != null) {
+			Component zone = Component.translatable("soundsculptor.sounds.zone", zoneName);
 			String zoneText = zone.getString();
 			columns.add(new SculptList.Row.Column(() -> zoneText, Math.min(ZONE_WIDTH, SculptList.Row.Column.widthFor(zone)), 1, true));
 		}
-		columns.add(new SculptList.Row.Column(() -> plays, widths.plays(), 1));
+		columns.add(new SculptList.Row.Column(live::plays, widths.plays(), 1, false, live::exact));
 		if (SoundSculptorSettings.showDistance()) {
-			String band = Component.translatable(row.band().translationKey()).getString();
-			columns.add(new SculptList.Row.Column(() -> band, widths.band(), 1));
+			columns.add(new SculptList.Row.Column(live::band, widths.band(), 1));
 		}
 	}
 
@@ -599,9 +671,12 @@ public final class SoundsPanel {
 			statuses.add(IN_SET);
 			seen.add(IN_SET);
 		}
-		Component plays = Component.translatable("soundsculptor.sounds.plays", PLAYS_MEASURED,
-				Component.translatable("soundsculptor.sounds.ago.seconds", 59));
-		widths = new Widths(widthFor(categories), widthFor(statuses), widthFor(seen), SculptList.Row.Column.widthFor(plays),
+		// Every label a recent row can show: it leaves the list RecentSounds.WINDOW_MS after its last play.
+		List<Component> plays = new ArrayList<>();
+		for (long millis = 0; millis < RecentSounds.WINDOW_MS; millis += 60_000) {
+			plays.add(Component.translatable("soundsculptor.sounds.plays", PLAYS_MEASURED, agoText(TimeAgo.of(millis))));
+		}
+		widths = new Widths(widthFor(categories), widthFor(statuses), widthFor(seen), widthFor(plays),
 				widthFor(bands), SculptButton.widthFor(Component.translatable("soundsculptor.picker.like_this")));
 		return widths;
 	}
@@ -610,11 +685,23 @@ public final class SoundsPanel {
 		return SculptList.Row.Column.widthFor(texts.toArray(Component[]::new));
 	}
 
-	private static String ago(long millis) {
-		long seconds = Math.max(0, millis / 1000);
-		return seconds < 60
-				? Component.translatable("soundsculptor.sounds.ago.seconds", seconds).getString()
-				: Component.translatable("soundsculptor.sounds.ago.minutes", seconds / 60).getString();
+	/** "&lt;1m ago", "1m ago", "2m ago" or "&gt;1h ago" (FR-1.2). */
+	private static Component agoText(TimeAgo ago) {
+		return Component.translatable(ago.translationKey(), ago.value());
+	}
+
+	/** "Last played 45s ago", "Last played 1m 23s ago" or "Last played 1h 2m 5s ago". */
+	private static Component exactAgo(long millis) {
+		TimeAgo.Exact exact = TimeAgo.exact(millis);
+		Component time;
+		if (exact.hours() > 0) {
+			time = Component.translatable("soundsculptor.sounds.ago.exact.hours", exact.hours(), exact.minutes(), exact.seconds());
+		} else if (exact.minutes() > 0) {
+			time = Component.translatable("soundsculptor.sounds.ago.exact.minutes", exact.minutes(), exact.seconds());
+		} else {
+			time = Component.translatable("soundsculptor.sounds.ago.exact.seconds", exact.seconds());
+		}
+		return Component.translatable("soundsculptor.sounds.ago.exact", time);
 	}
 
 	// ---- Row buttons ----
