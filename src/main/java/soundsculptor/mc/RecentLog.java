@@ -6,7 +6,7 @@ import net.minecraft.util.Util;
 
 /**
  * Feeds every observed sound start into the recently played log (PRD FR-1.1). {@link RecentSounds} applies the
- * fair-play range filter and the vanilla-covered exclusions. The log is cleared when joining or leaving a world.
+ * fair-play range filter. The log is cleared when joining or leaving a world.
  *
  * <p>Runs on the thread that starts sounds (the render thread), as does the screen that reads it.
  */

@@ -17,8 +17,7 @@ import soundsculptor.core.diag.MemoryEstimate;
  *
  * <p>A play is recorded only if it is non-positional, or positional and within vanilla hearing range: the same set
  * vanilla subtitles would show (fair play). Sounds Sound Sculptor muted or limited are recorded too, with their status.
- * Vanilla-covered categories (Music, UI, Voice/Speech) are never recorded, but their IDs are remembered so search can
- * hide them (FR-3.1).
+ * Music, UI and Voice/Speech sounds are recorded like any other (every sound is in scope).
  *
  * <p>Rows are grouped by sound ID and kept for 3 minutes after their last play, at most {@link #MAX_IDS} of them.
  * Play counts use one-second buckets, so a play leaves the count within a second of turning 3 minutes old. The
@@ -73,9 +72,8 @@ public final class RecentSounds {
 	}
 
 	/**
-	 * A number that changes whenever a play is recorded, a row expires or is dropped, or a sound is first seen in a
-	 * vanilla-covered category; equal values mean {@link #snapshot} rows (apart from the time since the last play) and
-	 * the session sets are unchanged. The Sounds tab uses it to skip a refresh that would change nothing (FR-1.6).
+	 * A number that changes whenever a play is recorded, a row expires or is dropped, or the list is cleared; equal
+	 * values mean {@link #snapshot} rows (apart from the time since the last play) and the session sets are unchanged. The Sounds tab uses it to skip a refresh that would change nothing (FR-1.6).
 	 * Expired rows are dropped by {@link #snapshot}, so a caller that skips snapshots must still take one when rows may
 	 * have expired.
 	 */
