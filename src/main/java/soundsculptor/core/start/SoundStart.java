@@ -7,10 +7,19 @@ package soundsculptor.core.start;
 public final class SoundStart {
 	/** The sound's ID, e.g. {@code minecraft:entity.villager.ambient}; reuse one string per ID. */
 	public String soundId;
-	/** Whether the sound belongs to Music, UI or Voice/Speech, which Sound Sculptor never changes (section 5, Q8). */
-	public boolean vanillaCovered;
-	/** Whether the sound has a world position (not relative to the listener); zones apply only then. */
+	/** Whether the sound has a world position (not relative to the listener); only then does the range gate apply. */
 	public boolean positional;
+	/**
+	 * Whether vanilla loops the sound for as long as its source exists (minecart, bee, biome ambience): a muted loop
+	 * starts silently so it can come back when the player moves or edits a set (FR-8.8).
+	 */
+	public boolean looping;
+	/** Whether the player's feet block is known; if not, only Everywhere applies (FR-8.4). */
+	public boolean feetKnown;
+	/** The block the local player's feet are in, which decides the zones (FR-8.4). */
+	public int feetX;
+	public int feetY;
+	public int feetZ;
 	/** Vanilla hearing range from the sound's own, un-boosted volume ({@code SoundRange.vanillaRange}). */
 	public float range;
 	/** Squared distance from the listener to the sound; ignored for non-positional sounds. */
@@ -19,6 +28,7 @@ public final class SoundStart {
 	public String worldKey;
 	/** The current dimension, e.g. {@code minecraft:overworld}. */
 	public String dimension;
+	/** The sound's position: only per-source repeat limits use it (FR-6.3). */
 	public double x;
 	public double y;
 	public double z;
@@ -36,8 +46,12 @@ public final class SoundStart {
 	/** Back to a non-positional sound with no ID and no world. */
 	public void reset() {
 		soundId = null;
-		vanillaCovered = false;
 		positional = false;
+		looping = false;
+		feetKnown = false;
+		feetX = 0;
+		feetY = 0;
+		feetZ = 0;
 		range = Float.POSITIVE_INFINITY;
 		distanceSq = 0;
 		worldKey = "";

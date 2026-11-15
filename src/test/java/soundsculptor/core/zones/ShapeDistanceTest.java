@@ -30,27 +30,7 @@ class ShapeDistanceTest {
 		new Shape.Cylinder(1, 1);
 	}
 
-	// --- Depth inside (for Inside-mode fade) ---
-
-
-	@Test
-	void boxDepthIsDistanceToTheNearestFace() {
-		Shape b = new Shape.Box(20, 8, 30);
-		assertEquals(4, b.depthInside(0, 0, 0), 1e-9, "the 8-high box is nearest its top and bottom");
-		assertEquals(1, b.depthInside(9, 0, 0), 1e-9);
-		assertEquals(0, b.depthInside(11, 0, 0), 1e-9);
-	}
-
-	@Test
-	void cylinderDepthIsTheNearerOfSideAndTopOrBottom() {
-		Shape c = new Shape.Cylinder(10, 40);
-		assertEquals(10, c.depthInside(0, 0, 0), 1e-9);
-		assertEquals(2, c.depthInside(0, 18, 0), 1e-9);
-		assertEquals(4, c.depthInside(6, 0, 0), 1e-9, "nearer the side than the top");
-		assertEquals(0, c.depthInside(11, 0, 0), 1e-9);
-	}
-
-	// --- Distance outside (for Outside-mode fade and outline culling) ---
+	// --- Distance outside (for outline culling) ---
 
 
 	@Test

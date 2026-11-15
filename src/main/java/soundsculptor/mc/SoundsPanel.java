@@ -13,7 +13,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Util;
-import net.minecraft.world.phys.Vec3;
 import soundsculptor.core.browser.BrowserRow;
 import soundsculptor.core.browser.LikeThis;
 import soundsculptor.core.browser.PickerModel;
@@ -36,7 +35,6 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetLibrary;
 import soundsculptor.core.sets.Workspace;
 import soundsculptor.core.trace.EntryEdit;
-import soundsculptor.core.zones.Point;
 import soundsculptor.mc.compat.Keys;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptCheckbox;
@@ -428,7 +426,7 @@ public final class SoundsPanel {
 		List<RecentRow> recent = log.snapshot(now, SortOrder.MOST_RECENT, null);
 		// Read after the snapshot, which drops expired rows.
 		shownGeneration = log.generation();
-		List<BrowserRow> found = SoundBrowser.rows(recent, entries, query, state.recentOnly, state.sort, KnownSounds.seenExcluded());
+		List<BrowserRow> found = SoundBrowser.rows(recent, entries, query, state.recentOnly, state.sort);
 		Predicate<String> muted = null;
 		boolean anyRecent = false;
 		List<SculptList.Row> rows = new ArrayList<>(found.size());
@@ -890,9 +888,8 @@ public final class SoundsPanel {
 		if (!ProfileManager.isLoaded() || mc.player == null) {
 			return List.of(ApplyTarget.EVERYWHERE);
 		}
-		Vec3 eye = mc.player.getEyePosition();
 		String key = ProfileManager.key() == null ? "" : ProfileManager.key();
-		return ApplyTo.choices(ProfileManager.profile(), key, WorldSession.dimension(mc), new Point(eye.x, eye.y, eye.z));
+		return ApplyTo.choices(ProfileManager.profile(), key, WorldSession.dimension(mc), WorldSession.feet(mc));
 	}
 
 	// ---- Search help ----

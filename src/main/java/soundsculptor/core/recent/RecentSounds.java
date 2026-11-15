@@ -2,15 +2,12 @@ package soundsculptor.core.recent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import soundsculptor.core.diag.MemoryEstimate;
@@ -34,16 +31,12 @@ public final class RecentSounds {
 	public static final long WINDOW_MS = 180_000;
 	public static final int MAX_IDS = 200;
 
-	/** Sound source names ({@code SoundSource.getName()}) whose sounds have their own vanilla slider (section 5, Q8). */
-	public static final Set<String> EXCLUDED_CATEGORIES = Set.of("music", "ui", "voice");
-
 	/** Cap for the session-long sets, since servers can send arbitrary sound IDs. */
 	static final int MAX_SEEN_IDS = 4096;
 
 	private static final int BUCKETS = (int) (WINDOW_MS / 1000);
 
 	private final Map<String, Row> rows = new HashMap<>();
-	private final Set<String> seenExcluded = new HashSet<>();
 	private final Map<String, String> seenCategories = new HashMap<>();
 	/** Changes whenever what {@link #snapshot} or the session sets would show changes. */
 	private long generation;
@@ -63,12 +56,6 @@ public final class RecentSounds {
 	 */
 	public void record(String soundId, String category, boolean positional, double distance, boolean audible,
 			PlayStatus status, String zoneName, long nowMs) {
-		if (category != null && EXCLUDED_CATEGORIES.contains(category)) {
-			if (seenExcluded.size() < MAX_SEEN_IDS && seenExcluded.add(soundId)) {
-				generation++;
-			}
-			return;
-		}
 		if (positional && !audible) {
 			return;
 		}
@@ -155,11 +142,6 @@ public final class RecentSounds {
 		return (name == null ? id : name).toLowerCase(Locale.ROOT);
 	}
 
-	/** IDs that played in an excluded category this session, for {@code SoundSearch} (FR-3.1). */
-	public Set<String> seenExcludedIds() {
-		return Collections.unmodifiableSet(seenExcluded);
-	}
-
 	/**
 	 * The category a sound last played in this session within the player's hearing range, or {@code null} (search's
 	 * "Seen as", FR-3.2). Out-of-range plays are deliberately not remembered: showing "Seen as" for a sound the player
@@ -178,15 +160,10 @@ public final class RecentSounds {
 		long bytes = MemoryEstimate.object(3 * MemoryEstimate.REFERENCE)
 				+ MemoryEstimate.HASH_MAP + MemoryEstimate.hashTable(rows.size())
 				+ rows.size() * (MemoryEstimate.HASH_NODE + Row.BYTES)
-				+ MemoryEstimate.HASH_SET + MemoryEstimate.hashTable(seenExcluded.size())
-				+ seenExcluded.size() * MemoryEstimate.HASH_NODE
 				+ MemoryEstimate.HASH_MAP + MemoryEstimate.hashTable(seenCategories.size())
 				+ seenCategories.size() * MemoryEstimate.HASH_NODE;
 		for (Row row : rows.values()) {
 			bytes += MemoryEstimate.string(row.id);
-		}
-		for (String id : seenExcluded) {
-			bytes += MemoryEstimate.string(id);
 		}
 		for (String id : seenCategories.keySet()) {
 			bytes += MemoryEstimate.string(id);

@@ -4,9 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import soundsculptor.core.profile.Profile;
-import soundsculptor.core.zones.Point;
+import soundsculptor.core.zones.FeetBlock;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneMode;
 
 /**
  * The choices of the Sounds tab's "Apply to" selector (PRD FR-1.5): Everywhere first, then each zone the player is
@@ -28,16 +27,17 @@ public final class ApplyTo {
 	}
 
 	/**
-	 * The selector's choices for the player at {@code eye}.
+	 * The selector's choices for the player whose feet are in {@code feet}: Everywhere, then each zone they stand in
+	 * (FR-8.4).
 	 *
 	 * @param worldKey  the current world key (FR-11.1)
 	 * @param dimension the current dimension, e.g. {@code minecraft:overworld}
 	 */
-	public static List<ApplyTarget> choices(Profile profile, String worldKey, String dimension, Point eye) {
+	public static List<ApplyTarget> choices(Profile profile, String worldKey, String dimension, FeetBlock feet) {
 		List<ApplyTarget> choices = new ArrayList<>();
 		choices.add(ApplyTarget.EVERYWHERE);
 		for (Zone zone : profile.zones()) {
-			if (isStandingIn(zone, worldKey, dimension, eye)) {
+			if (feet != null && feet.isIn(zone, worldKey, dimension)) {
 				choices.add(new ApplyTarget(zone.id(), zone.name()));
 			}
 		}
@@ -57,14 +57,5 @@ public final class ApplyTo {
 			}
 		}
 		return ApplyTarget.EVERYWHERE;
-	}
-
-	private static boolean isStandingIn(Zone zone, String worldKey, String dimension, Point eye) {
-		if (!zone.enabled() || !zone.worldKey().equals(worldKey) || !zone.dimension().equals(dimension)) {
-			return false;
-		}
-		Point a = zone.anchor();
-		boolean inShape = zone.shape().contains(eye.x() - a.x(), eye.y() - a.y(), eye.z() - a.z());
-		return inShape == (zone.mode() == ZoneMode.INSIDE);
 	}
 }

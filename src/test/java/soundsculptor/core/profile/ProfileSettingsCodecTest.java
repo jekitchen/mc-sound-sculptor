@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.List;
 
 import soundsculptor.core.outline.OutlineMode;
-import soundsculptor.core.zones.ZoneEdge;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -40,8 +39,8 @@ class ProfileSettingsCodecTest {
 	@Test
 	void everySettingRoundTrips() throws ProfileFormatException {
 		for (ProfileSettings s : List.of(ProfileSettings.DEFAULTS,
-				new ProfileSettings(false, false, OutlineMode.ALWAYS, ZoneEdge.fade(0.5)),
-				new ProfileSettings(true, false, OutlineMode.NEVER, ZoneEdge.fade(32)))) {
+				new ProfileSettings(false, false, OutlineMode.ALWAYS),
+				new ProfileSettings(true, false, OutlineMode.NEVER))) {
 			Profile p = Profile.empty("A").withSettings(s);
 			assertEquals(p, read(ProfileCodec.toJson(p)));
 		}
@@ -50,19 +49,19 @@ class ProfileSettingsCodecTest {
 	@Test
 	void settingsUseTheNamesFromTheFileSketch() {
 		JsonObject s = written(Profile.empty("A").withSettings(
-				new ProfileSettings(false, false, OutlineMode.ALWAYS, ZoneEdge.fade(8)))).getAsJsonObject("settings");
+				new ProfileSettings(false, false, OutlineMode.ALWAYS))).getAsJsonObject("settings");
 		assertFalse(s.get("showDistance").getAsBoolean());
 		assertFalse(s.get("cueDefault").getAsBoolean());
 		assertEquals("always", s.get("outlines").getAsString());
-		assertEquals("fade", s.getAsJsonObject("edge").get("mode").getAsString());
-		assertEquals(8.0, s.getAsJsonObject("edge").get("fade").getAsDouble());
+		assertFalse(s.has("edge"), "fade edges were removed on 2026-11-14");
 	}
 
 	@Test
-	void aHardEdgeIsWrittenWithoutAFadeDistance() {
-		JsonObject edge = written(Profile.empty("A")).getAsJsonObject("settings").getAsJsonObject("edge");
-		assertEquals("hard", edge.get("mode").getAsString());
-		assertFalse(edge.has("fade"));
+	void anOldDefaultEdgeIsIgnoredWithoutAWarning() throws ProfileFormatException {
+		ProfileCodec.Read read = ProfileCodec.read(
+				"{\"schemaVersion\": 3, \"settings\": {\"edge\": {\"mode\": \"fade\", \"fade\": 8}}}", version -> { });
+		assertEquals(ProfileSettings.DEFAULTS, read.profile().settings());
+		assertEquals(List.of(), read.warnings());
 	}
 
 	@Test
@@ -70,19 +69,12 @@ class ProfileSettingsCodecTest {
 		assertEquals(ProfileSettings.DEFAULTS, read("{\"schemaVersion\": 3, \"settings\": {}}").settings());
 		assertEquals(ProfileSettings.DEFAULTS.withOutlines(OutlineMode.NEVER),
 				read("{\"schemaVersion\": 3, \"settings\": {\"outlines\": \"never\"}}").settings());
-		assertEquals(ProfileSettings.DEFAULTS.withDefaultEdge(ZoneEdge.fade(ZoneEdge.DEFAULT_FADE)),
-				read("{\"schemaVersion\": 3, \"settings\": {\"edge\": {\"mode\": \"fade\"}}}").settings(),
-				"a fade edge without a distance fades over the default 4 blocks");
 	}
 
 	@Test
 	void badSettingsNameTheFieldInPlainWords() {
 		assertEquals("Settings, field outlines: \"sometimes\" is not one of: always, editing, never.",
 				problem("{\"schemaVersion\": 3, \"settings\": {\"outlines\": \"sometimes\"}}"));
-		assertEquals("Settings, field edge mode: \"default\" is not one of: hard, fade.",
-				problem("{\"schemaVersion\": 3, \"settings\": {\"edge\": {\"mode\": \"default\"}}}"));
-		assertEquals("Settings, field fade: 40 is above the maximum 32.",
-				problem("{\"schemaVersion\": 3, \"settings\": {\"edge\": {\"mode\": \"fade\", \"fade\": 40}}}"));
 		assertEquals("Settings, field cueDefault: \"yes\" is not true or false.",
 				problem("{\"schemaVersion\": 3, \"settings\": {\"cueDefault\": \"yes\"}}"));
 	}

@@ -38,8 +38,8 @@ public final class SoundStartResult {
 	}
 
 	/**
-	 * Whether Sound Sculptor decided this sound. False with Bypass on, for vanilla-covered sounds and before a profile is
-	 * loaded: the sound then plays exactly as in vanilla.
+	 * Whether Sound Sculptor decided this sound. False with Bypass on and before a profile is loaded: the sound then
+	 * plays exactly as in vanilla.
 	 */
 	public boolean handled() {
 		return handled;
@@ -69,9 +69,9 @@ public final class SoundStartResult {
 	}
 
 	/**
-	 * True when the sound must not start at all: dropped by a repeat limit, or muted where nothing can make it audible
-	 * while it plays. A sound muted by a zone, or one a zone could unmute, starts silently instead ({@link #factor} 0)
-	 * so the per-tick loop can bring it back (FR-8.8, matrix case P12).
+	 * True when the sound must not start at all: dropped by a repeat limit, or muted and not looping. A muted looping
+	 * sound starts silently instead ({@link #factor} 0), so it can come back when the player walks out of the zone,
+	 * edits a set or turns on Bypass (FR-8.8, matrix case P12).
 	 */
 	public boolean cancel() {
 		return cancel;

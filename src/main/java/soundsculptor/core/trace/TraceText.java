@@ -16,7 +16,7 @@ import soundsculptor.core.zones.Zone;
  * The "Copy trace" text (PRD FR-14.5): the trace panel as plain text, for asking for help or filing a bug. Sections
  * follow FR-14.2: notices; Everywhere, with each set that has a matching entry ("used in N places" when it is linked
  * to more than one) and under it its entries, the winner and reason per setting, and for losers "overridden by" the
- * winning set and entry; zones considered (mode, weight, distance to the anchor, their sets as for Everywhere); the
+ * winning set and entry; the zones the player stood in, smallest first (shape, their sets as for Everywhere); the
  * deciding zone per setting; then the final result. Every phrase comes from one translation key; only line breaks and
  * indentation are added here.
  *
@@ -34,8 +34,12 @@ public final class TraceText {
 	public static final String ENTRY = "soundsculptor.trace.text.entry";
 	public static final String WINS = "soundsculptor.trace.text.wins";
 	public static final String OVERRIDDEN = "soundsculptor.trace.text.overridden";
+	/** "You were in: Pen → Base → Everywhere" (FR-14.2 item 2). */
 	public static final String ZONES = "soundsculptor.trace.text.zones";
-	public static final String NO_ZONES = "soundsculptor.trace.text.no_zones";
+	/** The same for a sound not heard yet: "You are in: …". */
+	public static final String ZONES_NOW = "soundsculptor.trace.text.zones_now";
+	/** Why Everywhere decided a setting while the player stood in zones. */
+	public static final String NO_ZONE_SETS_IT = "soundsculptor.trace.zone_reason.everywhere";
 	public static final String ZONE = "soundsculptor.trace.text.zone";
 	public static final String ZONE_WINNERS = "soundsculptor.trace.text.zone_winners";
 	public static final String ZONE_WINNER = "soundsculptor.trace.text.zone_winner";
@@ -113,23 +117,28 @@ public final class TraceText {
 		line(out, 0, tr.translate(EVERYWHERE), new PlaceTarget(PlaceRef.EVERYWHERE));
 		place(out, 1, trace.everywhere(), PlaceRef.EVERYWHERE, tr);
 
-		line(out, 0, tr.translate(ZONES));
-		if (trace.zones().isEmpty()) {
-			line(out, 1, tr.translate(NO_ZONES));
-		}
+		List<String> path = new ArrayList<>();
 		for (ZoneLine zone : trace.zones()) {
-			line(out, 1, tr.translate(ZONE, name(zone.zone()), ZoneSummary.modePart(zone.zone().mode()).text(tr),
-					Numbers.plain(zone.weight() * 100), Numbers.plain(zone.distance())), new ZoneTarget(zone.zone()));
+			path.add(name(zone.zone()));
+		}
+		path.add(tr.translate(EVERYWHERE));
+		line(out, 0, tr.translate(trace.playAllowed() == null ? ZONES_NOW : ZONES, String.join(" → ", path)));
+		for (ZoneLine zone : trace.zones()) {
+			line(out, 1, tr.translate(ZONE, name(zone.zone()), ZoneSummary.shapePart(zone.zone().shape()).text(tr)),
+					new ZoneTarget(zone.zone()));
 			place(out, 2, zone.sets(), PlaceRef.zone(zone.zone().id()), tr);
 		}
 
-		if (!trace.zoneWinners().isEmpty()) {
+		if (!trace.zones().isEmpty()) {
 			line(out, 0, tr.translate(ZONE_WINNERS));
 			for (TraceProperty property : TraceProperty.values()) {
 				ZoneWinner winner = trace.zoneWinners().get(property);
 				if (winner != null) {
 					line(out, 1, tr.translate(ZONE_WINNER, property(property, tr), name(winner.zone()),
 							tr.translate(winner.reason().translationKey())));
+				} else if (trace.everywhere().winners().containsKey(property)) {
+					line(out, 1, tr.translate(ZONE_WINNER, property(property, tr), tr.translate(EVERYWHERE),
+							tr.translate(NO_ZONE_SETS_IT)));
 				}
 			}
 		}

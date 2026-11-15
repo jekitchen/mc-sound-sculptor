@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
-import java.util.Set;
 
 import soundsculptor.core.recent.DistanceBand;
 import soundsculptor.core.recent.PlayStatus;
@@ -37,7 +36,7 @@ class SoundBrowserTest {
 	}
 
 	private static List<BrowserRow> recentOnly(String query, SortOrder sort) {
-		return SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(query), true, sort, Set.of());
+		return SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(query), true, sort);
 	}
 
 	@Test
@@ -56,27 +55,27 @@ class SoundBrowserTest {
 
 	@Test
 	void filterOffListsEveryKnownMatch() {
-		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse("villager"), false, SortOrder.MOST_RECENT, Set.of());
+		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse("villager"), false, SortOrder.MOST_RECENT);
 		assertEquals(List.of(AMBIENT.id(), HURT.id()), ids(rows));
 		assertEquals("Villager hurts", rows.get(1).subtitle());
 	}
 
 	@Test
-	void filterOffHidesVanillaCoveredAndSeenExcluded() {
-		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(""), false, SortOrder.MOST_RECENT, Set.of(HURT.id()));
-		assertEquals(List.of(AMBIENT.id(), ZOMBIE.id()), ids(rows));
+	void filterOffListsEverySoundMusicIncluded() {
+		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(""), false, SortOrder.MOST_RECENT);
+		assertEquals(List.of(AMBIENT.id(), HURT.id(), ZOMBIE.id(), MUSIC.id()), ids(rows));
 	}
 
 	@Test
 	void emptyQueryShowsAll() {
 		SearchQuery empty = SearchQuery.parse("");
-		assertEquals(2, SoundBrowser.rows(RECENT, ALL, empty, true, SortOrder.MOST_RECENT, Set.of()).size());
-		assertEquals(3, SoundBrowser.rows(RECENT, ALL, empty, false, SortOrder.MOST_RECENT, Set.of()).size());
+		assertEquals(2, SoundBrowser.rows(RECENT, ALL, empty, true, SortOrder.MOST_RECENT).size());
+		assertEquals(4, SoundBrowser.rows(RECENT, ALL, empty, false, SortOrder.MOST_RECENT).size(), "music included");
 	}
 
 	@Test
 	void recentDataCarriedWhenFilterOff() {
-		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(""), false, SortOrder.MOST_RECENT, Set.of());
+		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(""), false, SortOrder.MOST_RECENT);
 		assertSame(R_AMBIENT, rows.get(0).recent());
 		assertNull(rows.get(1).recent());
 		assertSame(R_ZOMBIE, rows.get(2).recent());
@@ -85,7 +84,7 @@ class SoundBrowserTest {
 	@Test
 	void recentSoundMissingFromKnownListIsStillShown() {
 		RecentRow modded = recent("mod:thing.hum", 1, 3000);
-		List<BrowserRow> rows = SoundBrowser.rows(List.of(modded), ALL, SearchQuery.parse("hum"), true, SortOrder.MOST_RECENT, Set.of());
+		List<BrowserRow> rows = SoundBrowser.rows(List.of(modded), ALL, SearchQuery.parse("hum"), true, SortOrder.MOST_RECENT);
 		assertEquals(List.of("mod:thing.hum"), ids(rows));
 		assertNull(rows.get(0).subtitle());
 	}

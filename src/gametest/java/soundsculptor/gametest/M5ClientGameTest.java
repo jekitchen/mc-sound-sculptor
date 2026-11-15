@@ -88,7 +88,7 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			int listed = context.computeOnClient(mc -> soundsculptor.core.lists.EntrySummary.matchCount(QuickEntries.get(ProfileManager.profile(), wildcardId),
 					soundsculptor.mc.KnownSounds.ids()));
 			int previewed = context.computeOnClient(mc -> soundsculptor.core.editor.PatternPreview.of("minecraft:entity.villager.*",
-					soundsculptor.mc.KnownSounds.ids(), soundsculptor.mc.KnownSounds.seenExcluded()).count());
+					soundsculptor.mc.KnownSounds.ids()).count());
 			check(listed == previewed && listed > 0, "the list's match count (" + listed + ") should equal the preview's (" + previewed + ")");
 
 			check(!play(context, VILLAGER_AMBIENT, SoundSource.NEUTRAL), "villager ambient should be muted");

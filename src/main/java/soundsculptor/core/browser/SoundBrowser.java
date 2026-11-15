@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 import soundsculptor.core.recent.RecentRow;
 import soundsculptor.core.recent.SortOrder;
@@ -32,10 +31,9 @@ public final class SoundBrowser {
 	 *                     (FR-1.3); false for every known sound that matches, in {@code all} order, each carrying its
 	 *                     recent data when it has some
 	 * @param sort         order for the recent-only list
-	 * @param seenExcluded IDs that played in a vanilla-covered category, hidden from the full list (FR-3.1)
 	 */
 	public static List<BrowserRow> rows(List<RecentRow> recent, List<SoundEntry> all, SearchQuery query,
-			boolean recentOnly, SortOrder sort, Set<String> seenExcluded) {
+			boolean recentOnly, SortOrder sort) {
 		if (recentOnly) {
 			return recentRows(recent, all, query, sort);
 		}
@@ -43,7 +41,7 @@ public final class SoundBrowser {
 		for (RecentRow row : recent) {
 			recentById.put(row.id(), row);
 		}
-		List<SoundEntry> found = SoundSearch.search(all, query, seenExcluded);
+		List<SoundEntry> found = SoundSearch.search(all, query);
 		List<BrowserRow> result = new ArrayList<>(found.size());
 		for (SoundEntry entry : found) {
 			result.add(new BrowserRow(entry.id(), entry.subtitle(), recentById.get(entry.id())));

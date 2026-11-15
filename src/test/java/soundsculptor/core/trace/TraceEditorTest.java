@@ -25,8 +25,6 @@ import soundsculptor.core.undo.UndoSlot;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 import org.junit.jupiter.api.Test;
 
@@ -73,7 +71,7 @@ class TraceEditorTest {
 	}
 
 	private static TraceEditContext context(LastPlay play) {
-		return new TraceEditContext(AMBIENT, play, false, false);
+		return new TraceEditContext(AMBIENT, play, Standing.NOWHERE, false);
 	}
 
 	private static TraceEditResult ok(TraceEditResult result) {
@@ -204,7 +202,7 @@ class TraceEditorTest {
 			assertEquals(2, zone.sets().sets().get(0).placesUsing(), zone.zone().id());
 		}
 		// Another world's profile using the set in 3 places adds those 3 places.
-		TraceEditContext withOthers = new TraceEditContext(AMBIENT, PLAY, false, false, setId -> setId.equals("farm") ? 3 : 0);
+		TraceEditContext withOthers = new TraceEditContext(AMBIENT, PLAY, Standing.NOWHERE, false, setId -> setId.equals("farm") ? 3 : 0);
 		assertEquals(5, withOthers.trace(start).zones().get(0).sets().sets().get(0).placesUsing(),
 				"places in other profiles count too");
 	}
@@ -325,8 +323,8 @@ class TraceEditorTest {
 	}
 
 	@Test
-	void disabledZoneKeepsItsModeAndEdge() {
-		Zone far = cylinder("far", 8, attached("farm")).withMode(ZoneMode.OUTSIDE).withEdge(ZoneEdge.fade(4));
+	void disabledZoneKeepsEverythingElse() {
+		Zone far = cylinder("far", 8, attached("farm"));
 		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, far);
 		Zone off = ok(TraceEditor.setZoneEnabled(context(PLAY), start, "far", false)).after().profile().zone("far");
 		assertEquals(far.withEnabled(false), off);

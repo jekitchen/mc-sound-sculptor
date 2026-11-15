@@ -35,8 +35,8 @@ class TraceTextLinesTest {
 	}
 
 	private static SoundTrace trace(List<SetEntry> everywhere, List<Zone> zones) {
-		return SoundTracer.trace(precedence(everywhere, zones, soundsculptor.core.zones.ZoneEdge.hard()), SetLibrary.EMPTY, AMBIENT,
-				PLAY, false, false);
+		return SoundTracer.trace(precedence(everywhere, zones), SetLibrary.EMPTY, AMBIENT,
+				PLAY, Standing.NOWHERE, false);
 	}
 
 	/** Entry, zone and "no entry" targets; set lines and the Everywhere heading are checked on their own. */
@@ -93,7 +93,7 @@ class TraceTextLinesTest {
 		SoundSet a2 = new SoundSet("a2", "Villagers (2)", a.entries());
 		SetLibrary library = new SetLibrary(List.of(a, a2));
 		PlaceSets everywhere = PlaceSets.EMPTY.attach("a").attach("a2");
-		SoundTrace t = SoundTracer.trace(new Precedence(everywhere, List.of(), library), library, AMBIENT, PLAY, false, false);
+		SoundTrace t = SoundTracer.trace(new Precedence(everywhere, List.of(), library), library, AMBIENT, PLAY, Standing.NOWHERE, false);
 		List<TraceText.Line> lines = TraceText.lines(t, EN);
 
 		assertEquals(List.of(
@@ -113,7 +113,7 @@ class TraceTextLinesTest {
 		SetEntry quickEntry = SetEntry.of("q", AMBIENT).withVolume(60);
 		PlaceSets everywhere = PlaceSets.EMPTY.attach("farm").withQuickEntries(List.of(quickEntry));
 		Zone pen = new Zone("pen", "Pen", true, WORLD, OVERWORLD, new Point(1, 0, 0), new Shape.Cylinder(20, 40), PlaceSets.EMPTY.attach("farm"));
-		SoundTrace t = SoundTracer.trace(new Precedence(everywhere, List.of(pen), library), library, setId -> 2, AMBIENT, PLAY, false, false);
+		SoundTrace t = SoundTracer.trace(new Precedence(everywhere, List.of(pen), library), library, setId -> 2, AMBIENT, PLAY, Standing.NOWHERE, false);
 		List<TraceText.Line> lines = TraceText.lines(t, EN);
 
 		List<TraceText.SetTarget> sets = new ArrayList<>();
@@ -138,7 +138,7 @@ class TraceTextLinesTest {
 	void everywhereHeadingCarriesItsPlace() {
 		List<TraceText.Line> lines = TraceText.lines(trace(List.of(SetEntry.of("e", AMBIENT).withVolume(60)), List.of()), EN);
 		assertEquals(new TraceText.PlaceTarget(PlaceRef.EVERYWHERE), lines.get(indexOf(lines, "Everywhere")).target());
-		assertNull(lines.get(indexOf(lines, "Zones")).target(), "the zones heading has nothing to edit");
+		assertNull(lines.get(indexOf(lines, "You were in: Everywhere")).target(), "the where-you-were heading has nothing to edit");
 	}
 
 	@Test
@@ -147,7 +147,6 @@ class TraceTextLinesTest {
 		int everywhere = indexOf(lines, "Everywhere");
 		assertEquals("  No entry matches this sound", lines.get(everywhere + 1).text());
 		assertEquals(new TraceText.NoEntryTarget(PlaceRef.EVERYWHERE), lines.get(everywhere + 1).target());
-		assertNull(lines.get(indexOf(lines, "  No zone affects this sound")).target(), "'No zone affects this sound' has nothing to edit");
 	}
 
 	private static int indexOf(List<TraceText.Line> lines, String text) {

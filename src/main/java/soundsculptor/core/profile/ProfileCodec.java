@@ -12,8 +12,6 @@ import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -56,13 +54,16 @@ public final class ProfileCodec {
 
 	private static final Set<String> ROOT_FIELDS = Set.of("schemaVersion", "id", "name", "worldKey", "settings", "everywhere",
 			"zones", "lastJoined", "boostConfirmed");
+	/**
+	 * {@code edge} in the settings, and {@code mode} and {@code edge} on a zone, were retired with Outside mode and fade
+	 * edges (owner decision 2026-11-14): still accepted without a warning, and ignored.
+	 */
 	private static final Set<String> SETTINGS_FIELDS = Set.of("showDistance", "cueDefault", "outlines", "edge");
 	private static final Set<String> PLACE_FIELDS = Set.of("sets", "quickChanges");
 	private static final Set<String> ATTACHMENT_FIELDS = Set.of("set", "enabled");
 	private static final Set<String> ZONE_FIELDS = Set.of("id", "name", "enabled", "color", "anchor", "shape", "mode", "edge",
 			"sets", "quickChanges");
 	private static final Set<String> ANCHOR_FIELDS = Set.of("type", "x", "y", "z", "dimension", "worldKey");
-	private static final Set<String> EDGE_FIELDS = Set.of("mode", "fade");
 	private static final Map<String, Set<String>> SHAPE_FIELDS = Map.of(
 			"box", Set.of("type", "width", "height", "depth"),
 			"cylinder", Set.of("type", "radius", "height"));
@@ -125,13 +126,6 @@ public final class ProfileCodec {
 		json.addProperty("showDistance", s.showDistance());
 		json.addProperty("cueDefault", s.cueDefault());
 		json.addProperty("outlines", s.outlines().name().toLowerCase(Locale.ROOT));
-		JsonObject edge = new JsonObject();
-		boolean fade = s.defaultEdge().mode() == ZoneEdge.Mode.FADE;
-		edge.addProperty("mode", fade ? "fade" : "hard");
-		if (fade) {
-			edge.addProperty("fade", s.defaultEdge().fadeDistance());
-		}
-		json.add("edge", edge);
 		return json;
 	}
 
@@ -183,17 +177,6 @@ public final class ProfileCodec {
 			}
 		}
 		json.add("shape", shape);
-		json.addProperty("mode", zone.mode() == ZoneMode.INSIDE ? "inside" : "outside");
-		JsonObject edge = new JsonObject();
-		edge.addProperty("mode", switch (zone.edge().mode()) {
-			case DEFAULT -> "default";
-			case HARD -> "hard";
-			case FADE -> "fade";
-		});
-		if (zone.edge().mode() == ZoneEdge.Mode.FADE) {
-			edge.addProperty("fade", zone.edge().fadeDistance());
-		}
-		json.add("edge", edge);
 		placeToJson(json, zone.sets());
 		return json;
 	}
@@ -358,12 +341,6 @@ public final class ProfileCodec {
 			String mode = s.choice("outlines", "outlines", "always", "editing", "never");
 			settings = settings.withOutlines(OutlineMode.valueOf(mode.toUpperCase(Locale.ROOT)));
 		}
-		if (s.has("edge")) {
-			Fields e = s.object("edge", s.where(), EDGE_FIELDS);
-			String mode = e.has("mode") ? e.choice("mode", "edge mode", "hard", "fade") : "hard";
-			double fade = e.has("fade") ? e.number("fade", ZoneEdge.MIN_FADE, ZoneEdge.MAX_FADE) : ZoneEdge.DEFAULT_FADE;
-			settings = settings.withDefaultEdge(mode.equals("fade") ? ZoneEdge.fade(fade) : ZoneEdge.hard());
-		}
 		return settings;
 	}
 
@@ -381,23 +358,8 @@ public final class ProfileCodec {
 		String dimension = a.string("dimension");
 		String worldKey = a.string("worldKey");
 		Shape shape = readShape(z);
-		ZoneMode mode = ZoneMode.INSIDE;
-		if (z.has("mode")) {
-			mode = z.choice("mode", "mode", "inside", "outside").equals("inside") ? ZoneMode.INSIDE : ZoneMode.OUTSIDE;
-		}
-		ZoneEdge edge = ZoneEdge.DEFAULT;
-		if (z.has("edge")) {
-			Fields e = z.object("edge", z.where(), EDGE_FIELDS);
-			String edgeMode = e.has("mode") ? e.choice("mode", "edge mode", "default", "hard", "fade") : "default";
-			double fade = e.has("fade") ? e.number("fade", ZoneEdge.MIN_FADE, ZoneEdge.MAX_FADE) : ZoneEdge.DEFAULT_FADE;
-			edge = switch (edgeMode) {
-				case "hard" -> ZoneEdge.hard();
-				case "fade" -> ZoneEdge.fade(fade);
-				default -> ZoneEdge.DEFAULT;
-			};
-		}
 		PlaceSets sets = readPlace(z, warnings);
-		return new Zone(id, name, enabled, worldKey, dimension, anchor, shape, sets, mode, edge);
+		return new Zone(id, name, enabled, worldKey, dimension, anchor, shape, sets);
 	}
 
 	private static Shape readShape(Fields z) throws ProfileFormatException {

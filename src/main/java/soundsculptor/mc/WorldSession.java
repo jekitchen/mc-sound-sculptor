@@ -3,6 +3,7 @@ package soundsculptor.mc;
 import soundsculptor.SoundSculptorClient;
 import soundsculptor.core.profile.WorldIds;
 import soundsculptor.core.profile.WorldKey;
+import soundsculptor.core.zones.FeetBlock;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -78,6 +79,19 @@ public final class WorldSession {
 			dimension = minecraft.level.dimension().identifier().toString();
 		}
 		return dimension;
+	}
+
+	/**
+	 * The block the local player's feet are in (FR-8.4): the player's own block position, not the camera's, so third
+	 * person and riding do not change it. {@code null} without a player. Allocates; the sound path reads the player's
+	 * block position directly instead.
+	 */
+	public static FeetBlock feet(Minecraft minecraft) {
+		if (minecraft.player == null) {
+			return null;
+		}
+		var block = minecraft.player.blockPosition();
+		return new FeetBlock(block.getX(), block.getY(), block.getZ());
 	}
 
 	private record Joined(WorldKey key, String displayName) {

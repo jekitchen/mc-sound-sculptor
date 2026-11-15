@@ -8,13 +8,10 @@ public sealed interface Shape {
 	/** Whether the offset {@code (dx, dy, dz)} from the anchor is inside the shape. */
 	boolean contains(double dx, double dy, double dz);
 
-	/** Geometric volume in cubic blocks, used to break distance ties (FR-9 step 5). */
+	/** Geometric volume in cubic blocks, used to put zones smallest first (FR-9 step 1). */
 	double volume();
 
-	/** Distance from an inside point to the nearest boundary; 0 for points outside (FR-8.5 Inside fade). */
-	double depthInside(double dx, double dy, double dz);
-
-	/** Distance from an outside point to the nearest point of the shape; 0 for points inside (Outside fade). */
+	/** Distance from an outside point to the nearest point of the shape; 0 for points inside (outline culling). */
 	double distanceOutside(double dx, double dy, double dz);
 
 	/** Axis-aligned box; width along x, height along y, depth along z, each 1 to 512 blocks. */
@@ -36,12 +33,6 @@ public sealed interface Shape {
 		@Override
 		public double volume() {
 			return width * height * depth;
-		}
-
-		@Override
-		public double depthInside(double dx, double dy, double dz) {
-			double d = Math.min(width / 2 - Math.abs(dx), Math.min(height / 2 - Math.abs(dy), depth / 2 - Math.abs(dz)));
-			return Math.max(0, d);
 		}
 
 		@Override
@@ -73,13 +64,6 @@ public sealed interface Shape {
 		@Override
 		public double volume() {
 			return Math.PI * radius * radius * height;
-		}
-
-		@Override
-		public double depthInside(double dx, double dy, double dz) {
-			double side = radius - Math.sqrt(dx * dx + dz * dz);
-			double ends = height / 2 - Math.abs(dy);
-			return Math.max(0, Math.min(side, ends));
 		}
 
 		@Override

@@ -39,14 +39,9 @@ class RecentSoundsTest {
 		assertEquals(afterPlay, log.generation(), "a snapshot with nothing expired leaves it");
 		log.record(VILLAGER, "neutral", true, 30.0, false, PlayStatus.PLAYING, null, 2000);
 		assertEquals(afterPlay, log.generation(), "a play out of range is not recorded and leaves it");
-		log.record("minecraft:ui.button.click", "ui", false, 0, true, PlayStatus.PLAYING, null, 2000);
-		long afterExcluded = log.generation();
-		assertTrue(afterExcluded != afterPlay, "a newly seen vanilla-covered sound changes it (the full list hides it)");
-		log.record("minecraft:ui.button.click", "ui", false, 0, true, PlayStatus.PLAYING, null, 2100);
-		assertEquals(afterExcluded, log.generation(), "seen again, it changes nothing");
 		rows(1000 + RecentSounds.WINDOW_MS + 1000);
 		long afterExpiry = log.generation();
-		assertTrue(afterExpiry != afterExcluded, "a row expiring changes it");
+		assertTrue(afterExpiry != afterPlay, "a row expiring changes it");
 		heard(COW, 500_000);
 		long beforeClear = log.generation();
 		log.clear();
@@ -94,18 +89,12 @@ class RecentSoundsTest {
 	}
 
 	@Test
-	void vanillaCoveredCategoriesAreNeverRecorded() {
+	void musicUiAndVoiceSoundsAreRecordedLikeAnyOther() {
+		// Every sound is in scope (section 5, decided 2026-11-14).
 		log.record("minecraft:music.game", "music", false, 0, true, PlayStatus.PLAYING, null, 1000);
 		log.record("minecraft:ui.button.click", "ui", false, 0, true, PlayStatus.PLAYING, null, 1000);
 		log.record("somemod:radio", "voice", false, 0, true, PlayStatus.PLAYING, null, 1000);
-		assertTrue(rows(1000).isEmpty());
-	}
-
-	@Test
-	void idsSeenInExcludedCategoriesAreRememberedForSearch() {
-		log.record("somemod:theme", "music", false, 0, true, PlayStatus.PLAYING, null, 1000);
-		heard(VILLAGER, 1000);
-		assertEquals(java.util.Set.of("somemod:theme"), log.seenExcludedIds());
+		assertEquals(3, rows(1000).size());
 	}
 
 	@Test

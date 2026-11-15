@@ -3,8 +3,6 @@ package soundsculptor.core.outline;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 /**
  * Builds the line segments for a zone's outline (PRD FR-10.2, FR-10.3):
@@ -12,8 +10,6 @@ import soundsculptor.core.zones.ZoneMode;
  *   <li>box: its 12 edges;</li>
  *   <li>cylinder: top and bottom circles plus four vertical lines.</li>
  * </ul>
- * Outside zones are marked dashed. A fade zone gets an inner outline where the fade reaches full strength: the shape
- * shrunk by the fade distance for Inside zones, grown by it for Outside zones.
  *
  * <p>Build once per zone and cache: outlines only change when the zone is edited.
  */
@@ -26,41 +22,14 @@ public final class OutlineGeometry {
 	private OutlineGeometry() {
 	}
 
-	/** The outline with a hard profile default edge. */
 	public static Outline of(Zone zone) {
-		return of(zone, ZoneEdge.hard());
+		return new Outline(lines(zone.shape(), zone.anchor()));
 	}
 
-	/** @param profileEdge the profile's default edge, for zones whose edge is {@link ZoneEdge#DEFAULT} */
-	public static Outline of(Zone zone, ZoneEdge profileEdge) {
-		Point a = zone.anchor();
-		boolean dashed = zone.mode() == ZoneMode.OUTSIDE;
-		ZoneEdge edge = zone.edge().mode() == ZoneEdge.Mode.DEFAULT ? profileEdge : zone.edge();
-		Outline inner = null;
-		if (edge.mode() == ZoneEdge.Mode.FADE) {
-			double grow = zone.mode() == ZoneMode.INSIDE ? -edge.fadeDistance() : edge.fadeDistance();
-			double[] coords = lines(zone.shape(), a, grow);
-			if (coords != null) {
-				inner = new Outline(coords, dashed, null);
-			}
-		}
-		return new Outline(lines(zone.shape(), a, 0), dashed, inner);
-	}
-
-	/** The shape's lines with every size grown by {@code grow} blocks (negative shrinks); null if nothing is left. */
-	private static double[] lines(Shape shape, Point a, double grow) {
+	private static double[] lines(Shape shape, Point a) {
 		return switch (shape) {
-			case Shape.Box b -> {
-				double hx = b.width() / 2 + grow;
-				double hy = b.height() / 2 + grow;
-				double hz = b.depth() / 2 + grow;
-				yield hx > 0 && hy > 0 && hz > 0 ? box(a, hx, hy, hz) : null;
-			}
-			case Shape.Cylinder c -> {
-				double r = c.radius() + grow;
-				double hh = c.height() / 2 + grow;
-				yield r > 0 && hh > 0 ? cylinder(a, r, hh) : null;
-			}
+			case Shape.Box b -> box(a, b.width() / 2, b.height() / 2, b.depth() / 2);
+			case Shape.Cylinder c -> cylinder(a, c.radius(), c.height() / 2);
 		};
 	}
 

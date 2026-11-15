@@ -48,9 +48,10 @@ class PrecedenceSetsTest {
 		return new SoundSet(id, id, List.of(entries));
 	}
 
-	private static SoundDecision decide(Precedence p, String soundId, double x) {
+	/** Decides {@code soundId} with the player's feet in block {@code (x, 0, 0)}. */
+	private static SoundDecision decide(Precedence p, String soundId, int x) {
 		SoundDecision out = new SoundDecision();
-		p.decide(soundId, true, WORLD, OVERWORLD, x, 0, 0, out);
+		p.decide(soundId, soundsculptor.core.Fixtures.at(p, WORLD, OVERWORLD, x, 0, 0), out);
 		return out;
 	}
 
@@ -91,13 +92,13 @@ class PrecedenceSetsTest {
 		// P2: Everywhere mutes with no zones.
 		assertEquals(0, decide(new Precedence(attached("set-g"), List.of(), library), VILLAGER, 0).volumePercent(), 1e-6);
 
-		// P3: the closest anchor wins, whatever the list order.
+		// P3: the smaller zone wins, whatever the list order.
 		Zone near = cylinder("near", 3, 10, attached("set-20"));
 		Zone far = cylinder("far", 9, 20, attached("set-80"));
 		assertEquals(20, decide(new Precedence(PlaceSets.EMPTY, List.of(near, far), library), VILLAGER, 0).volumePercent(), 1e-6);
 		assertEquals(20, decide(new Precedence(PlaceSets.EMPTY, List.of(far, near), library), VILLAGER, 0).volumePercent(), 1e-6);
 
-		// P4: each property comes from the closest zone that sets it.
+		// P4: each property comes from the first zone that sets it (equal sizes: list order).
 		Zone muting = cylinder("m", 2, 10, attached("set-m"));
 		Zone limiting = cylinder("l", 6, 10, attached("set-l"));
 		SoundDecision d = decide(new Precedence(PlaceSets.EMPTY, List.of(muting, limiting), library), VILLAGER, 0);
@@ -107,7 +108,7 @@ class PrecedenceSetsTest {
 		assertSame(limiting, d.limitZone());
 		assertEquals("set-l", d.limitSet());
 
-		// P5: a tie on distance goes to the smaller zone.
+		// P5: the smaller of two zones you stand in wins.
 		Zone small = cylinder("small", 5, 6, attached("set-20"));
 		Zone big = new Zone("big", "big", true, WORLD, OVERWORLD, new Point(0, 5, 0), new Shape.Cylinder(10, 20), attached("set-80"));
 		assertEquals(20, decide(new Precedence(PlaceSets.EMPTY, List.of(big, small), library), VILLAGER, 0).volumePercent(), 1e-6);
@@ -148,6 +149,8 @@ class PrecedenceSetsTest {
 		in.worldKey = WORLD;
 		in.dimension = OVERWORLD;
 		in.x = x;
+		in.feetKnown = true;
+		in.feetX = (int) Math.floor(x);
 		in.range = 16;
 		in.distanceSq = 1;
 		in.nowMs = nowMs;

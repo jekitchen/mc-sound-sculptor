@@ -347,11 +347,11 @@ public final class EntryEditorScreen extends SculptScreen {
 	}
 
 	private void updatePreview() {
-		preview = PatternPreview.of(draft.text(Field.TARGET), KnownSounds.ids(), KnownSounds.seenExcluded());
+		preview = PatternPreview.of(draft.text(Field.TARGET), KnownSounds.ids());
 		overridden = Component.empty();
 		if (searching()) {
 			if (matchList != null && searchEntries != null) {
-				searchResults = SoundSearch.search(searchEntries, SearchQuery.parse(draft.text(Field.TARGET)), KnownSounds.seenExcluded());
+				searchResults = SoundSearch.search(searchEntries, SearchQuery.parse(draft.text(Field.TARGET)));
 			}
 			return;
 		}
@@ -442,7 +442,7 @@ public final class EntryEditorScreen extends SculptScreen {
 		if (searchEntries == null) {
 			searchEntries = KnownSounds.entries();
 		}
-		searchResults = SoundSearch.search(searchEntries, SearchQuery.parse(draft.text(Field.TARGET)), KnownSounds.seenExcluded());
+		searchResults = SoundSearch.search(searchEntries, SearchQuery.parse(draft.text(Field.TARGET)));
 		List<SculptList.Row> rows = new ArrayList<>(searchResults.size());
 		for (SoundEntry entry : searchResults) {
 			String id = entry.id();

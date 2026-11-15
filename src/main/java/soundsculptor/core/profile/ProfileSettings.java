@@ -1,51 +1,40 @@
 package soundsculptor.core.profile;
 
 import soundsculptor.core.outline.OutlineMode;
-import soundsculptor.core.zones.ZoneEdge;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Profile settings (PRD FR-11: cue defaults, outline mode, default edge, show distance). Keybinds and UI preferences
+ * Profile settings (PRD FR-11: cue defaults, outline mode, show distance). Keybinds and UI preferences
  * are app-wide and live elsewhere.
  *
  * @param showDistance FR-1.4: show the distance band in the recently played list (default on)
  * @param cueDefault   FR-7.6: the Cue setting new mute rules start with (default on)
  * @param outlines     FR-10.1: "Show zone outlines" (default only while editing)
- * @param defaultEdge  FR-8.5: the edge of zones that use the profile default; Hard or Fade, never
- *                     {@link ZoneEdge.Mode#DEFAULT} (default Hard)
  */
-public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineMode outlines, ZoneEdge defaultEdge) {
-	public static final ProfileSettings DEFAULTS = new ProfileSettings(true, true, OutlineMode.DEFAULT, ZoneEdge.hard());
+public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineMode outlines) {
+	public static final ProfileSettings DEFAULTS = new ProfileSettings(true, true, OutlineMode.DEFAULT);
 
 	public ProfileSettings {
 		Objects.requireNonNull(outlines, "outlines");
-		Objects.requireNonNull(defaultEdge, "defaultEdge");
-		if (defaultEdge.mode() == ZoneEdge.Mode.DEFAULT) {
-			throw new IllegalArgumentException("the profile's default edge must be hard or fade");
-		}
 	}
 
 	/** Only "show distance" set; every other setting at its default. */
 	public ProfileSettings(boolean showDistance) {
-		this(showDistance, true, OutlineMode.DEFAULT, ZoneEdge.hard());
+		this(showDistance, true, OutlineMode.DEFAULT);
 	}
 
 	public ProfileSettings withShowDistance(boolean value) {
-		return new ProfileSettings(value, cueDefault, outlines, defaultEdge);
+		return new ProfileSettings(value, cueDefault, outlines);
 	}
 
 	public ProfileSettings withCueDefault(boolean value) {
-		return new ProfileSettings(showDistance, value, outlines, defaultEdge);
+		return new ProfileSettings(showDistance, value, outlines);
 	}
 
 	public ProfileSettings withOutlines(OutlineMode value) {
-		return new ProfileSettings(showDistance, cueDefault, value, defaultEdge);
-	}
-
-	public ProfileSettings withDefaultEdge(ZoneEdge value) {
-		return new ProfileSettings(showDistance, cueDefault, outlines, value);
+		return new ProfileSettings(showDistance, cueDefault, value);
 	}
 
 	/** Whether this value is at its default, so its reset button has nothing to do. */
@@ -54,7 +43,6 @@ public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineM
 			case SHOW_DISTANCE -> showDistance == DEFAULTS.showDistance;
 			case CUE_DEFAULT -> cueDefault == DEFAULTS.cueDefault;
 			case OUTLINES -> outlines == DEFAULTS.outlines;
-			case DEFAULT_EDGE -> defaultEdge.equals(DEFAULTS.defaultEdge);
 		};
 	}
 
@@ -75,7 +63,6 @@ public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineM
 			case SHOW_DISTANCE -> withShowDistance(DEFAULTS.showDistance);
 			case CUE_DEFAULT -> withCueDefault(DEFAULTS.cueDefault);
 			case OUTLINES -> withOutlines(DEFAULTS.outlines);
-			case DEFAULT_EDGE -> withDefaultEdge(DEFAULTS.defaultEdge);
 		};
 	}
 

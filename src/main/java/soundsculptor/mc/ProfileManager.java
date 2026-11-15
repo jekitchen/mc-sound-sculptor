@@ -513,7 +513,7 @@ public final class ProfileManager {
 
 	private static Snapshot snapshot(String key, Profile profile, SetLibrary library) {
 		return new Snapshot(key, profile, library,
-				new Precedence(profile.everywhere(), profile.zones(), library, profile.settings().defaultEdge()));
+				new Precedence(profile.everywhere(), profile.zones(), library));
 	}
 
 	// ---- Bypass (FR-13.1) ----

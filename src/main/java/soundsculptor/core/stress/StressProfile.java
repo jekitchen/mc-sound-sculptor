@@ -14,8 +14,6 @@ import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 /**
  * The "stress" profile for the noisy-farm test (PRD 11.2 step 2), and the "typical" profile measured beside it (PRD 9.1).
@@ -23,7 +21,8 @@ import soundsculptor.core.zones.ZoneMode;
  *
  * <ul>
  *   <li><b>Stress:</b> Everywhere attaches 2 library Sound Sets of 25 entries each, mixing single sounds and groups;
- *       64 zones (the maximum, every kind) that all affect a 9 x 9 pen centred on (0, {@value #PEN_Y}, 0) each attach 1
+ *       64 zones (the maximum, boxes and cylinders of many sizes) that all contain the player's feet block in the middle
+ *       of a 9 x 9 pen centred on (0, {@value #PEN_Y}, 0) each attach 1
  *       to 3 sets from a pool of 8, so most pool sets are shared by several zones. The pool is drawn so the zones weigh
  *       what the 64 zones of 1 to 3 rules weighed before Sound Sets (see {@link #POOL_SEED}), keeping the worst case
  *       comparable with PRD 9.1's.</li>
@@ -37,6 +36,10 @@ public final class StressProfile {
 	public static final double PEN_Y = 64;
 	/** The player's eye position, standing in the middle of the pen: the anchor of the zones around the player. */
 	public static final Point PLAYER = new Point(0, PEN_Y + 1.62, 0);
+	/** The block the player's feet are in (FR-8.4), standing on the pen floor: every stress zone contains it. */
+	public static final int FEET_X = 0;
+	public static final int FEET_Y = (int) PEN_Y;
+	public static final int FEET_Z = 0;
 	/** The two sets attached to Everywhere. */
 	public static final List<String> EVERYWHERE_SET_IDS = List.of("stress-everywhere-1", "stress-everywhere-2");
 	/** The set attached to Everywhere in the typical profile. */
@@ -180,9 +183,9 @@ public final class StressProfile {
 	}
 
 	/**
-	 * The stress profile's 64 zones that all affect the pen: Inside boxes and cylinders scattered up to 20 blocks away,
-	 * Outside cylinders 40 to 60 blocks away, and boxes centred on the player. Every third zone fades. Each attaches 1 to
-	 * 3 different sets from the pool in {@link #library()}.
+	 * The stress profile's 64 zones that all contain the player's feet block ({@link #FEET_X}, {@link #FEET_Y},
+	 * {@link #FEET_Z}): boxes and cylinders anchored up to 20 blocks away, cylinders around the pen centre, and boxes
+	 * centred on the player. Each attaches 1 to 3 different sets from the pool in {@link #library()}.
 	 */
 	public static List<Zone> zones(String worldKey, String dimension) {
 		return generate(worldKey, dimension).stress();
@@ -212,7 +215,6 @@ public final class StressProfile {
 			double az = random.nextInt(41) - 20;
 			double dy = Math.abs(PEN_Y - ay);
 			Shape shape;
-			ZoneMode mode = ZoneMode.INSIDE;
 			switch (i % 8) {
 				case 0, 1 -> {
 					// A cube or an upright cylinder whose half-size reaches past the pen centre.
@@ -224,14 +226,15 @@ public final class StressProfile {
 				case 4, 5 -> shape = new Shape.Cylinder(
 						Math.min(Shape.Cylinder.MAX_RADIUS, Math.ceil(Math.hypot(ax, az)) + 2 + random.nextInt(18)), side(dy, random));
 				case 6 -> {
-					// Outside zone around somewhere else: the pen is outside it, so it is affected.
-					double angle = random.nextDouble() * 2 * Math.PI;
-					double distance = 40 + random.nextInt(21);
-					ax = Math.round(Math.cos(angle) * distance);
-					az = Math.round(Math.sin(angle) * distance);
+					// Was an Outside zone far away (removed 2026-11-14): now an upright cylinder around the pen centre.
+					// The draws stay, so every later zone keeps the entries it had.
+					random.nextDouble();
+					random.nextInt(21);
 					double r = 5 + random.nextInt(16);
+					ax = 0;
+					ay = PEN_Y;
+					az = 0;
 					shape = new Shape.Cylinder(r, 2 * r);
-					mode = ZoneMode.OUTSIDE;
 				}
 				default -> {
 					// Centred on the player: the zones nearest to most sounds in the pen.
@@ -253,10 +256,9 @@ public final class StressProfile {
 			while (pooled.librarySetCount() < pooledCount) {
 				pooled = pooled.attach(poolId(pick.nextInt(POOL_SIZE)));
 			}
-			Zone zone = new Zone("z" + i, "Stress " + i, true, worldKey, dimension, new Point(ax, ay, az), shape, pooled)
-					.withMode(mode);
+			Zone zone = new Zone("z" + i, "Stress " + i, true, worldKey, dimension, new Point(ax, ay, az), shape, pooled);
 			if (i % 3 == 0) {
-				zone = zone.withEdge(ZoneEdge.fade(1 + random.nextInt(8)));
+				random.nextInt(8); // was the fade distance; drawn so later zones keep their entries
 			}
 			stress.add(zone);
 			typical.add(zone.withSets(PlaceSets.EMPTY.attach(zoneSetId(i))));
