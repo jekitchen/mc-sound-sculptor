@@ -94,8 +94,9 @@ public final class M3ClientGameTest implements FabricClientGameTest {
 
 			// Keyboard focus and narration of a read-only row.
 			String narration = context.computeOnClient(mc -> NarrationCompat.collect(sounds(mc).list::updateNarration));
-			// Focus stays on the same sound when newer rows arrive above it, so the position can be 1 or 2.
-			check(narration.matches("(?s).*row [12] out of 2.*") && (narration.contains("Anvil landed") || narration.contains("Villager mumbles"))
+			// Focus stays on the same sound when newer rows arrive above it, so the position can vary; background music can
+			// start at any moment and is listed too (every sound is in scope), so there may be a third row.
+			check(narration.matches("(?s).*row [123] out of [23].*") && (narration.contains("Anvil landed") || narration.contains("Villager mumbles"))
 					&& narration.contains("Friendly Mobs") == narration.contains("Villager mumbles"),
 					"the focused row should be narrated with its text and position, was: " + narration);
 
