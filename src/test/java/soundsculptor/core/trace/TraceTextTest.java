@@ -31,7 +31,7 @@ class TraceTextTest {
 	private static final String AMBIENT = "minecraft:entity.villager.ambient";
 	private static final String COW = "minecraft:entity.cow.ambient";
 
-	private static LastPlay playAt(double x, float volume, boolean dropped, boolean cueShown) {
+	private static LastPlay playAt(int x, float volume, boolean dropped, boolean cueShown) {
 		return new LastPlay(true, WORLD, OVERWORLD, x, 0, 0, volume, dropped, cueShown);
 	}
 
@@ -48,12 +48,12 @@ class TraceTextTest {
 	}
 
 	private static String text(Precedence p, LastPlay play, boolean bypass) {
-		return TraceText.of(SoundTracer.trace(p, SetLibrary.EMPTY, AMBIENT, play, bypass, false), EN);
+		return TraceText.of(SoundTracer.trace(p, SetLibrary.EMPTY, AMBIENT, play, Standing.NOWHERE, bypass), EN);
 	}
 
 	private static String text(SetLibrary library, PlaceSets everywhere, String soundId, ToIntFunction<String> placesUsing) {
 		Precedence p = new Precedence(everywhere, List.of(), library);
-		return TraceText.of(SoundTracer.trace(p, library, placesUsing, soundId, playAt(0, 100, false, false), false, false), EN);
+		return TraceText.of(SoundTracer.trace(p, library, placesUsing, soundId, playAt(0, 100, false, false), Standing.NOWHERE, false), EN);
 	}
 
 	@Test
@@ -62,7 +62,7 @@ class TraceTextTest {
 		SetEntry exact = SetEntry.of("e", AMBIENT).withVolume(60);
 		SetLibrary library = new SetLibrary(List.of(new SoundSet("villagers", "Villagers", List.of(wildcard, exact))));
 		String text = TraceText.of(SoundTracer.trace(new Precedence(attached("villagers"), List.of(), library), library, AMBIENT,
-				playAt(0, 60, false, false), false, false), EN);
+				playAt(0, 60, false, false), Standing.NOWHERE, false), EN);
 		assertEquals(String.join("\n",
 				"Sound Sculptor trace for minecraft:entity.villager.ambient",
 				"Everywhere",
@@ -71,8 +71,7 @@ class TraceTextTest {
 				"      Decides loudness (Exact sound ID)",
 				"    *:*villager*: Muted",
 				"      loudness overridden by Villagers: minecraft:entity.villager.ambient",
-				"Zones",
-				"  No zone affects this sound",
+				"You were in: Everywhere",
 				"Result",
 				"  Volume 60%",
 				"  No repeat limit",
@@ -95,7 +94,7 @@ class TraceTextTest {
 				"  Quiet",
 				"    minecraft:entity.cow.ambient: Level 10%",
 				"      loudness overridden by Farm animals: *:*cow*",
-				"Zones")), text);
+				"You were in: Everywhere")), text);
 	}
 
 	@Test
@@ -118,26 +117,26 @@ class TraceTextTest {
 				"  Farm animals",
 				"    *:*cow*: Level 40%",
 				"      loudness overridden by Quick changes: minecraft:entity.cow.ambient",
-				"Zones")), text);
+				"You were in: Everywhere")), text);
 	}
 
 	@Test
-	void zonesShowModeWeightDistanceTheirSetsAndTheWinners() {
-		Zone near = cylinder("near", 3, 20, SetEntry.of("rn", "*villager*").withVolume(20));
-		Zone far = cylinder("far", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
-		String text = text(precedence(List.of(), List.of(far, near)), playAt(0, 20, false, false), false);
+	void zonesYouStoodInShowSmallestFirstWithTheirShapeSetsAndTheWinners() {
+		Zone pen = cylinder("Pen", 3, 10, SetEntry.of("rn", "*villager*").withVolume(20));
+		Zone base = cylinder("Base", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
+		String text = text(precedence(List.of(), List.of(base, pen)), playAt(0, 20, false, false), false);
 		assertTrue(text.contains(String.join("\n",
-				"Zones",
-				"  far (Inside): weight 100%, 9 blocks from its anchor",
-				"    Quick changes",
-				"      *:*villager*: Level 80%",
-				"        Decides loudness (Only matching entry)",
-				"  near (Inside): weight 100%, 3 blocks from its anchor",
+				"You were in: Pen → Base → Everywhere",
+				"  Pen (Cylinder, radius 10, height 20)",
 				"    Quick changes",
 				"      *:*villager*: Level 20%",
 				"        Decides loudness (Only matching entry)",
+				"  Base (Cylinder, radius 20, height 40)",
+				"    Quick changes",
+				"      *:*villager*: Level 80%",
+				"        Decides loudness (Only matching entry)",
 				"Deciding zones",
-				"  loudness: near (Closest anchor)",
+				"  loudness: Pen (Smallest zone that sets it)",
 				"Result",
 				"  Volume 20%")), text);
 		assertTrue(text.startsWith("Sound Sculptor trace for " + AMBIENT + "\nEverywhere\n  No entry matches this sound\n"), text);
@@ -168,16 +167,28 @@ class TraceTextTest {
 	@Test
 	void notHeardYetLeavesOutWhatHappenedAtTheLastPlay() {
 		String text = text(precedence(List.of(SetEntry.of("m", AMBIENT).withMute(true)), List.of()), null, false);
-		assertTrue(text.contains("Not heard yet; zones depend on where it plays"), text);
+		assertTrue(text.contains("Not heard yet: predicted for where you are."), text);
+		assertTrue(text.contains("You are in: Everywhere"), text);
 		assertFalse(text.contains("Last play"), text);
 		assertFalse(text.contains("cue was shown"), text);
 	}
 
 	@Test
-	void fadeWeightAndUnnamedZones() {
-		Zone fade = new Zone("z7", "", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(20, 40),
-				quick(List.of(SetEntry.of("r", "*").withMute(true)))).withEdge(soundsculptor.core.zones.ZoneEdge.fade(8));
-		String text = text(precedence(List.of(), List.of(fade)), playAt(16, 50, false, false), false);
-		assertTrue(text.contains("  z7 (Inside): weight 50%, 16 blocks from its anchor"), text);
+	void unnamedZonesShowTheirId() {
+		Zone unnamed = new Zone("z7", "", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(20, 40),
+				quick(List.of(SetEntry.of("r", "*").withMute(true))));
+		String text = text(precedence(List.of(), List.of(unnamed)), playAt(16, 0, false, false), false);
+		assertTrue(text.contains("You were in: z7 → Everywhere\n  z7 (Cylinder, radius 20, height 40)"), text);
+	}
+
+	@Test
+	void everywhereDecidesWhatNoZoneSets() {
+		Zone cueOnly = cylinder("Pen", 0, 10, SetEntry.of("c", "*villager*").withCue(true));
+		String text = text(precedence(List.of(SetEntry.of("g", AMBIENT).withVolume(40)), List.of(cueOnly)),
+				playAt(0, 40, false, false), false);
+		assertTrue(text.contains(String.join("\n",
+				"Deciding zones",
+				"  loudness: Everywhere (No zone sets it)",
+				"  cue: Pen (Only zone that sets it)")), text);
 	}
 }

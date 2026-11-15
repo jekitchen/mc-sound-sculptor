@@ -138,11 +138,11 @@ class ProfileImportTest {
 	}
 
 	@Test
-	void fadeOutOfRangeIsNamed() {
+	void aRetiredFadeEdgeIsIgnoredEvenOutOfRange() throws ProfileFormatException {
+		// Fade edges were removed on 2026-11-14: an old file still loads.
 		String zone = fixedZone("z1", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}").replace("\"name\"",
 				"\"edge\": {\"mode\": \"fade\", \"fade\": 40}, \"name\"");
-		assertEquals("Zone 1, field fade: 40 is above the maximum 32.",
-				problem("{\"schemaVersion\": 3, \"zones\": [" + zone + "]}"));
+		assertEquals(1, ProfileCodec.fromJson("{\"schemaVersion\": 3, \"zones\": [" + zone + "]}").zones().size());
 	}
 
 	@Test

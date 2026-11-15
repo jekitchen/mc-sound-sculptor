@@ -101,7 +101,7 @@ public final class SoundSculptorClient implements ClientModInitializer {
 		while (outlinesKey.consumeClick()) {
 			SoundSculptorSettings.cycleOutlineMode();
 		}
-		// FR-8.8: re-decide playing sounds every tick (zones, moving sources, Bypass).
+		// FR-8.8, FR-13.1: work out where the player is; re-decide playing loops only when that, the profile or Bypass changed.
 		PlayingChannels.get().tick(minecraft);
 	}
 }

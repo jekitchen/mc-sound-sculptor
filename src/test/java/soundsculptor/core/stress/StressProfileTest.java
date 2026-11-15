@@ -12,12 +12,10 @@ import soundsculptor.core.sets.EntryResolution;
 import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetLibrary;
 import soundsculptor.core.sets.SoundSet;
-import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
+import soundsculptor.core.zones.WhereYouAre;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,13 +44,11 @@ class StressProfileTest {
 
 	@Test
 	void hasTheMaximumSixtyFourZonesOfEveryKind() {
-		// PRD 11.2: boxes, cylinders, some fade, some Outside.
+		// PRD 11.2: boxes and cylinders of different sizes.
 		List<Zone> zones = StressProfile.zones(WORLD, OVERWORLD);
 		assertEquals(Precedence.MAX_ZONES, zones.size());
 		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box));
 		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Cylinder));
-		assertTrue(zones.stream().anyMatch(z -> z.mode() == ZoneMode.OUTSIDE));
-		assertTrue(zones.stream().anyMatch(z -> z.edge().mode() == ZoneEdge.Mode.FADE));
 		assertTrue(zones.stream().anyMatch(z -> z.anchor().equals(StressProfile.PLAYER)), "zones centred on the player");
 	}
 
@@ -117,27 +113,29 @@ class StressProfileTest {
 	private static double[] zoneLoad(List<Zone> zones) {
 		Precedence precedence = new Precedence(StressProfile.everywhere(), zones, StressProfile.library());
 		List<String> ids = StressProfile.soundIds();
-		EntryResolution[] row = new EntryResolution[zones.size() + 1];
 		int matched = 0;
 		int limits = 0;
 		for (String id : ids) {
-			precedence.resolve(id, row);
-			for (int i = 1; i < row.length; i++) {
-				matched += row[i] == EntryResolution.NONE ? 0 : 1;
-				limits += row[i].limit() == null ? 0 : 1;
+			for (int i = 0; i < zones.size(); i++) {
+				EntryResolution r = precedence.zoneResolver(i).resolve(id);
+				matched += r == EntryResolution.NONE ? 0 : 1;
+				limits += r.limit() == null ? 0 : 1;
 			}
 		}
 		return new double[] {matched / (double) ids.size(), limits / (double) ids.size()};
 	}
 
 	@Test
-	void everyZoneAffectsThePenCentre() {
-		// The pen is 9 x 9 blocks around (0, 64, 0), with the player standing in it.
-		for (Zone z : StressProfile.zones(WORLD, OVERWORLD)) {
-			Point a = z.anchor();
-			double w = z.weight(-a.x(), StressProfile.PEN_Y - a.y(), -a.z(), ZoneEdge.hard());
-			assertTrue(w > 0, z.id() + " weight " + w);
+	void everyZoneContainsThePlayersFeetBlock() {
+		// PRD 11.2: 64 zones that all contain the spot where the player stands in the pen.
+		List<Zone> zones = StressProfile.zones(WORLD, OVERWORLD);
+		for (Zone z : zones) {
+			assertTrue(z.containsBlock(StressProfile.FEET_X, StressProfile.FEET_Y, StressProfile.FEET_Z), z.id());
 		}
+		WhereYouAre where = new WhereYouAre();
+		where.update(new Precedence(StressProfile.everywhere(), zones, StressProfile.library()), WORLD, OVERWORLD,
+				StressProfile.FEET_X, StressProfile.FEET_Y, StressProfile.FEET_Z);
+		assertEquals(Precedence.MAX_ZONES, where.count());
 	}
 
 	@Test

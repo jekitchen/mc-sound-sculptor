@@ -11,12 +11,14 @@ import soundsculptor.core.recent.RecentSounds;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.SoundDecision;
+import soundsculptor.core.zones.WhereYouAre;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * PRD section 9.1: the sound hot path must cost under 5 µs per sound on average with 50 global rules and 64 zones,
- * and allocate nothing in steady state. These run on every build, so a regression shows up in CI, not in a farm.
+ * PRD section 9.1: the sound hot path must cost under 5 µs per sound on average with 50 global rules and 64 zones
+ * that all contain the player, and allocate nothing in steady state. Each sound start checks where the player is, as
+ * the sound hook does. These run on every build, so a regression shows up in CI, not in a farm.
  *
  * <p>The time limit is the PRD budget, far above the expected cost, so a slow CI machine does not make it flaky. The
  * allocation check uses the JVM's own per-thread counter.
@@ -29,21 +31,18 @@ class HotPathBudgetTest {
 	private final Precedence precedence = new Precedence(StressProfile.everywhere(), StressProfile.zones(WORLD, OVERWORLD),
 			StressProfile.library());
 	private final String[] ids = StressProfile.soundIds().toArray(new String[0]);
-	private final double[] xs = new double[ids.length];
-	private final double[] zs = new double[ids.length];
+	private final WhereYouAre where = new WhereYouAre();
 
-	HotPathBudgetTest() {
-		// Sources spread over the 9 x 9 pen, deterministically.
-		for (int i = 0; i < ids.length; i++) {
-			xs[i] = (i * 37 % 90) / 10.0 - 4.5;
-			zs[i] = (i * 53 % 90) / 10.0 - 4.5;
-		}
+	/** What the sound hook does to decide one sound: check where the player is (cheap when unchanged), then decide. */
+	private void decide(int i, SoundDecision out) {
+		where.update(precedence, WORLD, OVERWORLD, StressProfile.FEET_X, StressProfile.FEET_Y, StressProfile.FEET_Z);
+		precedence.decide(ids[i], where, out);
 	}
 
 	private void decideAll(SoundDecision out, int rounds) {
 		for (int r = 0; r < rounds; r++) {
 			for (int i = 0; i < ids.length; i++) {
-				precedence.decide(ids[i], true, WORLD, OVERWORLD, xs[i], 64, zs[i], out);
+				decide(i, out);
 			}
 		}
 	}
@@ -62,11 +61,11 @@ class HotPathBudgetTest {
 
 	@Test
 	void stressProfileReallyExercisesTheZones() {
-		// Guard against a profile that never reaches the zone code: most sounds in the pen should be decided by a zone.
+		// Guard against a profile that never reaches the zone code: most sounds should be decided by a zone.
 		SoundDecision out = new SoundDecision();
 		int byZone = 0;
 		for (int i = 0; i < ids.length; i++) {
-			precedence.decide(ids[i], true, WORLD, OVERWORLD, xs[i], 64, zs[i], out);
+			decide(i, out);
 			if (out.loudnessZone() != null) {
 				byZone++;
 			}
@@ -98,11 +97,12 @@ class HotPathBudgetTest {
 		long now = 1_000L + round * 10L; // stays inside the 3-minute window, so no row expires
 		for (int i = 0; i < ids.length; i++) {
 			long t0 = System.nanoTime();
-			precedence.decide(ids[i], true, WORLD, OVERWORLD, xs[i], 64, zs[i], out);
+			decide(i, out);
 			PlayStatus status = out.volumePercent() == 0 ? PlayStatus.MUTED : PlayStatus.PLAYING;
 			String zoneName = out.loudnessZone() == null ? null : out.loudnessZone().name();
 			recent.record(ids[i], "neutral", true, 6.0, true, status, zoneName, now);
-			lastPlays.record(ids[i], true, WORLD, OVERWORLD, xs[i], 64, zs[i], out.volumePercent(), false, false);
+			lastPlays.record(ids[i], true, WORLD, OVERWORLD, StressProfile.FEET_X, StressProfile.FEET_Y, StressProfile.FEET_Z,
+					out.volumePercent(), false, false);
 			timing.add(System.nanoTime() - t0, now);
 		}
 	}

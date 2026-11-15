@@ -6,8 +6,8 @@ import soundsculptor.core.sets.PlaceSets;
 import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetLibrary;
 import soundsculptor.core.zones.Precedence;
+import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
 
 /** Short ways for tests to build places from a plain entry list: the entries become the place's Quick changes. */
 public final class Fixtures {
@@ -23,12 +23,22 @@ public final class Fixtures {
 		return quick(List.of(entries));
 	}
 
-	/** Everywhere's Quick changes holding {@code everywhere}, these zones, an empty library and the hard default edge. */
+	/** Everywhere's Quick changes holding {@code everywhere}, these zones and an empty library. */
 	public static Precedence precedence(List<SetEntry> everywhere, List<Zone> zones) {
 		return new Precedence(quick(everywhere), zones, SetLibrary.EMPTY);
 	}
 
-	public static Precedence precedence(List<SetEntry> everywhere, List<Zone> zones, ZoneEdge profileEdge) {
-		return new Precedence(quick(everywhere), zones, SetLibrary.EMPTY, profileEdge);
+	/** Where you are for {@code p} with your feet in block {@code (x, y, z)} of this world and dimension. */
+	public static WhereYouAre at(Precedence p, String worldKey, String dimension, int x, int y, int z) {
+		WhereYouAre where = new WhereYouAre();
+		where.update(p, worldKey, dimension, x, y, z);
+		return where;
+	}
+
+	/** Where you are for {@code p} with no feet block known: Everywhere only. */
+	public static WhereYouAre nowhere(Precedence p) {
+		WhereYouAre where = new WhereYouAre();
+		where.updateNowhere(p);
+		return where;
 	}
 }

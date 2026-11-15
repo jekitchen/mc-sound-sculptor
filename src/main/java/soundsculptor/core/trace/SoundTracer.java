@@ -14,17 +14,17 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.sets.SetLibrary;
 import soundsculptor.core.sets.SoundPattern;
 import soundsculptor.core.sets.SoundSet;
-import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.SoundDecision;
+import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.zones.Zone;
 
 /**
- * Builds the sound trace (PRD FR-14) when the "Why?" panel opens, in Sound Set terms: for Everywhere and each zone,
- * the attached sets with entries that match the sound, the winning entry per setting and the set it won in. Not on the
- * hot path: it allocates freely. Entries are listed and picked in the order the place's resolver uses, the final
- * result comes from {@link Precedence#decide} and the zone tie-break from
- * {@link Precedence#beats(double, double, double, double)}, so the trace can never disagree with what was played.
+ * Builds the sound trace (PRD FR-14) when the "Why?" panel opens, in Sound Set terms: for Everywhere and each zone the
+ * player stood in, the attached sets with entries that match the sound, the winning entry per setting and the set it
+ * won in. Not on the hot path: it allocates freely. Entries are listed and picked in the order the place's resolver
+ * uses, the zones in {@link WhereYouAre}'s order, and the final result comes from {@link Precedence#decide}, so the
+ * trace can never disagree with what was played.
  */
 public final class SoundTracer {
 	private static final float SAME_VOLUME = 0.01F;
@@ -32,75 +32,48 @@ public final class SoundTracer {
 	private SoundTracer() {
 	}
 
-	/** {@link #trace(Precedence, SetLibrary, ToIntFunction, String, LastPlay, boolean, boolean)} with no place counts. */
-	public static SoundTrace trace(Precedence p, SetLibrary lib, String soundId, LastPlay play, boolean bypass,
-			boolean vanillaCovered) {
-		return trace(p, lib, setId -> 0, soundId, play, bypass, vanillaCovered);
+	/** {@link #trace(Precedence, SetLibrary, ToIntFunction, String, LastPlay, Standing, boolean)} with no place counts. */
+	public static SoundTrace trace(Precedence p, SetLibrary lib, String soundId, LastPlay play, Standing now, boolean bypass) {
+		return trace(p, lib, setId -> 0, soundId, play, now, bypass);
 	}
 
 	/**
-	 * @param p              the places, built from {@code lib}
-	 * @param lib            the library the places' set IDs refer to, for set names
-	 * @param placesUsing    for a library set ID, how many places use the set ("used in 3 places", FR-14.4)
-	 * @param play           the sound's last play, or {@code null} if it has not played this session
-	 * @param bypass         whether Bypass Sound Sculptor is on
-	 * @param vanillaCovered whether the sound belongs to Music, UI or Voice/Speech
+	 * @param p           the places, built from {@code lib}
+	 * @param lib         the library the places' set IDs refer to, for set names
+	 * @param placesUsing for a library set ID, how many places use the set ("used in 3 places", FR-14.4)
+	 * @param play        the sound's last play, or {@code null} if it has not played this session
+	 * @param now         where the player stands now: the trace of a sound not heard yet is predicted for there
+	 * @param bypass      whether Bypass Sound Sculptor is on
 	 */
 	public static SoundTrace trace(Precedence p, SetLibrary lib, ToIntFunction<String> placesUsing, String soundId,
-			LastPlay play, boolean bypass, boolean vanillaCovered) {
+			LastPlay play, Standing now, boolean bypass) {
 		Set<TraceNotice> notices = EnumSet.noneOf(TraceNotice.class);
 		Boolean playAllowed = play == null ? null : !play.dropped();
 		Boolean cueShown = play == null ? null : play.cueShown();
-		if (vanillaCovered) {
-			notices.add(TraceNotice.VANILLA_COVERED);
-			return new SoundTrace(soundId, notices, PlaceTrace.EMPTY, List.of(), Map.of(), 100, null, false, playAllowed, cueShown);
-		}
 		if (bypass) {
 			notices.add(TraceNotice.BYPASS);
 		}
 		if (play == null) {
 			notices.add(TraceNotice.NOT_HEARD_YET);
-		} else if (!play.positional()) {
-			notices.add(TraceNotice.NON_POSITIONAL);
 		}
 
 		PlaceTrace everywhere = explain(p.everywhere(), soundId, lib, placesUsing);
-		List<ZoneLine> lines = new ArrayList<>();
-		List<Integer> indices = new ArrayList<>();
-		if (play != null && play.positional()) {
-			List<Zone> zones = p.zones();
-			for (int i = 0; i < zones.size(); i++) {
-				Zone zone = zones.get(i);
-				if (!zone.enabled() || !play.worldKey().equals(zone.worldKey()) || !play.dimension().equals(zone.dimension())) {
-					continue;
-				}
-				Point a = zone.anchor();
-				double dx = play.x() - a.x();
-				double dy = play.y() - a.y();
-				double dz = play.z() - a.z();
-				double w = zone.weight(dx, dy, dz, p.profileEdge());
-				if (w <= 0) {
-					continue;
-				}
-				PlaceTrace sets = explain(p.zoneResolver(i), soundId, lib, placesUsing);
-				lines.add(new ZoneLine(zone, w, Math.sqrt(dx * dx + dy * dy + dz * dz), sets));
-				indices.add(i);
-			}
+		WhereYouAre where = (play != null ? Standing.of(play) : now).locate(p);
+		List<ZoneLine> lines = new ArrayList<>(where.count());
+		for (int k = 0; k < where.count(); k++) {
+			int i = where.zone(k);
+			lines.add(new ZoneLine(p.zoneAt(i), explain(p.zoneResolver(i), soundId, lib, placesUsing)));
 		}
 		Map<TraceProperty, ZoneWinner> zoneWinners = new EnumMap<>(TraceProperty.class);
 		for (TraceProperty property : TraceProperty.values()) {
-			ZoneWinner winner = zoneWinner(p, lines, indices, property);
+			ZoneWinner winner = zoneWinner(p, where, lines, property);
 			if (winner != null) {
 				zoneWinners.put(property, winner);
 			}
 		}
 
 		SoundDecision d = new SoundDecision();
-		if (play != null) {
-			p.decide(soundId, play.positional(), play.worldKey(), play.dimension(), play.x(), play.y(), play.z(), d);
-		} else {
-			p.decide(soundId, false, "", "", 0, 0, 0, d);
-		}
+		p.decide(soundId, where, d);
 		float volume = bypass ? 100 : d.volumePercent();
 		if (!bypass && volume > 100) {
 			notices.add(TraceNotice.BOOSTED);
@@ -180,44 +153,31 @@ public final class SoundTracer {
 		return EntryWinReason.LIST_ORDER;
 	}
 
-	/** Picks the winning zone for one setting exactly as {@code Precedence.decide} does, and names the deciding step. */
-	private static ZoneWinner zoneWinner(Precedence p, List<ZoneLine> lines, List<Integer> indices, TraceProperty property) {
+	/**
+	 * The first zone in where-you-are order that sets the property (FR-9 step 2), and why: the only one, the smallest,
+	 * or as small as the next one that sets it and higher in the zone list.
+	 */
+	private static ZoneWinner zoneWinner(Precedence p, WhereYouAre where, List<ZoneLine> lines, TraceProperty property) {
 		int best = -1;
+		int runnerUp = -1;
 		for (int k = 0; k < lines.size(); k++) {
-			if (sets(lines.get(k), property) && (best < 0 || beats(p, lines, indices, k, best))) {
-				best = k;
+			if (lines.get(k).sets().winners().containsKey(property)) {
+				if (best < 0) {
+					best = k;
+				} else {
+					runnerUp = k;
+					break;
+				}
 			}
 		}
 		if (best < 0) {
 			return null;
 		}
-		// FR-9 step 6: a limit or cue from a zone applies only at weight 0.5 or more; otherwise the global value stays.
-		if (property != TraceProperty.LOUDNESS && lines.get(best).weight() < 0.5) {
-			return null;
-		}
-		int runnerUp = -1;
-		for (int k = 0; k < lines.size(); k++) {
-			if (k != best && sets(lines.get(k), property) && (runnerUp < 0 || beats(p, lines, indices, k, runnerUp))) {
-				runnerUp = k;
-			}
-		}
 		Zone zone = lines.get(best).zone();
 		if (runnerUp < 0) {
 			return new ZoneWinner(zone, ZoneWinReason.ONLY_ZONE);
 		}
-		if (Precedence.isDistanceTie(lines.get(best).distance(), lines.get(runnerUp).distance())) {
-			boolean smaller = p.zoneVolume(indices.get(best)) < p.zoneVolume(indices.get(runnerUp));
-			return new ZoneWinner(zone, smaller ? ZoneWinReason.TIE_SMALLER_ZONE : ZoneWinReason.TIE_LIST_ORDER);
-		}
-		return new ZoneWinner(zone, ZoneWinReason.CLOSEST);
-	}
-
-	private static boolean sets(ZoneLine line, TraceProperty property) {
-		return line.sets().winners().containsKey(property);
-	}
-
-	private static boolean beats(Precedence p, List<ZoneLine> lines, List<Integer> indices, int k, int best) {
-		return Precedence.beats(lines.get(k).distance(), p.zoneVolume(indices.get(k)), lines.get(best).distance(),
-				p.zoneVolume(indices.get(best)));
+		boolean sameSize = p.zoneVolume(where.zone(best)) == p.zoneVolume(where.zone(runnerUp));
+		return new ZoneWinner(zone, sameSize ? ZoneWinReason.SAME_SIZE_LIST_ORDER : ZoneWinReason.SMALLEST);
 	}
 }

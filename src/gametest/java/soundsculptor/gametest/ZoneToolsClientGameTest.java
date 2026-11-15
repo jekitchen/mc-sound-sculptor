@@ -75,6 +75,19 @@ public final class ZoneToolsClientGameTest implements FabricClientGameTest {
 			check(context.computeOnClient(mc -> ((ZoneEditorScreen) mc.gui.screen()).draft().build().shape()).equals(new Shape.Box(5, 2, 7)),
 					"cancel keeps the box");
 
+			// Both corners on the floor: the box is 1 block tall, and the hint says the player would stand above it (FR-8.4).
+			context.runOnClient(mc -> ((ZoneEditorScreen) mc.gui.screen()).markCorners());
+			context.waitTicks(2);
+			moveTo(context, world, 0, 0, 90);
+			context.getInput().pressKey(options -> options.keyAttack);
+			context.waitTicks(3);
+			moveTo(context, world, 3, 3, 90);
+			String floorHint = context.computeOnClient(mc -> ZoneMarking.hintText());
+			check(floorHint.startsWith("Second corner · 4 × 1 × 4 blocks · 1 block tall: you would stand above it\n"),
+					"a floor-only box should be flagged, was " + floorHint);
+			context.getInput().pressKey(InputConstants.KEY_BACKSPACE);
+			context.waitForScreen(ZoneEditorScreen.class);
+
 			// Grow and Shrink: Grow east adds width and keeps the west face; Shrink up stops at the 1-block minimum.
 			context.runOnClient(mc -> {
 				ZoneEditorScreen e = (ZoneEditorScreen) mc.gui.screen();

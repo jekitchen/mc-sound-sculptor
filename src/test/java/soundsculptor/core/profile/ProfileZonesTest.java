@@ -17,8 +17,6 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
-import soundsculptor.core.zones.ZoneMode;
 
 import org.junit.jupiter.api.Test;
 
@@ -70,11 +68,10 @@ class ProfileZonesTest {
 	@Test
 	void zonesRoundTripThroughTheFile() throws ProfileFormatException {
 		Zone round = fixed("z1", new Shape.Cylinder(12.5, 25));
-		Zone box = fixed("z2", new Shape.Box(20, 8, 30)).withEdge(ZoneEdge.fade(6));
+		Zone box = fixed("z2", new Shape.Box(20, 8, 30));
 		Zone cylinder = new Zone("z3", "Tower", false, SERVER, "minecraft:the_nether", new Point(-5, 70, 9),
 				new Shape.Cylinder(4, 40), quick(List.of(new SetEntry("r9", false, soundsculptor.core.sets.SoundPattern.of("minecraft:block.*"),
-						null, 150, new Limit(2, 500, true), false))))
-				.withMode(ZoneMode.OUTSIDE).withEdge(ZoneEdge.hard());
+						null, 150, new Limit(2, 500, true), false))));
 		Profile p = Profile.empty("Server").withZones(List.of(round, box, cylinder))
 				.withZoneColor("z1", 0xE69F00).withZoneColor("z3", 0x123456);
 		Profile back = ProfileCodec.fromJson(ProfileCodec.toJson(p));
@@ -90,11 +87,21 @@ class ProfileZonesTest {
 		assertTrue(json.contains("\"type\": \"fixed\""), json);
 		assertTrue(json.contains("\"worldKey\": \"play.example.net\""), json);
 		assertTrue(json.contains("\"type\": \"box\""), json);
-		assertTrue(json.contains("\"mode\": \"inside\""), json);
 		assertTrue(json.contains("\"type\": \"cylinder\""), json);
-		assertFalse(json.contains("\"fade\""), "a default edge has no fade distance: " + json);
+		assertFalse(json.contains("\"mode\""), "Outside mode was removed on 2026-11-14: " + json);
+		assertFalse(json.contains("\"edge\""), "fade edges were removed on 2026-11-14: " + json);
 		// The second zone has no color.
 		String secondPart = json.substring(json.indexOf("\"z2\""));
 		assertFalse(secondPart.contains("color"), secondPart);
+	}
+
+	@Test
+	void anOldZoneModeAndEdgeAreIgnoredWithoutAWarning() throws ProfileFormatException {
+		String json = ProfileCodec.toJson(Profile.empty("Server").withZones(List.of(fixed("z1", new Shape.Box(20, 8, 30)))))
+				.replace("\"shape\":", "\"mode\": \"outside\", \"edge\": {\"mode\": \"fade\", \"fade\": 4.0}, \"shape\":");
+		assertTrue(json.contains("\"outside\""), json);
+		ProfileCodec.Read read = ProfileCodec.read(json, version -> { });
+		assertEquals(List.of(fixed("z1", new Shape.Box(20, 8, 30))), read.profile().zones());
+		assertEquals(List.of(), read.warnings());
 	}
 }

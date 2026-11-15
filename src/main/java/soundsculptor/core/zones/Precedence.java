@@ -14,14 +14,10 @@ import soundsculptor.core.sets.SetLibrary;
 /**
  * Combines Everywhere and the zones into one decision per sound (PRD FR-9), separately for loudness, limit and cue:
  * <ol>
- *   <li>Resolve Everywhere's attached Sound Sets for the sound ID (FR-4.5).</li>
- *   <li>Collect zones in the sound's world and dimension whose weight {@code w} for the sound is above 0
- *       ({@link Zone#weight}). Non-positional sounds skip zones.</li>
- *   <li>A zone takes part for a property only if an entry in its attached sets sets it.</li>
- *   <li>Among those, the zone whose anchor is closest to the sound wins. Outside zones are measured from their centre
- *       too.</li>
- *   <li>Anchors within 0.01 blocks of the same distance tie: the smaller shape wins, then the zone higher in the list.</li>
- *   <li>Volume blends {@code everywhere + (zone - everywhere) × w}; limit and cue use the zone when {@code w ≥ 0.5}.</li>
+ *   <li>Where you are: the zones containing the player's feet block, smallest first ({@link WhereYouAre}), then
+ *       Everywhere. The sound's own position plays no part (FR-8.7).</li>
+ *   <li>For each property, the first place in that order whose attached sets set it for the sound wins (FR-4.5 within
+ *       a place).</li>
  *   <li>A property nothing sets keeps vanilla behavior (100%, no limit, cue off).</li>
  * </ol>
  *
@@ -43,28 +39,10 @@ public final class Precedence {
 	 */
 	public static final int ROW_CACHE_IDS = 1024;
 
-	private static final double TIE_DISTANCE = 0.01;
-	private static final float DISCRETE_WEIGHT = 0.5F;
-
 	private final EntryResolver everywhere;
 	private final Zone[] zones;
 	private final EntryResolver[] zoneResolvers;
 	private final double[] volumes;
-	private final ZoneEdge profileEdge;
-	/**
-	 * Per zone, in flat arrays so the per-sound loop reads them together instead of following references (zone,
-	 * anchor, shape): on/off, Inside mode, the anchor and the shape's half-size on each axis. An Inside zone has weight
-	 * 0 outside its shape, so a sound beyond the half-size on any axis is rejected without the exact test (PRD 7.4: "a
-	 * cheap axis-aligned bounding-box test before the exact cylinder test").
-	 */
-	private final boolean[] enabled;
-	private final boolean[] inside;
-	private final double[] ax;
-	private final double[] ay;
-	private final double[] az;
-	private final double[] hx;
-	private final double[] hy;
-	private final double[] hz;
 
 	/**
 	 * Per sound ID, what every place resolves it to (Everywhere first, then each zone): one lookup per sound instead of
@@ -72,76 +50,93 @@ public final class Precedence {
 	 * like the resolvers' own caches, because servers can send arbitrary IDs.
 	 */
 	private final Map<String, EntryResolution[]> rows = new ConcurrentHashMap<>();
-	/** Which zones are in the last world and dimension decided. */
-	private String hereWorldKey;
-	private String hereDimension;
-	private boolean[] here = new boolean[0];
 	/** Sounds decided from {@link #rows}; each answers every list from the cache. Plain field: one thread. */
 	private long rowHits;
 
-	/** A profile whose default edge is hard (PRD 7.5). */
-	public Precedence(PlaceSets everywhere, List<Zone> zones, SetLibrary library) {
-		this(everywhere, zones, library, ZoneEdge.hard());
-	}
-
 	/**
-	 * @param everywhere  the sets attached to Everywhere
-	 * @param library     the library the places' set IDs refer to; attachments to sets it does not have are skipped
-	 * @param profileEdge the profile's default edge, used by zones whose edge is {@link ZoneEdge#DEFAULT}
+	 * @param everywhere the sets attached to Everywhere
+	 * @param library    the library the places' set IDs refer to; attachments to sets it does not have are skipped
 	 */
-	public Precedence(PlaceSets everywhere, List<Zone> zones, SetLibrary library, ZoneEdge profileEdge) {
-		this.profileEdge = profileEdge.mode() == ZoneEdge.Mode.DEFAULT ? ZoneEdge.hard() : profileEdge;
+	public Precedence(PlaceSets everywhere, List<Zone> zones, SetLibrary library) {
 		if (zones.size() > MAX_ZONES) {
 			throw new IllegalArgumentException(zones.size() + " zones is more than the maximum " + MAX_ZONES);
 		}
 		this.everywhere = EntryResolver.forPlace(everywhere, library, null);
 		this.zones = zones.toArray(new Zone[0]);
 		this.zoneResolvers = new EntryResolver[this.zones.length];
-		int n = this.zones.length;
-		this.volumes = new double[n];
-		this.enabled = new boolean[n];
-		this.inside = new boolean[n];
-		this.ax = new double[n];
-		this.ay = new double[n];
-		this.az = new double[n];
-		this.hx = new double[n];
-		this.hy = new double[n];
-		this.hz = new double[n];
+		this.volumes = new double[this.zones.length];
 		CacheBudget zoneCaches = new CacheBudget(ZONE_CACHE_IDS);
-		for (int i = 0; i < n; i++) {
-			Zone zone = this.zones[i];
-			zoneResolvers[i] = EntryResolver.forPlace(zone.sets(), library, zoneCaches);
-			volumes[i] = zone.shape().volume();
-			enabled[i] = zone.enabled();
-			inside[i] = zone.mode() == ZoneMode.INSIDE;
-			ax[i] = zone.anchor().x();
-			ay[i] = zone.anchor().y();
-			az[i] = zone.anchor().z();
-			switch (zone.shape()) {
-				case Shape.Box box -> {
-					hx[i] = box.width() / 2;
-					hy[i] = box.height() / 2;
-					hz[i] = box.depth() / 2;
-				}
-				case Shape.Cylinder cylinder -> {
-					hx[i] = cylinder.radius();
-					hy[i] = cylinder.height() / 2;
-					hz[i] = cylinder.radius();
-				}
-			}
+		for (int i = 0; i < this.zones.length; i++) {
+			zoneResolvers[i] = EntryResolver.forPlace(this.zones[i].sets(), library, zoneCaches);
+			volumes[i] = this.zones[i].shape().volume();
 		}
 	}
 
 	/**
-	 * Decides one sound and writes the result into {@code out}.
+	 * Decides one sound for where the player is and writes the result into {@code out}.
 	 *
-	 * @param positional whether the sound has a world position (PRD section 5); zones never apply otherwise
-	 * @param worldKey   the current server or world (FR-11.1)
-	 * @param dimension  the current dimension, e.g. {@code minecraft:overworld}
+	 * @param where worked out for this snapshot ({@link WhereYouAre#update} with this {@code Precedence})
+	 * @throws IllegalArgumentException if {@code where} belongs to another snapshot
 	 */
-	public void decide(String soundId, boolean positional, String worldKey, String dimension, double x, double y, double z,
-			SoundDecision out) {
-		decide(soundId, null, positional, worldKey, dimension, x, y, z, out);
+	public void decide(String soundId, WhereYouAre where, SoundDecision out) {
+		if (where.precedence() != this) {
+			throw new IllegalArgumentException("where you are was worked out for another profile snapshot");
+		}
+		out.reset();
+		EntryResolution[] row = row(soundId);
+		EntryResolution g = row[0];
+		EntryResolution loud = null;
+		EntryResolution limit = null;
+		EntryResolution cue = null;
+		int loudIdx = -1;
+		int limitIdx = -1;
+		int cueIdx = -1;
+		int n = where.count();
+		for (int k = 0; k < n && (loud == null || limit == null || cue == null); k++) {
+			int i = where.zone(k);
+			EntryResolution r = row[i + 1];
+			if (r == EntryResolution.NONE) {
+				continue;
+			}
+			if (loud == null && r.loudness() != null) {
+				loud = r;
+				loudIdx = i;
+			}
+			if (limit == null && r.limit() != null) {
+				limit = r;
+				limitIdx = i;
+			}
+			if (cue == null && r.cue() != null) {
+				cue = r;
+				cueIdx = i;
+			}
+		}
+
+		if (loud != null) {
+			out.volumePercent = loud.effectiveVolumePercent();
+			out.loudnessRule = loud.loudness();
+			out.loudnessZone = zones[loudIdx];
+		} else {
+			out.volumePercent = g.effectiveVolumePercent();
+			out.loudnessRule = g.loudness();
+		}
+		if (limit != null) {
+			out.limitRule = limit.limit();
+			out.limitSet = limit.limitSet();
+			out.limitZone = zones[limitIdx];
+		} else {
+			out.limitRule = g.limit();
+			out.limitSet = g.limitSet();
+		}
+		out.limit = out.limitRule == null ? null : out.limitRule.limit();
+		if (cue != null) {
+			out.cueRule = cue.cue();
+			out.cueZone = zones[cueIdx];
+			out.cueOn = cue.cueOn();
+		} else {
+			out.cueRule = g.cue();
+			out.cueOn = g.cueOn();
+		}
 	}
 
 	/** The cached resolutions of every list for this sound ID; computed on first sight. */
@@ -160,26 +155,9 @@ public final class Precedence {
 	}
 
 	/**
-	 * Which zones are in this world and dimension. Recomputed only when they change, so the per-sound loop does
-	 * not compare strings for every zone. Not thread-safe beyond the game thread, like the rest of the hot path.
-	 */
-	private boolean[] here(String worldKey, String dimension) {
-		if (!worldKey.equals(hereWorldKey) || !dimension.equals(hereDimension)) {
-			boolean[] flags = new boolean[zones.length];
-			for (int i = 0; i < zones.length; i++) {
-				flags[i] = worldKey.equals(zones[i].worldKey()) && dimension.equals(zones[i].dimension());
-			}
-			here = flags;
-			hereWorldKey = worldKey;
-			hereDimension = dimension;
-		}
-		return here;
-	}
-
-	/**
 	 * Fills {@code out} with what each place resolves {@code soundId} to: index 0 is Everywhere, index {@code i + 1} is
-	 * zone {@code i}. For callers that decide the same sound again and again, such as the per-tick re-evaluation of
-	 * playing sounds (FR-8.8): resolve once per profile snapshot, then use {@link #decideResolved}.
+	 * zone {@code i}. {@link #decide} does this once per sound ID and keeps the row; tests and the memory budget call it
+	 * directly.
 	 *
 	 * @param out at least {@link #zoneCount()} + 1 long
 	 */
@@ -188,131 +166,6 @@ public final class Precedence {
 		for (int i = 0; i < zones.length; i++) {
 			out[i + 1] = zoneResolvers[i].resolve(soundId);
 		}
-	}
-
-	/**
-	 * The same decision as {@link #decide(String, boolean, String, String, double, double, double, SoundDecision)},
-	 * from resolutions {@link #resolve} filled for this snapshot. Skips the per-ID lookups.
-	 */
-	public void decideResolved(EntryResolution[] resolved, boolean positional, String worldKey, String dimension,
-			double x, double y, double z, SoundDecision out) {
-		decide(null, resolved, positional, worldKey, dimension, x, y, z, out);
-	}
-
-	private void decide(String soundId, EntryResolution[] resolved, boolean positional, String worldKey, String dimension,
-			double x, double y, double z, SoundDecision out) {
-		out.reset();
-		if (resolved == null) {
-			resolved = row(soundId);
-		}
-		EntryResolution g = resolved[0];
-		boolean[] inThisWorld = positional ? here(worldKey, dimension) : null;
-
-		int loudIdx = -1;
-		int limitIdx = -1;
-		int cueIdx = -1;
-		double loudDist = 0;
-		double limitDist = 0;
-		double cueDist = 0;
-		double loudW = 0;
-		double limitW = 0;
-		double cueW = 0;
-		EntryResolution loudRes = null;
-		EntryResolution limitRes = null;
-		EntryResolution cueRes = null;
-
-		if (positional) {
-			for (int i = 0; i < zones.length; i++) {
-				if (!enabled[i] || !inThisWorld[i]) {
-					continue;
-				}
-				if (resolved[i + 1] == EntryResolution.NONE) {
-					continue; // nothing in this zone matches the sound: skip the geometry (same result, it is skipped below)
-				}
-				double dx = x - ax[i];
-				double dy = y - ay[i];
-				double dz = z - az[i];
-				if (inside[i] && (Math.abs(dx) > hx[i] || Math.abs(dy) > hy[i] || Math.abs(dz) > hz[i])) {
-					continue; // outside the shape's bounding box: an Inside zone's weight is 0 there
-				}
-				double w = zones[i].weight(dx, dy, dz, profileEdge);
-				if (w <= 0) {
-					continue;
-				}
-				EntryResolution r = resolved[i + 1];
-				double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-				if (r.loudness() != null && beats(i, dist, loudIdx, loudDist)) {
-					loudIdx = i;
-					loudDist = dist;
-					loudRes = r;
-					loudW = w;
-				}
-				if (r.limit() != null && beats(i, dist, limitIdx, limitDist)) {
-					limitIdx = i;
-					limitDist = dist;
-					limitRes = r;
-					limitW = w;
-				}
-				if (r.cue() != null && beats(i, dist, cueIdx, cueDist)) {
-					cueIdx = i;
-					cueDist = dist;
-					cueRes = r;
-					cueW = w;
-				}
-			}
-		}
-
-		float everywhereVolume = g.effectiveVolumePercent();
-		if (loudIdx >= 0) {
-			out.volumePercent = (float) (everywhereVolume + (loudRes.effectiveVolumePercent() - everywhereVolume) * loudW);
-			out.loudnessRule = loudRes.loudness();
-			out.loudnessZone = zones[loudIdx];
-			out.loudnessWeight = (float) loudW;
-		} else {
-			out.volumePercent = everywhereVolume;
-			out.loudnessRule = g.loudness();
-		}
-
-		if (limitIdx >= 0 && limitW >= DISCRETE_WEIGHT) {
-			out.limitRule = limitRes.limit();
-			out.limitSet = limitRes.limitSet();
-			out.limitZone = zones[limitIdx];
-		} else {
-			out.limitRule = g.limit();
-			out.limitSet = g.limitSet();
-		}
-		out.limit = out.limitRule == null ? null : out.limitRule.limit();
-
-		if (cueIdx >= 0 && cueW >= DISCRETE_WEIGHT) {
-			out.cueRule = cueRes.cue();
-			out.cueZone = zones[cueIdx];
-			out.cueOn = cueRes.cueOn();
-		} else {
-			out.cueRule = g.cue();
-			out.cueOn = g.cueOn();
-		}
-	}
-
-	/**
-	 * Whether any zone could set this sound's loudness while it plays (FR-8.8): an enabled zone with an entry that sets
-	 * mute or level for {@code soundId}, in this world and dimension. A sound muted at start must still get a channel
-	 * if so, so the per-tick loop can make it audible when the source moves (matrix case P12). Allocates nothing once
-	 * each sound ID has been seen.
-	 */
-	public boolean anyZoneCouldSetLoudness(String soundId, String worldKey, String dimension) {
-		for (int i = 0; i < zones.length; i++) {
-			Zone zone = zones[i];
-			if (!zone.enabled()) {
-				continue;
-			}
-			if (!worldKey.equals(zone.worldKey()) || !dimension.equals(zone.dimension())) {
-				continue;
-			}
-			if (zoneResolvers[i].resolve(soundId).loudness() != null) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/** Cache hits across Everywhere and every zone (FR-13.3). */
@@ -335,7 +188,7 @@ public final class Precedence {
 	}
 
 	/**
-	 * Estimated bytes of Everywhere's and every zone's per-ID caches, the per-ID rows and the flat zone arrays, for the
+	 * Estimated bytes of Everywhere's and every zone's per-ID caches, the per-ID rows and the zone volumes, for the
 	 * Diagnostics memory readout (PRD 9.1).
 	 * The sets and zones belong to the profile and the library and are not counted. Walks the caches: call it through
 	 * {@code MemoryMeter}, not per sound.
@@ -343,7 +196,6 @@ public final class Precedence {
 	public long estimatedBytes() {
 		long bytes = MemoryEstimate.object(5 * MemoryEstimate.REFERENCE)
 				+ MemoryEstimate.array(MemoryEstimate.REFERENCE, zoneResolvers.length) + MemoryEstimate.array(8, volumes.length)
-				+ 6 * MemoryEstimate.array(8, ax.length) + 3 * MemoryEstimate.array(1, enabled.length)
 				+ MemoryEstimate.CONCURRENT_HASH_MAP + MemoryEstimate.hashTable(rows.size())
 				+ rows.size() * (MemoryEstimate.HASH_NODE + MemoryEstimate.array(MemoryEstimate.REFERENCE, zones.length + 1))
 				+ everywhere.estimatedBytes();
@@ -379,28 +231,6 @@ public final class Precedence {
 		return zones.length;
 	}
 
-	/** Whether zone {@code i} at {@code dist} beats the current best zone (FR-9 steps 4 and 5). */
-	private boolean beats(int i, double dist, int best, double bestDist) {
-		return best < 0 || beats(dist, volumes[i], bestDist, volumes[best]);
-	}
-
-	/**
-	 * The FR-9 tie-break between two zones that both set a property, for a zone visited after the current best:
-	 * the closer anchor wins; anchors within 0.01 blocks tie, and then the smaller shape wins. On a full tie the
-	 * earlier zone (higher in the list) keeps the win, so this returns false.
-	 */
-	public static boolean beats(double dist, double volume, double bestDist, double bestVolume) {
-		if (isDistanceTie(dist, bestDist)) {
-			return volume < bestVolume;
-		}
-		return dist < bestDist;
-	}
-
-	/** Whether two anchor distances count as equal (FR-9 step 5). */
-	public static boolean isDistanceTie(double a, double b) {
-		return Math.abs(a - b) <= TIE_DISTANCE;
-	}
-
 	/** Everywhere's resolver, its attached sets flattened in order, for the sound trace (FR-14). */
 	public EntryResolver everywhere() {
 		return everywhere;
@@ -416,12 +246,12 @@ public final class Precedence {
 		return zoneResolvers[i];
 	}
 
-	/** The profile's default edge, applied to zones whose edge is {@link ZoneEdge#DEFAULT}. */
-	public ZoneEdge profileEdge() {
-		return profileEdge;
+	/** Zone {@code i} in list order. */
+	public Zone zoneAt(int i) {
+		return zones[i];
 	}
 
-	/** Shape volume of zone {@code i}, as used for tie-breaks. */
+	/** Shape volume of zone {@code i}, which puts the zones you stand in smallest first (FR-9 step 1). */
 	public double zoneVolume(int i) {
 		return volumes[i];
 	}

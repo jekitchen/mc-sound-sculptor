@@ -88,7 +88,7 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			int listed = context.computeOnClient(mc -> soundsculptor.core.lists.EntrySummary.matchCount(QuickEntries.get(ProfileManager.profile(), wildcardId),
 					soundsculptor.mc.KnownSounds.ids()));
 			int previewed = context.computeOnClient(mc -> soundsculptor.core.editor.PatternPreview.of("minecraft:entity.villager.*",
-					soundsculptor.mc.KnownSounds.ids(), soundsculptor.mc.KnownSounds.seenExcluded()).count());
+					soundsculptor.mc.KnownSounds.ids()).count());
 			check(listed == previewed && listed > 0, "the list's match count (" + listed + ") should equal the preview's (" + previewed + ")");
 
 			check(!play(context, VILLAGER_AMBIENT, SoundSource.NEUTRAL), "villager ambient should be muted");
@@ -127,8 +127,14 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			check(play(context, WOOD_STEP, SoundSource.BLOCKS), "a 50% sound still plays");
 			check(lastStartFactor == 0.5F, "wood steps should play at 50%");
 			// The volume is applied again whenever vanilla recalculates a playing sound's volume.
-			check(context.computeOnClient(mc -> SoundHook.applyVolume(instance(mc, STONE_STEP, SoundSource.BLOCKS), 0.8F)) == 0.4F,
-					"recalculated volumes get the rule factor too");
+			// A playing sound keeps its own factor (FR-8.8); one that never started through the hook plays as vanilla.
+			check(context.computeOnClient(mc -> {
+				SoundInstance step = instance(mc, STONE_STEP, SoundSource.BLOCKS);
+				mc.getSoundManager().play(step);
+				return SoundHook.applyVolume(step, 0.8F);
+			}) == 0.4F, "recalculated volumes get the rule factor too");
+			check(context.computeOnClient(mc -> SoundHook.applyVolume(instance(mc, STONE_STEP, SoundSource.BLOCKS), 0.8F)) == 0.8F,
+					"a sound the hook never started is not changed");
 
 			// A-2: edit an entry's volume with the keyboard only: the slider moves in 5% steps.
 			String stepId = context.computeOnClient(mc -> QuickEntries.of(ProfileManager.profile()).get(2).id());
@@ -162,13 +168,13 @@ public final class M5ClientGameTest implements FabricClientGameTest {
 			editQuick(context, e -> e.setEntryEnabled(wildcardId, true));
 			check(!play(context, VILLAGER_HURT, SoundSource.NEUTRAL), "with the entry on again, villager hurt is muted");
 
-			// Vanilla-covered sounds are never changed, not even by *.
+			// Every sound is in scope (P11, decided 2026-11-14): * mutes a UI click too.
 			context.runOnClient(mc -> ProfileManager.update(p -> QuickEntries.put(p, SetEntry.of(QuickEntries.newId(p), "*").withMute(true))));
-			check(context.computeOnClient(mc -> {
+			check(!context.computeOnClient(mc -> {
 				SoundInstance click = SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvent.createVariableRangeEvent(Identifier.parse(UI_CLICK)), 1.0F);
 				mc.getSoundManager().play(click);
 				return mc.getSoundManager().isActive(click);
-			}), "a UI click must not be muted by *");
+			}), "* mutes a UI click");
 			check(!play(context, TRADER_AMBIENT, SoundSource.NEUTRAL), "* mutes ordinary sounds");
 
 			// Move and remove in the Quick changes editor.

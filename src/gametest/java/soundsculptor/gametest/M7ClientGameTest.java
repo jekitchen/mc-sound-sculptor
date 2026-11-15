@@ -32,16 +32,16 @@ import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Automated version of the M7 engine tests (PRD 11.1): a profile per world (FR-11.1), cylinder and box zones with
- * Inside mode and a hard edge (FR-8 MVP AC), precedence cases P1 to P5 (FR-9, section 11.4), the per-tick re-check
- * of playing sounds (FR-8.8), "Zone: name" in the recently played list and zones in the sound trace.
+ * Automated version of the M7 engine tests (PRD 11.1): a profile per world (FR-11.1), cylinder and box zones with hard
+ * edges that follow where the player stands (FR-8 AC), precedence cases P1 to P5, P17 and P18 (FR-9, section 11.4),
+ * playing loops following the player and edits (FR-8.8), Bypass (FR-13.1), "Zone: name" in the recently played list and
+ * zones in the sound trace.
  */
 public final class M7ClientGameTest implements FabricClientGameTest {
 	private static final String VILLAGER = "minecraft:entity.villager.ambient";
 	private static final String TRADER = "minecraft:entity.wandering_trader.ambient";
 	private static final String LOOP = "minecraft:block.beacon.ambient";
 	private static final String OVERWORLD = "minecraft:overworld";
-	private static final float SILENT = 1.0E-6F;
 	private static final int SETTLE = 3;
 
 	@Override
@@ -61,72 +61,76 @@ public final class M7ClientGameTest implements FabricClientGameTest {
 				RecentLog.get().sounds().clear();
 			});
 			Vec3 origin = context.computeOnClient(mc -> mc.getSoundManager().getListenerTransform().position());
+			server = world;
+			feetY = context.computeOnClient(mc -> mc.player.position().y);
 
-			// FR-8 AC 1: a 10-block cylinder muting *villager*: a villager inside is silent; one 15 blocks away is not.
+			// FR-8 AC 1: a 10-block cylinder muting *villager*: standing in it a villager is silent; 15 blocks away it is not.
 			Point pen = new Point(origin.x + 6, origin.y, origin.z);
 			setZones(context, List.of(), zone("pen", "Pen", key, OVERWORLD, pen, new Shape.Cylinder(10, 20), SetEntry.of("z1", "*villager*").withMute(true)));
-			check(play(context, VILLAGER, pen.x() + 2, pen.y(), pen.z()) == SILENT, "a villager inside the zone should be muted");
+			check(playAt(context, VILLAGER, pen.x() + 2, pen.z()) == 0.0F, "a villager while you stand in the zone should be muted");
 			check(lastStatus(context, VILLAGER) == PlayStatus.MUTED, "the row should say Muted");
 			check("Pen".equals(lastZone(context, VILLAGER)), "the row should say which zone decided, was " + lastZone(context, VILLAGER));
 			// Zones are part of the trace of that play (FR-14.2).
 			String trace = context.computeOnClient(mc -> new TraceScreen(null, VILLAGER).text());
-			check(trace.contains("  Pen (Inside): weight 100%, ") && trace.contains("Deciding zones\n"), "the trace should list the zone:\n" + trace);
-			check(play(context, VILLAGER, pen.x() - 15, pen.y(), pen.z()) == 1.0F, "a villager 15 blocks from the anchor plays");
-			check(play(context, TRADER, pen.x(), pen.y(), pen.z()) == 1.0F, "the trader does not match *villager*");
+			check(trace.contains("You were in: Pen \u2192 Everywhere\n  Pen (Cylinder, radius 10, height 20)\n") && trace.contains("Deciding zones\n"),
+					"the trace should list the zone:\n" + trace);
+			check(playAt(context, VILLAGER, pen.x() - 15, pen.z()) == 1.0F, "standing 15 blocks from the anchor, the villager plays");
+			check(playAt(context, TRADER, pen.x(), pen.z()) == 1.0F, "the trader does not match *villager*");
+			// P17 and P18: only where you stand counts, not where the sound is.
+			standAt(context, pen.x() + 8, pen.z());
+			check(play(context, VILLAGER, pen.x() + 20, origin.y, pen.z()) == 0.0F, "P17: a villager outside the zone you stand in is muted");
+			standAt(context, pen.x() - 15, pen.z());
+			check(play(context, VILLAGER, pen.x(), origin.y, pen.z()) == 1.0F, "P18: a villager in a zone you are not in plays");
 
 			// FR-8 AC 2 and 3: a zone made for another dimension or another world has no effect here.
 			setZones(context, List.of(), zone("nether", "Nether", key, "minecraft:the_nether", pen, new Shape.Cylinder(10, 20), SetEntry.of("z1", "*villager*").withMute(true)));
-			check(play(context, VILLAGER, pen.x(), pen.y(), pen.z()) == 1.0F, "a Nether zone must not apply in the Overworld");
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 1.0F, "a Nether zone must not apply in the Overworld");
 			setZones(context, List.of(), zone("other", "Other", "play.example.net", OVERWORLD, pen, new Shape.Cylinder(10, 20), SetEntry.of("z1", "*villager*").withMute(true)));
-			check(play(context, VILLAGER, pen.x(), pen.y(), pen.z()) == 1.0F, "another server's zone must not apply here");
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 1.0F, "another server's zone must not apply here");
 
 			// Box zones: half the size in each direction from the anchor (FR-8.3).
 			setZones(context, List.of(), zone("box", "Box", key, OVERWORLD, pen, new Shape.Box(4, 4, 20), SetEntry.of("z1", "*villager*").withVolume(30)));
-			check(play(context, VILLAGER, pen.x(), pen.y(), pen.z() + 9) == 0.3F, "inside the box's long side the zone applies");
-			check(play(context, VILLAGER, pen.x() + 3, pen.y(), pen.z()) == 1.0F, "outside the box's short side it does not");
+			check(playAt(context, VILLAGER, pen.x(), pen.z() + 9) == 0.3F, "standing inside the box's long side the zone applies");
+			check(playAt(context, VILLAGER, pen.x() + 3, pen.z()) == 1.0F, "outside the box's short side it does not");
 
-			// P1: global villagers muted, zone A villagers 50%: 50% inside A; muted (not started) outside.
+			// P1: Everywhere mutes villagers, zone A sets them to 50%: 50% while you stand in A; muted (not started) outside.
 			setZones(context, List.of(SetEntry.of("g1", "*villager*").withMute(true)),
 					zone("a", "A", key, OVERWORLD, pen, new Shape.Cylinder(10, 20), SetEntry.of("z1", "*villager*").withVolume(50)));
-			check(play(context, VILLAGER, pen.x(), pen.y(), pen.z()) == 0.5F, "P1 inside A: 50%");
-			// Outside A the global mute applies; the sound starts silently because a zone could unmute it while it plays.
-			check(play(context, VILLAGER, pen.x() + 30, pen.y(), pen.z()) <= SILENT, "P1 outside A: muted");
-			// P2: global mute, no zone.
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 0.5F, "P1 in A: 50%");
+			check(playAt(context, VILLAGER, pen.x() + 30, pen.z()) == 0.0F, "P1 outside A: muted, not started");
+			// P2: Everywhere mutes, no zone.
 			setZones(context, List.of(SetEntry.of("g1", "*villager*").withMute(true)));
-			check(play(context, VILLAGER, pen.x(), pen.y(), pen.z()) == 0.0F, "P2: muted");
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 0.0F, "P2: muted");
 
-			// P3: A 20% with its anchor 3 blocks away beats B 80% at 9 blocks.
-			Point sound = pen;
+			// P3: standing in A (radius 10) inside B (radius 20), the smaller A wins, whatever the list order.
 			setZones(context, List.of(),
-					zone("a", "A", key, OVERWORLD, new Point(sound.x() + 3, sound.y(), sound.z()), new Shape.Cylinder(20, 40), SetEntry.of("z1", "*villager*").withVolume(20)),
-					zone("b", "B", key, OVERWORLD, new Point(sound.x() - 9, sound.y(), sound.z()), new Shape.Cylinder(20, 40), SetEntry.of("z1", "*villager*").withVolume(80)));
-			check(play(context, VILLAGER, sound.x(), sound.y(), sound.z()) == 0.2F, "P3: the closer zone A wins");
+					zone("b", "B", key, OVERWORLD, new Point(pen.x() - 9, pen.y(), pen.z()), new Shape.Cylinder(20, 40), SetEntry.of("z1", "*villager*").withVolume(80)),
+					zone("a", "A", key, OVERWORLD, new Point(pen.x() + 3, pen.y(), pen.z()), new Shape.Cylinder(10, 20), SetEntry.of("z1", "*villager*").withVolume(20)));
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 0.2F, "P3: the smaller zone A wins");
 			check("A".equals(lastZone(context, VILLAGER)), "P3: the row should name zone A");
-			// P5: both anchors 5.00 blocks away; the smaller zone wins the tie, whatever the list order.
+			// P5: two zones of the same size: the one higher in the list wins.
 			setZones(context, List.of(),
-					zone("b", "B", key, OVERWORLD, new Point(sound.x() - 5, sound.y(), sound.z()), new Shape.Cylinder(12, 24), SetEntry.of("z1", "*villager*").withVolume(80)),
-					zone("a", "A", key, OVERWORLD, new Point(sound.x() + 5, sound.y(), sound.z()), new Shape.Cylinder(8, 16), SetEntry.of("z1", "*villager*").withVolume(20)));
-			check(play(context, VILLAGER, sound.x(), sound.y(), sound.z()) == 0.2F, "P5: the smaller zone A wins the tie");
+					zone("b", "B", key, OVERWORLD, new Point(pen.x() - 5, pen.y(), pen.z()), new Shape.Cylinder(12, 24), SetEntry.of("z1", "*villager*").withVolume(80)),
+					zone("a", "A", key, OVERWORLD, new Point(pen.x() + 5, pen.y(), pen.z()), new Shape.Cylinder(12, 24), SetEntry.of("z1", "*villager*").withVolume(20)));
+			check(playAt(context, VILLAGER, pen.x(), pen.z()) == 0.8F, "P5: the same size: B, higher in the list, wins");
 
-			// FR-8.8: a playing sound is re-decided every tick. Add a muting zone around a looping sound: it goes silent
-			// without stopping; remove the zone: it comes back.
-			setZones(context, List.of());
-			SoundInstance loop = context.computeOnClient(mc -> {
-				SoundInstance instance = new SimpleSoundInstance(Identifier.parse(LOOP), SoundSource.BLOCKS, 1.0F, 1.0F, RandomSource.create(),
-						true, 0, SoundInstance.Attenuation.LINEAR, pen.x(), pen.y(), pen.z(), false);
-				mc.getSoundManager().play(instance);
-				return instance;
-			});
-			context.waitTicks(SETTLE);
-			float before = context.computeOnClient(mc -> PlayingChannels.get().gain(loop));
-			check(before > 0.01F, "the loop should be tracked at its vanilla gain, was " + before);
+			// FR-8.8: a playing loop follows you. With a zone muting it, it goes silent when you walk in, without
+			// stopping, and comes back when you walk out.
 			setZones(context, List.of(), zone("quiet", "Quiet", key, OVERWORLD, pen, new Shape.Cylinder(5, 10), SetEntry.of("z1", "*beacon*").withMute(true)));
-			context.waitTicks(SETTLE);
-			check(context.computeOnClient(mc -> PlayingChannels.get().gain(loop)) == 0.0F, "a zone added while it plays should silence it");
+			standAt(context, pen.x() - 12, pen.z());
+			SoundInstance loop = startLoop(context, pen);
+			float before = context.computeOnClient(mc -> PlayingChannels.get().gain(loop));
+			check(before > 0.01F, "outside the zone the loop should be tracked at its vanilla gain, was " + before);
+			standAt(context, pen.x(), pen.z());
+			check(context.computeOnClient(mc -> PlayingChannels.get().gain(loop)) == 0.0F, "walking into the zone should silence it");
 			check(context.computeOnClient(mc -> mc.getSoundManager().isActive(loop)), "muting by a zone must not stop the sound");
-			setZones(context, List.of());
+			standAt(context, pen.x() - 12, pen.z());
+			check(Math.abs(context.computeOnClient(mc -> PlayingChannels.get().gain(loop)) - before) < 1e-4, "walking out should restore it");
+			// An edit applies to a playing loop at once (P12): mute it on Everywhere while you stand outside the zone.
+			setZones(context, List.of(SetEntry.of("g1", "*beacon*").withMute(true)),
+					zone("quiet", "Quiet", key, OVERWORLD, pen, new Shape.Cylinder(5, 10), SetEntry.of("z1", "*beacon*").withMute(true)));
 			context.waitTicks(SETTLE);
-			check(Math.abs(context.computeOnClient(mc -> PlayingChannels.get().gain(loop)) - before) < 1e-4, "removing the zone should restore it");
+			check(context.computeOnClient(mc -> PlayingChannels.get().gain(loop)) == 0.0F, "muting it on Everywhere should silence it at once");
 			context.runOnClient(mc -> mc.getSoundManager().stop(loop));
 			// Vanilla releases a stopped channel some ticks later; tracking ends together with vanilla's.
 			for (int i = 0; i < 60 && context.computeOnClient(mc -> mc.getSoundManager().isActive(loop)); i++) {
@@ -136,22 +140,19 @@ public final class M7ClientGameTest implements FabricClientGameTest {
 
 			// Bypass returns playing sounds to vanilla too.
 			setZones(context, List.of(), zone("quiet", "Quiet", key, OVERWORLD, pen, new Shape.Cylinder(5, 10), SetEntry.of("z1", "*beacon*").withVolume(10)));
-			SoundInstance loop2 = context.computeOnClient(mc -> {
-				SoundInstance instance = new SimpleSoundInstance(Identifier.parse(LOOP), SoundSource.BLOCKS, 1.0F, 1.0F, RandomSource.create(),
-						true, 0, SoundInstance.Attenuation.LINEAR, pen.x(), pen.y(), pen.z(), false);
-				mc.getSoundManager().play(instance);
-				return instance;
-			});
-			context.waitTicks(SETTLE);
+			standAt(context, pen.x(), pen.z());
+			SoundInstance loop2 = startLoop(context, pen);
 			float quiet = context.computeOnClient(mc -> PlayingChannels.get().gain(loop2));
 			context.runOnClient(mc -> ProfileManager.setBypass(true));
 			context.waitTicks(SETTLE);
 			float bypassed = context.computeOnClient(mc -> PlayingChannels.get().gain(loop2));
 			check(bypassed > quiet * 5, "Bypass should bring the playing sound back to vanilla: " + quiet + " -> " + bypassed);
-			context.runOnClient(mc -> {
-				ProfileManager.setBypass(false);
-				mc.getSoundManager().stop(loop2);
-			});
+			context.runOnClient(mc -> ProfileManager.setBypass(false));
+			context.waitTicks(SETTLE);
+			check(Math.abs(context.computeOnClient(mc -> PlayingChannels.get().gain(loop2)) - quiet) < 1e-4,
+					"turning Bypass off should put the loop back at 10% at once");
+			context.runOnClient(mc -> mc.getSoundManager().stop(loop2));
+			standAt(context, origin.x, origin.z);
 
 			// The profile is saved under this world's key (FR-11.8).
 			context.runOnClient(mc -> ProfileManager.flushSaves());
@@ -175,16 +176,54 @@ public final class M7ClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> ProfileManager.update(p -> p.withEverywhere(PlaceSets.EMPTY.withQuickEntries(globalRules)).withZones(List.of(zones))));
 	}
 
-	/** Plays a villager-style sound at a position; returns the start factor (0 when it did not start). */
+	/** The world, for moving the player. */
+	private static TestSingleplayerContext server;
+	/** The height of the player's feet on the test world's floor. */
+	private static double feetY;
+
+	/** Moves the player's feet to {@code (x, floor, z)} (FR-8.4: zones follow where you stand). */
+	private static void standAt(ClientGameTestContext context, double x, double z) {
+		server.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.3f %.3f %.3f", x, feetY, z));
+		context.waitTicks(SETTLE);
+	}
+
+	/** Stands at {@code (x, z)} and plays the sound right there; returns the start factor (0 when it did not start). */
+	private static float playAt(ClientGameTestContext context, String id, double x, double z) {
+		standAt(context, x, z);
+		return context.computeOnClient(mc -> {
+			Vec3 at = mc.player.position();
+			return startFactor(mc, id, at.x, at.y + 1, at.z);
+		}) + settle(context);
+	}
+
+	/** Plays a villager-style sound at a position, wherever the player is; returns the start factor. */
 	private static float play(ClientGameTestContext context, String id, double x, double y, double z) {
-		float factor = context.computeOnClient(mc -> {
-			SoundInstance sound = new SimpleSoundInstance(Identifier.parse(id), SoundSource.NEUTRAL, 1.0F, 1.0F, RandomSource.create(),
-					false, 0, SoundInstance.Attenuation.LINEAR, x, y, z, false);
-			mc.getSoundManager().play(sound);
-			return mc.getSoundManager().isActive(sound) ? SoundHook.lastStartFactor() : 0.0F;
+		return context.computeOnClient(mc -> startFactor(mc, id, x, y, z)) + settle(context);
+	}
+
+	private static float startFactor(net.minecraft.client.Minecraft mc, String id, double x, double y, double z) {
+		SoundInstance sound = new SimpleSoundInstance(Identifier.parse(id), SoundSource.NEUTRAL, 1.0F, 1.0F, RandomSource.create(),
+				false, 0, SoundInstance.Attenuation.LINEAR, x, y, z, false);
+		mc.getSoundManager().play(sound);
+		return mc.getSoundManager().isActive(sound) ? SoundHook.lastStartFactor() : 0.0F;
+	}
+
+	/** Waits for the sound to settle; adds nothing to the factor. */
+	private static float settle(ClientGameTestContext context) {
+		context.waitTicks(SETTLE);
+		return 0F;
+	}
+
+	/** Starts the looping beacon sound at {@code at} and lets it settle. */
+	private static SoundInstance startLoop(ClientGameTestContext context, Point at) {
+		SoundInstance loop = context.computeOnClient(mc -> {
+			SoundInstance instance = new SimpleSoundInstance(Identifier.parse(LOOP), SoundSource.BLOCKS, 1.0F, 1.0F, RandomSource.create(),
+					true, 0, SoundInstance.Attenuation.LINEAR, at.x(), at.y(), at.z(), false);
+			mc.getSoundManager().play(instance);
+			return instance;
 		});
 		context.waitTicks(SETTLE);
-		return factor;
+		return loop;
 	}
 
 	private static RecentRow row(ClientGameTestContext context, String id) {

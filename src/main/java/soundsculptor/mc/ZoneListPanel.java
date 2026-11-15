@@ -6,7 +6,7 @@ import soundsculptor.core.lists.ZoneSummary;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.core.sets.PlaceSets;
-import soundsculptor.core.zones.Point;
+import soundsculptor.core.zones.FeetBlock;
 import soundsculptor.core.zones.Zone;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptDialog;
@@ -19,7 +19,6 @@ import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * The Zones tab (PRD 6.1): "New zone" and the list of places. The first row is always Everywhere (FR-8.10): it has no
@@ -65,8 +64,10 @@ public final class ZoneListPanel {
 		Profile profile = ProfileManager.profile();
 		String key = ProfileManager.key() == null ? "" : ProfileManager.key();
 		String dimension = WorldSession.dimension(minecraft);
-		Vec3 feet = minecraft.player == null ? Vec3.ZERO : minecraft.player.position();
-		Point player = new Point(feet.x, feet.y, feet.z);
+		FeetBlock feet = WorldSession.feet(minecraft);
+		if (feet == null) {
+			feet = new FeetBlock(0, 0, 0);
+		}
 		List<Zone> zones = profile.zones();
 		List<SculptList.Row> rows = new ArrayList<>(zones.size() + 1);
 		// The set count column is as wide as the widest count in this list, so the shape beside it keeps its room.
@@ -84,7 +85,7 @@ public final class ZoneListPanel {
 		List<List<SummaryPart>> summaries = new ArrayList<>(zones.size());
 		int placeWidth = 0;
 		for (Zone zone : zones) {
-			List<SummaryPart> parts = ZoneSummary.parts(zone, key, dimension, player, profile.settings().defaultEdge());
+			List<SummaryPart> parts = ZoneSummary.parts(zone, key, dimension, feet);
 			String where = parts.get(parts.size() - 1).text(TRANSLATOR);
 			String place = zone.enabled() ? where
 					: Component.translatable("soundsculptor.summary.rule.disabled").getString() + ", " + where;

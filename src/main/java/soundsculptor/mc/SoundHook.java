@@ -8,6 +8,7 @@ import soundsculptor.core.start.SoundStart;
 import soundsculptor.core.start.SoundStartDecider;
 import soundsculptor.core.start.SoundStartResult;
 import soundsculptor.core.zones.Precedence;
+import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
 import java.util.HashMap;
@@ -15,12 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Util;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,8 +31,9 @@ import net.minecraft.world.phys.Vec3;
  *
  * <ol>
  *   <li>Range: computes the vanilla hearing range from the sound's own volume (M1).</li>
- *   <li>Decide: with Bypass on, everything plays as vanilla; otherwise the profile's global rules may mute it (M4)
- *   or set its volume (M5). Vanilla-covered sounds (Music, UI, Voice/Speech categories) are never changed.</li>
+ *   <li>Decide: with Bypass on, everything plays as vanilla; otherwise the Sound Sets of Everywhere and of the zones
+ *   the player's feet are in decide it (FR-8.4, FR-9). Every sound is in scope, music, UI and Voice/Speech included
+ *   (section 5); vanilla's sliders apply first. Outside a world nothing is decided.</li>
  *   <li>Report: observers (the recently played log, the dev log) see the sound with its status. The sound's last play
  *   is kept for its trace (FR-14.6), and the time all this took feeds Diagnostics (FR-13.3).</li>
  * </ol>
@@ -55,7 +58,13 @@ public final class SoundHook {
 	private static SoundInstance pendingInstance;
 	private static String pendingId;
 	private static boolean pendingTracked;
-	/** Start volume factor of a sound that a zone mutes but may unmute while it plays: inaudible, but not zero. */
+	/**
+	 * The factor the sound is tracked with: the decided one, 0 for a muted loop. Only the start uses {@link #SILENT},
+	 * because vanilla skips a sound that starts at exactly 0; tracking 0 keeps it silent when vanilla recalculates it,
+	 * so its subtitle is not refreshed either.
+	 */
+	private static float pendingFactor = 1.0F;
+	/** Start volume factor of a muted looping sound, which may come back while it plays: inaudible, but not zero. */
 	static final float SILENT = 1.0E-6F;
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
@@ -119,19 +128,20 @@ public final class SoundHook {
 		Identifier id = instance.getIdentifier();
 		String idString = idString(id);
 
-		// Decide: global rules, zones and precedence (core SoundStartDecider). Outside a world nothing is decided.
+		// Decide: where you are, the sets, zones and precedence (core SoundStartDecider). Outside a world nothing is decided.
 		SoundStartResult result = null;
-		if (ProfileManager.isLoaded()) {
-			Precedence precedence = ProfileManager.precedence();
-			if (precedence != deciderProfile) {
-				DECIDER.setProfile(precedence);
-				deciderProfile = precedence;
-			}
+		boolean loaded = sync(minecraft);
+		if (loaded) {
 			SoundStart in = START;
 			in.reset();
 			in.soundId = idString;
-			in.vanillaCovered = isVanillaCovered(instance.getSource());
 			in.positional = !relative;
+			in.looping = instance.isLooping();
+			WhereYouAre where = DECIDER.where();
+			in.feetKnown = where.known();
+			in.feetX = where.x();
+			in.feetY = where.y();
+			in.feetZ = where.z();
 			in.range = range;
 			in.distanceSq = distanceSq;
 			in.worldKey = ProfileManager.key();
@@ -149,13 +159,14 @@ public final class SoundHook {
 
 		PlayStatus status = result == null ? PlayStatus.PLAYING : result.status();
 		boolean handled = result != null && result.handled();
-		if (handled && !result.cancel()) {
-			// A sound muted by a zone starts silently, so the per-tick check can bring it back (FR-8.8). Vanilla skips
-			// a sound whose volume is exactly 0, so it starts at an inaudible volume instead.
-			startFactor = result.factor() > 0 ? result.factor() : SILENT;
+		if (loaded && !(handled && result.cancel())) {
+			// Every sound that starts in a world is tracked, so a loop can follow the player and Bypass can reset it
+			// (FR-8.8, FR-13.1). A muted loop starts silently: vanilla skips a sound whose volume is exactly 0.
+			pendingFactor = handled ? result.factor() : 1.0F;
+			startFactor = pendingFactor > 0 ? pendingFactor : SILENT;
 			pendingInstance = instance;
 			pendingId = idString;
-			pendingTracked = !relative;
+			pendingTracked = true;
 		}
 
 		SoundObservation o = OBSERVATION;
@@ -178,9 +189,50 @@ public final class SoundHook {
 		return handled && result.cancel();
 	}
 
-	/** Sounds with their own vanilla slider: Sound Sculptor never changes them (PRD section 5, Q8). */
-	public static boolean isVanillaCovered(SoundSource source) {
-		return source == SoundSource.MUSIC || source == SoundSource.UI || source == SoundSource.VOICE;
+	/**
+	 * Makes the decider use the loaded profile and where the player's feet are (FR-8.4): the player's own block
+	 * position, not the camera's. Cheap when nothing changed; called by every sound start and every client tick.
+	 *
+	 * @return whether a profile is loaded (in a world); if not, nothing is decided
+	 */
+	static boolean sync(Minecraft minecraft) {
+		if (!ProfileManager.isLoaded()) {
+			return false;
+		}
+		Precedence precedence = ProfileManager.precedence();
+		if (precedence != deciderProfile) {
+			DECIDER.setProfile(precedence);
+			deciderProfile = precedence;
+		}
+		LocalPlayer player = minecraft.player;
+		if (player == null) {
+			DECIDER.locateNowhere();
+		} else {
+			BlockPos feet = player.blockPosition();
+			DECIDER.locate(ProfileManager.key(), WorldSession.dimension(minecraft), feet.getX(), feet.getY(), feet.getZ());
+		}
+		return true;
+	}
+
+	/** The profile snapshot the decider uses; valid after {@link #sync} returned true. */
+	static Precedence precedence() {
+		return deciderProfile;
+	}
+
+	/** Where the player stands now, for the trace of a sound not heard yet (FR-14.1). Render thread only. */
+	public static soundsculptor.core.trace.Standing standingNow() {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!sync(minecraft) || !DECIDER.where().known()) {
+			return soundsculptor.core.trace.Standing.NOWHERE;
+		}
+		WhereYouAre where = DECIDER.where();
+		return new soundsculptor.core.trace.Standing(true, ProfileManager.key(), WorldSession.dimension(minecraft), where.x(),
+				where.y(), where.z());
+	}
+
+	/** Where the player is, for {@link #precedence()} (FR-8.4). Render thread only. */
+	public static WhereYouAre where() {
+		return DECIDER.where();
 	}
 
 	private static String idString(Identifier id) {
@@ -204,9 +256,9 @@ public final class SoundHook {
 		lastAppliedFactor = factor;
 		lastStartFactor = factor;
 		float gain = vanillaVolume * factor;
-		if (instance != null && pendingTracked && gain > 0) {
+		if (instance != null && pendingTracked) {
 			try {
-				PlayingChannels.get().start(instance, pendingId, vanillaVolume, gain);
+				PlayingChannels.get().start(instance, pendingId, vanillaVolume, pendingFactor);
 			} catch (RuntimeException | LinkageError e) {
 				failOpen(e);
 			}
@@ -216,7 +268,9 @@ public final class SoundHook {
 
 	/**
 	 * Called whenever vanilla recalculates a playing sound's volume (every tick for moving sounds, and after a
-	 * slider change). A sound muted since it started goes silent.
+	 * slider change). A tracked sound keeps its own factor, so a muted sound stays silent and a one-shot keeps what
+	 * it was decided with at its start (FR-8.8). An untracked sound (it started before the profile loaded, or the
+	 * table was full) plays as vanilla: it was never decided, and re-deciding it as the player walks would break FR-8.8.
 	 */
 	public static float applyVolume(SoundInstance instance, float vanillaVolume) {
 		try {
@@ -225,14 +279,8 @@ public final class SoundHook {
 				lastAppliedFactor = vanillaVolume == 0 ? 1.0F : tracked / vanillaVolume;
 				return tracked;
 			}
-			float factor = 1.0F;
-			if (ProfileManager.isLoaded() && !ProfileManager.isBypassed() && !isVanillaCovered(instance.getSource())) {
-				// Not tracked (non-positional, or the table was full): only Everywhere applies.
-				String id = idString(instance.getIdentifier());
-				factor = Math.min(ProfileManager.precedence().everywhere().resolve(id).effectiveVolumePercent(), 100) / 100.0F;
-			}
-			lastAppliedFactor = factor;
-			return vanillaVolume * factor;
+			lastAppliedFactor = 1.0F;
+			return vanillaVolume;
 		} catch (RuntimeException | LinkageError e) {
 			failOpen(e);
 			return vanillaVolume;

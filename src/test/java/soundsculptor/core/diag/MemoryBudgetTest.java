@@ -83,7 +83,7 @@ class MemoryBudgetTest {
 	private static PlayingSounds fullPlaying() {
 		PlayingSounds playing = new PlayingSounds();
 		for (int i = 0; i < PlayingSounds.CAPACITY; i++) {
-			playing.start(i + 1, id(i), i, 64, 0, 1F, 1F);
+			playing.start(i + 1, id(i), i % 2 == 0, 1F, 1F);
 		}
 		return playing;
 	}

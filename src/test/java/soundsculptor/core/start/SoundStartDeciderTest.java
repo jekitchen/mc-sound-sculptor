@@ -25,14 +25,13 @@ import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
 
 import org.junit.jupiter.api.Test;
 
 /**
  * One sound start, end to end (PRD section 7 flowchart): range gate, decide (global rules, zones, precedence, repeat
- * limit), then drop, mute (with cue) or play. The source is at the origin and the listener 5 blocks away unless a test
- * says otherwise.
+ * limit), then drop, mute (with cue) or play. Zones follow where the player stands (FR-8.4): {@link #villagerAt} puts the
+ * player and the villager in the same block, 5 blocks from the listener for the range gate, unless a test moves one.
  */
 class SoundStartDeciderTest {
 	private static final String WORLD = "play.example.net";
@@ -63,7 +62,10 @@ class SoundStartDeciderTest {
 		decider.setProfile(precedence(global, List.of(zones)));
 	}
 
-	/** A villager sound at {@code (x, 0, 0)}, heard from 5 blocks away with vanilla's 16-block range. */
+	/**
+	 * The player's feet in block {@code (floor(x), 0, 0)} and a villager sound at {@code (x, 0, 0)}, heard from 5 blocks
+	 * away with vanilla's 16-block range.
+	 */
 	private SoundStart villagerAt(double x) {
 		in.reset();
 		in.soundId = VILLAGER;
@@ -73,6 +75,8 @@ class SoundStartDeciderTest {
 		in.worldKey = WORLD;
 		in.dimension = OVERWORLD;
 		in.x = x;
+		in.feetKnown = true;
+		in.feetX = (int) Math.floor(x);
 		in.hasSubtitle = true;
 		return in;
 	}
@@ -117,16 +121,20 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
-	void p11VanillaCoveredSoundsAreNeverChanged() {
-		profile(List.of(SetEntry.of("all", "*").withMute(true)));
-		SoundStart s = villagerAt(0);
-		s.soundId = "minecraft:music.game";
-		s.vanillaCovered = true;
-		SoundStartResult r = start(s);
-		assertFalse(r.handled());
-		assertEquals(1.0F, r.factor(), 1e-6);
-		assertFalse(r.cancel());
-		assertNull(lastPlays.get("minecraft:music.game"), "vanilla-covered sounds have no trace");
+	void p11MuteAllSilencesMusicAndUiToo() {
+		// Every sound is in scope (section 5, decided 2026-11-14).
+		profile(List.of(), cylinder("a", 0, 10, SetEntry.of("all", "*").withMute(true)));
+		for (String id : List.of("minecraft:music.game", "minecraft:ui.button.click", "minecraft:entity.generic.eat")) {
+			SoundStart s = villagerAt(0);
+			s.soundId = id;
+			s.positional = false;
+			s.range = Float.POSITIVE_INFINITY;
+			SoundStartResult r = start(s);
+			assertTrue(r.handled(), id);
+			assertEquals(PlayStatus.MUTED, r.status(), id);
+			assertTrue(r.cancel(), id + " is not a loop, so it does not start");
+			assertNotNull(lastPlays.get(id), id + " has a trace");
+		}
 	}
 
 	@Test
@@ -176,22 +184,41 @@ class SoundStartDeciderTest {
 		SoundStartResult outside = start(villagerAt(100));
 		assertEquals(PlayStatus.MUTED, outside.status());
 		assertNull(outside.zone());
-		assertFalse(outside.cancel(), "a moving source could still enter zone a, so it starts silently (P12)");
+		assertTrue(outside.cancel(), "a muted one-shot does not start");
 	}
 
 	@Test
-	void p3ClosestAnchorWins() {
-		profile(List.of(), cylinder("a", 3, 10, villagers("ra").withVolume(20)), cylinder("b", 9, 20, villagers("rb").withVolume(80)));
-		assertEquals(0.2F, start(villagerAt(0)).factor(), 1e-6);
+	void p3SmallestZoneYouStandInWins() {
+		Zone small = cylinder("a", 3, 10, villagers("ra").withVolume(20));
+		Zone big = cylinder("b", 9, 20, villagers("rb").withVolume(80));
+		profile(List.of(), big, small);
+		assertEquals(0.2F, start(villagerAt(0)).factor(), 1e-6, "in both: the smaller wins, whatever the list order");
+		assertEquals(0.8F, start(villagerAt(20)).factor(), 1e-6, "only in the big one");
 	}
 
 	@Test
-	void p6FadeEdgeBlendsTheVolume() {
-		Zone a = new Zone("a", "A", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(10, 20),
-				quick(List.of(SetEntry.of("ra", "*").withMute(true)))).withEdge(ZoneEdge.fade(4));
-		profile(List.of(), a);
-		// 2 blocks inside a 4-block fade: half way.
-		assertEquals(0.5F, start(villagerAt(8)).factor(), 1e-3);
+	void p17ASoundOutsideTheZoneYouStandInFollowsThatZone() {
+		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		SoundStart s = villagerAt(0);
+		s.x = 50; // the villager is far outside zone a; you are inside it
+		assertEquals(PlayStatus.MUTED, start(s).status());
+	}
+
+	@Test
+	void p18ASoundInsideAZoneYouAreNotInIsNotChanged() {
+		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		SoundStart s = villagerAt(50);
+		s.x = 0; // the villager is in zone a; you are not
+		assertEquals(PlayStatus.PLAYING, start(s).status());
+		assertEquals(1.0F, out.factor(), 1e-6);
+	}
+
+	@Test
+	void withoutAFeetBlockOnlyEverywhereApplies() {
+		profile(List.of(villagers("g1").withVolume(40)), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		SoundStart s = villagerAt(0);
+		s.feetKnown = false;
+		assertEquals(0.4F, start(s).factor(), 1e-6);
 	}
 
 	@Test
@@ -205,38 +232,34 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
-	void p12ZoneMuteStartsSilentlySoThePerTickLoopCanBringItBack() {
+	void p12AMutedLoopStartsSilentlySoItCanComeBack() {
+		// FR-8.8: a minecart rolling in a muting zone starts at volume 0, and follows you out of the zone.
 		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
-		SoundStartResult r = start(villagerAt(0));
+		SoundStart s = villagerAt(0);
+		s.looping = true;
+		SoundStartResult r = start(s);
 		assertEquals(PlayStatus.MUTED, r.status());
 		assertFalse(r.cancel());
 		assertEquals(0F, r.factor(), 1e-6);
 	}
 
 	@Test
-	void globalMuteStartsSilentlyWhenAZoneInThisWorldCouldOverrideIt() {
-		Zone far = cylinder("far", 500, 10, villagers("z1").withVolume(50));
-		profile(List.of(villagers("g1").withMute(true)), far);
-		assertFalse(start(villagerAt(0)).cancel());
-
-		SoundStart nether = villagerAt(0);
-		nether.dimension = NETHER;
-		assertTrue(start(nether).cancel(), "a zone in another dimension can never apply");
+	void aMutedOneShotDoesNotStartWhereverTheMuteComesFrom() {
+		profile(List.of(villagers("g1").withMute(true)), cylinder("far", 500, 10, villagers("z1").withVolume(50)));
+		assertTrue(start(villagerAt(0)).cancel(), "from Everywhere");
+		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		assertTrue(start(villagerAt(0)).cancel(), "from a zone");
 	}
 
 	@Test
-	void globalMuteIsCancelledWhenZonesOnlySetOtherProperties() {
-		profile(List.of(villagers("g1").withMute(true)), cylinder("a", 0, 10, villagers("z1").withCue(true)));
-		assertTrue(start(villagerAt(0)).cancel());
-	}
-
-	@Test
-	void globalMuteOfANonPositionalSoundIsCancelled() {
-		profile(List.of(villagers("g1").withMute(true)), cylinder("a", 0, 10, villagers("z1").withVolume(50)));
+	void aMutedNonPositionalLoopStartsSilentlyToo() {
+		// The underwater loop and biome ambience have no position, and follow you all the same.
+		profile(List.of(villagers("g1").withMute(true)));
 		SoundStart s = villagerAt(0);
 		s.positional = false;
 		s.range = Float.POSITIVE_INFINITY;
-		assertTrue(start(s).cancel(), "zones never apply to non-positional sounds");
+		s.looping = true;
+		assertFalse(start(s).cancel());
 	}
 
 	@Test
@@ -475,12 +498,10 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
-	void fullyFadedZoneMuteShowsACueButAPartlyFadedOneDoesNot() {
-		Zone a = new Zone("a", "A", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(10, 20),
-				quick(List.of(villagers("z1").withMute(true).withCue(true)))).withEdge(ZoneEdge.fade(4));
-		profile(List.of(), a);
-		assertTrue(start(villagerAt(0)).cue(), "full weight at the centre: volume 0");
-		assertFalse(start(villagerAt(8)).cue(), "half way through the fade the sound is still audible");
+	void aZoneMuteShowsACueWhileYouStandInIt() {
+		profile(List.of(), cylinder("a", 0, 10, villagers("z1").withMute(true).withCue(true)));
+		assertTrue(start(villagerAt(0)).cue());
+		assertFalse(start(villagerAt(50)).cue(), "outside the zone the sound plays");
 	}
 
 	// --- Trace ---
@@ -489,11 +510,16 @@ class SoundStartDeciderTest {
 	void theLastPlayIsRecordedForTheTrace() {
 		profile(List.of(villagers("g1").withVolume(60)));
 		SoundStart s = villagerAt(1);
+		s.feetY = 64;
+		s.feetZ = -3;
 		start(s);
 		LastPlay play = lastPlays.get(VILLAGER);
 		assertNotNull(play);
 		assertEquals(60, play.volumePercent(), 1e-6);
-		assertEquals(1, play.x(), 1e-9);
+		assertTrue(play.feetKnown());
+		assertEquals(1, play.feetX(), "where you stood, not where the sound was");
+		assertEquals(64, play.feetY());
+		assertEquals(-3, play.feetZ());
 		assertEquals(WORLD, play.worldKey());
 		assertFalse(play.dropped());
 		assertFalse(play.cueShown());

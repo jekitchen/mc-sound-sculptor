@@ -18,6 +18,7 @@ import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.SoundDecision;
+import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.zones.Zone;
 
 /**
@@ -26,14 +27,15 @@ import soundsculptor.core.zones.Zone;
  *   <li><b>Range gate:</b> whether the listener is in vanilla hearing range, from the un-boosted volume
  *       ({@link SoundRange}). Out-of-range sounds are still given their volume, but they never use up a repeat limit,
  *       never show a cue and are not recorded for the trace: not heard, not logged.</li>
- *   <li><b>Decide:</b> Everywhere, zones and precedence ({@link Precedence}), then the winning entry's repeat limit
- *       ({@link RepeatLimiter}).</li>
+ *   <li><b>Decide:</b> where the player stands ({@link WhereYouAre}, worked out again only when the feet block, world,
+ *       dimension or profile changed), Everywhere, zones and precedence ({@link Precedence}), then the winning entry's
+ *       repeat limit ({@link RepeatLimiter}). Every sound is in scope: music, UI and Voice/Speech too (section 5).</li>
  *   <li><b>Drop</b> (over the limit, FR-6.8: status Limited, no cue), <b>mute</b> (status Muted, cue if due, FR-7.1)
- *       or <b>play</b> at 0 to 200% (status Boosted above 100%, FR-5.4).</li>
+ *       or <b>play</b> at 0 to 200% (status Boosted above 100%, FR-5.4). A muted sound does not start, except a
+ *       looping one, which starts silently so it can come back (FR-8.8).</li>
  *   <li><b>Record</b> the play for the sound trace ({@link LastPlays}, FR-14.6).</li>
  * </ol>
- * Bypass, vanilla-covered sounds (Music, UI, Voice/Speech) and the time before a profile is loaded leave the sound as
- * vanilla plays it.
+ * Bypass and the time before a profile is loaded leave the sound as vanilla plays it.
  *
  * <p>Each entry has its own repeat-limit counter in each place (FR-6.7, owner decision 2026-11-11): the key is the
  * place, the set and the entry ID ({@link #limiterKey}), because entry IDs are unique only within one set and one set
@@ -52,6 +54,7 @@ public final class SoundStartDecider {
 	private final LastPlays lastPlays;
 	private final RepeatLimiter limiter = new RepeatLimiter();
 	private final SoundDecision decision = new SoundDecision();
+	private final WhereYouAre where = new WhereYouAre();
 	private Precedence precedence;
 	/** Everywhere's limiter keys: by set ID, then by entry (an entry is unique within its set). */
 	private Map<String, Map<SetEntry, String>> everywhereKeys = Map.of();
@@ -81,6 +84,32 @@ public final class SoundStartDecider {
 		this.everywhereKeys = everywhere;
 		this.zoneKeys = zones;
 		this.precedence = precedence;
+		where.updateNowhere(precedence);
+	}
+
+	/**
+	 * The player's feet are in block {@code (bx, by, bz)} (FR-8.4). Called by every sound start and by the client
+	 * tick; cheap when nothing changed. Needs a profile ({@link #setProfile}).
+	 *
+	 * @return whether where you are changed
+	 */
+	public boolean locate(String worldKey, String dimension, int bx, int by, int bz) {
+		return where.update(precedence, worldKey, dimension, bx, by, bz);
+	}
+
+	/** No player position is known: only Everywhere applies. */
+	public boolean locateNowhere() {
+		return where.updateNowhere(precedence);
+	}
+
+	/** Where the player is, for the current profile; shared with the re-decision of playing loops (FR-8.8). */
+	public WhereYouAre where() {
+		return where;
+	}
+
+	/** The current profile snapshot, or {@code null} before one is set. */
+	public Precedence precedence() {
+		return precedence;
 	}
 
 	/** One place's limiter keys, by set ID and then by entry; every key is also added to {@code all}. */
@@ -140,7 +169,7 @@ public final class SoundStartDecider {
 		boolean audible = !in.positional || SoundRange.isAudible(in.range, in.distanceSq);
 		out.audible = audible;
 		Precedence p = precedence;
-		if (in.vanillaCovered || p == null) {
+		if (p == null) {
 			return;
 		}
 		if (in.bypass) {
@@ -150,8 +179,13 @@ public final class SoundStartDecider {
 			return;
 		}
 
+		if (in.feetKnown) {
+			where.update(p, in.worldKey, in.dimension, in.feetX, in.feetY, in.feetZ);
+		} else {
+			where.updateNowhere(p);
+		}
 		SoundDecision d = decision;
-		p.decide(in.soundId, in.positional, in.worldKey, in.dimension, in.x, in.y, in.z, d);
+		p.decide(in.soundId, where, d);
 		float volume = d.volumePercent();
 		out.handled = true;
 		out.decision = d;
@@ -171,7 +205,7 @@ public final class SoundStartDecider {
 		if (volume <= 0) {
 			out.status = PlayStatus.MUTED;
 			out.factor = 0;
-			out.cancel = !(in.positional && p.anyZoneCouldSetLoudness(in.soundId, in.worldKey, in.dimension));
+			out.cancel = !in.looping;
 			out.cue = CueRules.shouldCue(in.hasSubtitle, volume, d.loudnessRule() != null, d.cueOn(), audible, cueSettings);
 			out.cueUsesSoundId = out.cue && !in.hasSubtitle;
 		} else {
@@ -193,6 +227,7 @@ public final class SoundStartDecider {
 	}
 
 	private void record(SoundStart in, float volume, boolean dropped, boolean cueShown) {
-		lastPlays.record(in.soundId, in.positional, in.worldKey, in.dimension, in.x, in.y, in.z, volume, dropped, cueShown);
+		lastPlays.record(in.soundId, in.feetKnown, in.worldKey, in.dimension, in.feetX, in.feetY, in.feetZ, volume, dropped,
+				cueShown);
 	}
 }

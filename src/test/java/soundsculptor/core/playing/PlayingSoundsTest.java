@@ -1,7 +1,7 @@
 package soundsculptor.core.playing;
 
-import static soundsculptor.core.Fixtures.quick;
 import static soundsculptor.core.Fixtures.precedence;
+import static soundsculptor.core.Fixtures.quick;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,202 +13,216 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import soundsculptor.core.sets.Limit;
 import soundsculptor.core.sets.SetEntry;
 import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.Shape;
+import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.zones.Zone;
-import soundsculptor.core.zones.ZoneEdge;
 
 import org.junit.jupiter.api.Test;
 
-/** PRD FR-8.8: playing sounds are re-decided every tick, volume only. */
+/**
+ * PRD FR-8.8 and FR-13.1: a playing sound keeps the volume it was decided with at its start; looping sounds are decided
+ * again when where you are or the profile changes; Bypass on puts every sound back to vanilla, Bypass off re-decides
+ * loops only. Nothing is re-decided on a tick where none of that changed.
+ */
 class PlayingSoundsTest {
 	private static final String WORLD = "play.example.net";
 	private static final String OVERWORLD = "minecraft:overworld";
+	private static final String MINECART = "minecraft:entity.minecart.riding";
 	private static final String VILLAGER = "minecraft:entity.villager.ambient";
-	private static final String COW = "minecraft:entity.cow.ambient";
+	private static final boolean LOOP = true;
+	private static final boolean ONE_SHOT = false;
+
+	/** An 11-block box around block (0, 64, 0) that mutes minecarts and villagers. */
+	private static final Zone BASE = new Zone("base", "Base", true, WORLD, OVERWORLD, new Point(0.5, 64.5, 0.5),
+			new Shape.Box(11, 11, 11), quick(SetEntry.of("m", MINECART).withMute(true), SetEntry.of("v", VILLAGER).withMute(true)));
 
 	private final PlayingSounds playing = new PlayingSounds();
 	private final Map<Long, Float> reported = new HashMap<>();
 	private final PlayingSounds.GainListener listener = reported::put;
+	private final WhereYouAre where = new WhereYouAre();
+	private final Precedence profile = precedence(List.of(), List.of(BASE));
 
-	private static Zone cylinder(String id, double radius, Point anchor, SetEntry... rules) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, anchor, new Shape.Cylinder(radius, 2 * radius), quick(List.of(rules)));
+	private void standInBase(Precedence p) {
+		where.update(p, WORLD, OVERWORLD, 0, 64, 0);
+	}
+
+	private void standOutside(Precedence p) {
+		where.update(p, WORLD, OVERWORLD, 100, 64, 0);
 	}
 
 	private int update(Precedence p) {
-		return playing.update(p, WORLD, OVERWORLD, true, listener);
+		return playing.update(p, where, false, true, listener);
+	}
+
+	private int bypassed() {
+		return playing.update(null, null, true, true, listener);
 	}
 
 	@Test
-	void reportsNothingWhenTheGainIsWhatTheSoundStartedWith() {
-		Precedence p = precedence(List.of(SetEntry.of("r", VILLAGER).withVolume(50)), List.of());
-		playing.start(1, VILLAGER, 0, 64, 0, 0.8F, 0.4F);
-		assertEquals(0, update(p));
-		assertTrue(reported.isEmpty());
+	void aLoopGoesSilentWhenYouWalkInAndComesBackWhenYouWalkOut() {
+		standOutside(profile);
+		playing.start(1, MINECART, LOOP, 0.8F, 1F);
+		update(profile);
+		assertTrue(reported.isEmpty(), "outside the base the minecart plays as it started");
+
+		standInBase(profile);
+		assertEquals(1, update(profile));
+		assertEquals(0F, reported.get(1L), "walking in mutes it, without stopping it");
+		assertTrue(playing.isTracked(1));
+
+		standOutside(profile);
+		assertEquals(1, update(profile));
+		assertEquals(0.8F, reported.get(1L), 1e-6, "walking out brings it back");
 	}
 
 	@Test
-	void reportsTheNewGainWhenTheProfileChangedWhileTheSoundPlays() {
-		playing.start(1, VILLAGER, 0, 64, 0, 0.8F, 0.8F);
-		Precedence p = precedence(List.of(SetEntry.of("r", VILLAGER).withVolume(50)), List.of());
-		assertEquals(1, update(p));
-		assertEquals(0.4F, reported.get(1L), 1e-6);
-		assertEquals(0.4F, playing.gain(1), 1e-6);
+	void aOneShotPlaysOnAsItStarted() {
+		// FR-8.8: a villager mumble already playing when you walk in plays to its end.
+		standOutside(profile);
+		playing.start(1, VILLAGER, ONE_SHOT, 0.8F, 1F);
+		update(profile);
+		standInBase(profile);
+		assertEquals(0, update(profile));
+		assertEquals(0.8F, playing.gain(1), 1e-6);
 	}
 
 	@Test
-	void muteReEvaluatesToSilenceWithoutStoppingTheSound() {
-		// A cow walks into a muting zone: its sound goes to gain 0 but stays tracked (still playing).
-		Precedence p = precedence(List.of(), List.of(cylinder("z", 10, new Point(0, 64, 0), SetEntry.of("m", COW).withMute(true))));
-		playing.start(7, COW, 15, 64, 0, 1F, 1F);
-		update(p);
-		assertTrue(reported.isEmpty());
-		playing.move(7, 5, 64, 0);
-		update(p);
-		assertEquals(0F, reported.get(7L));
-		assertTrue(playing.isTracked(7));
-		playing.move(7, 15, 64, 0);
-		update(p);
-		assertEquals(1F, reported.get(7L), 1e-6);
+	void anEditReDecidesLoopsOnly() {
+		// FR-8.8: Mute on a row works at once for a loop.
+		standOutside(profile);
+		playing.start(1, MINECART, LOOP, 1F, 1F);
+		playing.start(2, VILLAGER, ONE_SHOT, 1F, 1F);
+		update(profile);
+		Precedence muted = precedence(List.of(SetEntry.of("m", MINECART).withMute(true), SetEntry.of("v", VILLAGER).withMute(true)),
+				List.of(BASE));
+		standOutside(muted);
+		assertEquals(1, update(muted));
+		assertEquals(0F, reported.get(1L));
+		assertFalse(reported.containsKey(2L));
 	}
 
 	@Test
-	void fadeZoneMovingSourceGetsSteadilyQuieter() {
-		// FR-8 acceptance: fade 8 on a 20-block zone muting cows; a cow walking from the edge to the centre gets
-		// steadily quieter and is silent from 8 blocks inside.
-		Zone zone = cylinder("pen", 20, new Point(0, 64, 0), SetEntry.of("m", COW).withMute(true)).withEdge(ZoneEdge.fade(8));
-		Precedence p = precedence(List.of(), List.of(zone));
-		playing.start(5, COW, 20, 64, 0, 1F, 1F);
-		update(p);
-		float last = 1F;
-		for (double x = 19.5; x >= 0; x -= 0.5) {
-			playing.move(5, x, 64, 0);
-			update(p);
-			float gain = playing.gain(5);
-			if (x > 12) {
-				assertTrue(gain < last, "quieter at " + x + ": " + gain + " after " + last);
-			} else {
-				assertEquals(0F, gain, 1e-6, "silent at " + x);
-			}
-			last = gain;
+	void nothingIsReDecidedWhileNothingChanges() {
+		standInBase(profile);
+		playing.start(1, MINECART, LOOP, 1F, 0F);
+		update(profile);
+		long decisions = playing.decisionCount();
+		for (int tick = 0; tick < 100; tick++) {
+			where.update(profile, WORLD, OVERWORLD, 1, 64, tick % 3); // moving around inside the base
+			assertEquals(0, update(profile));
 		}
+		assertEquals(decisions, playing.decisionCount(), "moving inside one zone changes nothing");
 	}
 
 	@Test
-	void repeatLimitsAreNotReDecided() {
-		// A zone that only sets a limit changes nothing while the sound plays.
-		Precedence p = precedence(List.of(),
-				List.of(cylinder("z", 10, new Point(0, 64, 0), SetEntry.of("l", COW).withLimit(new Limit(1, 1000, false)))));
-		playing.start(1, COW, 30, 64, 0, 1F, 1F);
-		update(p);
-		playing.move(1, 0, 64, 0);
-		assertEquals(0, update(p));
-		assertTrue(reported.isEmpty());
-	}
+	void bypassOnPutsEverySoundBackToVanillaAndOffReDecidesLoopsOnly() {
+		// FR-13.1: a 30% one-shot jumps to full at once; a silent loop comes back; turning Bypass off mutes the loop
+		// again at once and leaves the one-shot at vanilla until it ends.
+		standInBase(profile);
+		playing.start(1, VILLAGER, ONE_SHOT, 1F, 0.3F);
+		playing.start(2, MINECART, LOOP, 1F, 1e-6F);
+		update(profile);
+		reported.clear();
 
-	@Test
-	void anotherWorldOrDimensionDropsTheZone() {
-		Precedence p = precedence(List.of(), List.of(cylinder("z", 10, new Point(0, 64, 0), SetEntry.of("m", COW).withMute(true))));
-		playing.start(1, COW, 0, 64, 0, 1F, 0F);
-		update(p);
-		assertTrue(reported.isEmpty());
-		playing.update(p, WORLD, "minecraft:the_nether", true, listener);
+		assertEquals(2, bypassed());
 		assertEquals(1F, reported.get(1L), 1e-6);
+		assertEquals(1F, reported.get(2L), 1e-6);
+		assertEquals(0, bypassed(), "staying on changes nothing more");
+
+		reported.clear();
+		assertEquals(1, update(profile));
+		assertEquals(0F, reported.get(2L));
+		assertEquals(1F, playing.gain(1), 1e-6, "the one-shot keeps playing at vanilla volume");
 	}
 
 	@Test
-	void boostIsCappedWhenNotSupported() {
-		Precedence p = precedence(List.of(SetEntry.of("b", COW).withVolume(150)), List.of());
-		playing.start(1, COW, 0, 64, 0, 0.8F, 0.8F);
-		playing.update(p, WORLD, OVERWORLD, false, listener);
-		assertTrue(reported.isEmpty(), "capped at 100%, which is where it started");
-		playing.update(p, WORLD, OVERWORLD, true, listener);
-		assertEquals(1.2F, reported.get(1L), 1e-6);
-	}
-
-	@Test
-	void vanillaGainChangeIsFollowed() {
-		Precedence p = precedence(List.of(SetEntry.of("r", COW).withVolume(50)), List.of());
-		playing.start(1, COW, 0, 64, 0, 1F, 0.5F);
-		update(p);
-		playing.setVanillaGain(1, 0.4F);
-		update(p);
-		assertEquals(0.2F, reported.get(1L), 1e-6);
-	}
-
-	@Test
-	void bypassRestoresVanillaGainsAndTheNextUpdateReappliesRules() {
-		Precedence p = precedence(List.of(SetEntry.of("m", COW).withMute(true)), List.of());
-		playing.start(1, COW, 0, 64, 0, 0.7F, 0F);
-		update(p);
-		assertEquals(1, playing.updateBypassed(listener));
-		assertEquals(0.7F, reported.get(1L), 1e-6);
-		assertEquals(1, update(p));
+	void aLoopStartedDuringBypassFollowsTheProfileWhenBypassTurnsOff() {
+		standInBase(profile);
+		bypassed();
+		playing.start(1, MINECART, LOOP, 1F, 1F);
+		assertEquals(0, bypassed());
+		assertEquals(1, update(profile));
 		assertEquals(0F, reported.get(1L));
 	}
 
 	@Test
-	void soundsWhoseInputsDidNotChangeAreNotReDecided() {
-		Precedence p = precedence(List.of(SetEntry.of("r", COW).withVolume(50)),
-				List.of(cylinder("z", 10, new Point(0, 64, 0), SetEntry.of("q", COW).withVolume(20))));
-		for (int i = 0; i < 10; i++) {
-			playing.start(i, COW, i, 64, 0, 1F, 1F);
-		}
-		update(p);
-		long before = playing.decisionCount();
-		update(p);
-		assertEquals(0, playing.decisionCount() - before, "nothing moved and the profile is the same");
-		playing.move(3, 3.5, 64, 0);
-		update(p);
-		assertEquals(1, playing.decisionCount() - before, "only the sound that moved");
-		playing.update(p, WORLD, "minecraft:the_nether", true, listener);
-		assertEquals(11, playing.decisionCount() - before, "another dimension re-decides every sound");
+	void vanillaRecalculatingTheVolumeKeepsTheSoundsOwnFactor() {
+		// A slider change: a 30% one-shot stays at 30% of the new vanilla gain; a muted loop stays silent.
+		playing.start(1, VILLAGER, ONE_SHOT, 1F, 0.3F);
+		playing.start(2, MINECART, LOOP, 1F, 0F);
+		assertEquals(0.15F, playing.recalculated(1, 0.5F), 1e-6);
+		assertEquals(0F, playing.recalculated(2, 0.5F));
+		assertTrue(Float.isNaN(playing.recalculated(3, 0.5F)), "not tracked");
 	}
 
+	@Test
+	void aReDecidedLoopUsesTheLatestVanillaGain() {
+		standOutside(profile);
+		playing.start(1, MINECART, LOOP, 1F, 1F);
+		update(profile);
+		playing.recalculated(1, 0.5F);
+		standInBase(profile);
+		update(profile);
+		standOutside(profile);
+		update(profile);
+		assertEquals(0.5F, reported.get(1L), 1e-6);
+	}
+
+	@Test
+	void boostIsCappedWhenNotSupported() {
+		Precedence loud = precedence(List.of(SetEntry.of("m", MINECART).withVolume(150)), List.of());
+		where.updateNowhere(loud);
+		playing.start(1, MINECART, LOOP, 0.5F, 1F);
+		playing.update(loud, where, false, false, listener);
+		assertTrue(reported.isEmpty(), "capped at 100%, the gain did not change");
+		playing.clear();
+		playing.start(1, MINECART, LOOP, 0.5F, 1F);
+		playing.update(loud, where, false, true, listener);
+		assertEquals(0.75F, reported.get(1L), 1e-6);
+	}
 
 	@Test
 	void stoppedSoundsAreRemoved() {
-		playing.start(1, COW, 0, 64, 0, 1F, 1F);
-		playing.start(2, COW, 0, 64, 0, 1F, 1F);
+		playing.start(1, VILLAGER, ONE_SHOT, 1F, 1F);
+		playing.start(2, VILLAGER, ONE_SHOT, 1F, 1F);
 		playing.stop(1);
 		assertFalse(playing.isTracked(1));
 		assertTrue(playing.isTracked(2));
 		assertEquals(1, playing.size());
 		assertTrue(Float.isNaN(playing.gain(1)));
 		playing.stop(1); // stopping twice is harmless
-		playing.move(1, 5, 5, 5); // so is moving an untracked sound
 		assertEquals(1, playing.size());
 	}
 
 	@Test
 	void startingTheSameHandleTwiceIsRefused() {
-		assertTrue(playing.start(1, COW, 0, 64, 0, 1F, 1F));
-		assertFalse(playing.start(1, VILLAGER, 0, 64, 0, 1F, 1F));
+		assertTrue(playing.start(1, VILLAGER, ONE_SHOT, 1F, 1F));
+		assertFalse(playing.start(1, MINECART, LOOP, 1F, 1F));
 		assertEquals(1, playing.size());
 	}
 
 	@Test
 	void aFullTableFailsOpen() {
 		for (int i = 0; i < PlayingSounds.CAPACITY; i++) {
-			assertTrue(playing.start(i, COW, 0, 64, 0, 1F, 1F));
+			assertTrue(playing.start(i, MINECART, LOOP, 1F, 1F));
 		}
-		assertFalse(playing.start(9_999, COW, 0, 64, 0, 1F, 1F));
+		assertFalse(playing.start(9_999, MINECART, LOOP, 1F, 1F));
 		assertEquals(1, playing.rejectedCount());
-		Precedence p = precedence(List.of(SetEntry.of("r", COW).withVolume(50)), List.of());
-		assertEquals(PlayingSounds.CAPACITY, update(p), "every tracked sound is still re-decided");
+		standInBase(profile);
+		assertEquals(PlayingSounds.CAPACITY, update(profile), "every tracked loop is still re-decided");
 		assertFalse(reported.containsKey(9_999L));
 		playing.stop(0);
-		assertTrue(playing.start(9_999, COW, 0, 64, 0, 1F, 1F), "room again after a sound stops");
+		assertTrue(playing.start(9_999, MINECART, LOOP, 1F, 1F), "room again after a sound stops");
 	}
 
 	@Test
 	void manyStartsAndStopsKeepTheTableConsistent() {
 		// Random churn against a plain map, so the handle hash and swap-remove stay in step.
 		Random random = new Random(88);
-		Map<Long, Double> model = new HashMap<>();
+		Map<Long, Float> model = new HashMap<>();
 		List<Long> live = new ArrayList<>();
 		for (int step = 0; step < 50_000; step++) {
 			if (!live.isEmpty() && (live.size() >= PlayingSounds.CAPACITY || random.nextInt(3) == 0)) {
@@ -220,16 +234,15 @@ class PlayingSoundsTest {
 				if (model.containsKey(h)) {
 					continue;
 				}
-				assertTrue(playing.start(h, COW, 0, 64, 0, 1F, 1F));
-				double x = random.nextInt(1000);
-				playing.move(h, x, 64, 0);
-				model.put(h, x);
+				float factor = random.nextInt(100) / 100F;
+				assertTrue(playing.start(h, VILLAGER, random.nextBoolean(), 1F, factor));
+				model.put(h, factor);
 				live.add(h);
 			}
 		}
 		assertEquals(model.size(), playing.size());
 		for (long h : live) {
-			assertTrue(playing.isTracked(h), "handle " + h);
+			assertEquals(model.get(h), playing.recalculated(h, 1F), 1e-6, "handle " + h);
 		}
 		playing.clear();
 		assertEquals(0, playing.size());
@@ -237,25 +250,15 @@ class PlayingSoundsTest {
 	}
 
 	@Test
-	void aNewProfileSnapshotIsResolvedAgain() {
-		// The player saves a change while the sound plays: the new snapshot's rules apply, not the cached old ones.
-		playing.start(1, COW, 0, 64, 0, 1F, 0.5F);
-		update(precedence(List.of(SetEntry.of("r", COW).withVolume(50)), List.of()));
-		assertTrue(reported.isEmpty());
-		update(precedence(List.of(SetEntry.of("r", COW).withVolume(25)), List.of()));
-		assertEquals(0.25F, reported.get(1L), 1e-6);
-	}
-
-	@Test
-	void stoppingASoundKeepsTheOthersRulesStraight() {
-		// Swap-remove moves the last sound into the hole; its cached rules must move with it.
-		Precedence p = precedence(List.of(SetEntry.of("c", COW).withVolume(40), SetEntry.of("v", VILLAGER).withVolume(60)), List.of());
-		playing.start(1, COW, 0, 64, 0, 1F, 0.4F);
-		playing.start(2, VILLAGER, 0, 64, 0, 1F, 0.6F);
-		update(p);
+	void stoppingASoundKeepsTheOthersLoopFlagAndFactorStraight() {
+		// Swap-remove moves the last sound into the hole; its flag and factor must move with it.
+		standOutside(profile);
+		playing.start(1, VILLAGER, ONE_SHOT, 1F, 0.4F);
+		playing.start(2, MINECART, LOOP, 1F, 1F);
+		update(profile);
 		playing.stop(1);
-		playing.setVanillaGain(2, 0.5F);
-		update(p);
-		assertEquals(0.3F, reported.get(2L), 1e-6, "the villager keeps its own 60% rule");
+		standInBase(profile);
+		assertEquals(1, update(profile));
+		assertEquals(0F, reported.get(2L));
 	}
 }

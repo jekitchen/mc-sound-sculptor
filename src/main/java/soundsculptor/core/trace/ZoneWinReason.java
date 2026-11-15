@@ -1,15 +1,13 @@
 package soundsculptor.core.trace;
 
-/** Why a zone won a setting over the other zones (PRD FR-14.2 item 3, mirroring FR-9 steps 4 and 5). */
+/** Why a zone won a setting over the other zones the player stood in (PRD FR-14.2 item 3, FR-9 step 2). */
 public enum ZoneWinReason {
-	/** No other zone containing the sound sets this. */
+	/** No other zone the player stood in sets this. */
 	ONLY_ZONE("only_zone"),
-	/** Its anchor is closest to the sound. */
-	CLOSEST("closest"),
-	/** Tie on distance; the smaller zone wins. */
-	TIE_SMALLER_ZONE("tie_smaller_zone"),
-	/** Tie on distance and size; higher in the zone list. */
-	TIE_LIST_ORDER("tie_list_order");
+	/** The smallest of the zones that set this. */
+	SMALLEST("smallest"),
+	/** As small as another zone that sets this, and higher in the zone list. */
+	SAME_SIZE_LIST_ORDER("same_size_list_order");
 
 	private final String key;
 
