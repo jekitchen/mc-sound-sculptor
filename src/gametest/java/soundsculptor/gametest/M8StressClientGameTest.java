@@ -34,7 +34,9 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Automated noisy-farm stress and soak test (PRD 11.2, budgets in 9.1): the "stress" profile (2 sets of 25 entries on
  * Everywhere, 64 zones of every kind around a 9 × 9 pen, each with 1 to 3 shared sets) with 300 sounds per second played
- * in the pen.
+ * in the pen and {@value #LOOPS} looping sounds held throughout. Every second the player steps between the pen and a spot
+ * a few blocks away that is outside some of the zones, so where-you-are is worked out again and the playing loops are
+ * decided again (11.2 step 2).
  *
  * <p>Checks the budgets Diagnostics can measure: average cost per sound start under 10 µs with the stress profile and
  * under 5 µs with a typical one (one set of 20 single sounds, 8 zones with a set of 1 to 3 entries each, half of them
@@ -55,6 +57,18 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 	private static final int TYPICAL_SECONDS = 6;
 	/** 10 seconds of the farm before measuring. */
 	private static final int WARM_UP_TICKS = 200;
+	/** Looping sounds kept playing in the pen, decided again on every step in or out. */
+	private static final int LOOPS = 64;
+	/**
+	 * Real looping sounds for them. The stress IDs include made-up modded ones that never play, and the stress zones'
+	 * repeat limits stop other loops from starting at all; these start, muted by Everywhere, so they begin silently and
+	 * are decided again on every step. No streamed sounds (music, biome ambience): vanilla has only 8 channels for those.
+	 */
+	private static final List<String> LOOP_IDS = List.of("minecraft:entity.minecart.riding", "minecraft:entity.minecart.inside",
+			"minecraft:entity.bee.loop", "minecraft:entity.bee.loop_aggressive", "minecraft:entity.blaze.burn",
+			"minecraft:entity.cat.purr", "minecraft:entity.horse.breathe", "minecraft:entity.bat.loop");
+	/** Ticks between steps into or out of zones. */
+	private static final int WALK_TICKS = 20;
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -81,6 +95,8 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 			check(context.computeOnClient(mc -> ProfileManager.profile().zones().size()) == 64, "the stress profile has 64 zones");
 			List<String> ids = StressProfile.soundIds();
 			long errorsBefore = context.computeOnClient(mc -> SoundHook.errorCount());
+			Walk walk = Walk.find(world, feet, zones);
+			check(walk != null, "there should be a spot near the pen that is inside some of the stress zones but not all");
 
 			// Warm-up: the sound hook runs as often as in a few minutes of play, so the JIT has compiled it.
 			context.runOnClient(mc -> {
@@ -95,13 +111,20 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 				}
 				SoundHook.soundTiming().resetPeak();
 			});
+			// Loops start before the farm, so they have channels.
+			List<SoundInstance> loops = context.computeOnClient(mc -> {
+				List<SoundInstance> started = new ArrayList<>();
+				for (int i = 0; i < LOOPS; i++) {
+					SoundInstance loop = loop(LOOP_IDS.get(i % LOOP_IDS.size()), feet, i);
+					mc.getSoundManager().play(loop);
+					started.add(loop);
+				}
+				return started;
+			});
 			// Then the farm runs for a while, as in any real session, before anything is measured.
 			int counter = 0;
 			for (int tick = 0; tick < WARM_UP_TICKS; tick++) {
-				int base = counter;
-				context.runOnClient(mc -> playBurst(mc, ids, feet, base));
-				counter += SOUNDS_PER_TICK;
-				context.waitTicks(1);
+				counter = farmTick(context, ids, feet, counter, walk);
 			}
 
 			// Measure: 300 sounds per second for several seconds, reading each completed second.
@@ -109,12 +132,10 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 			List<TimingWindow.Stats> ticks = new ArrayList<>();
 			List<TimingWindow.Stats> outlines = new ArrayList<>();
 			long memoryStart = 0;
+			long whereBefore = context.computeOnClient(mc -> SoundHook.where().version());
 			for (int second = 0; second < MEASURE_SECONDS; second++) {
 				for (int tick = 0; tick < 20; tick++) {
-					int base = counter;
-					context.runOnClient(mc -> playBurst(mc, ids, feet, base));
-					counter += SOUNDS_PER_TICK;
-					context.waitTicks(1);
+					counter = farmTick(context, ids, feet, counter, walk);
 				}
 				long now = context.computeOnClient(mc -> Util.getMillis());
 				sounds.add(context.computeOnClient(mc -> SoundHook.soundTiming().stats(now)));
@@ -126,16 +147,22 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 			}
 			int lines = context.computeOnClient(mc -> ZoneOutlines.linesLastFrame());
 			int tracked = context.computeOnClient(mc -> PlayingChannels.get().size());
+			long whereChanges = context.computeOnClient(mc -> SoundHook.where().version()) - whereBefore;
+			int loopsPlaying = context.computeOnClient(mc -> (int) loops.stream().filter(mc.getSoundManager()::isActive).count());
 
 			// Use the later seconds (the first may still be settling) and their median, so one GC pause does not decide.
 			double perSound = median(sounds.subList(2, sounds.size()), true);
 			double worstSound = median(sounds.subList(2, sounds.size()), false);
 			double perTick = median(ticks.subList(2, ticks.size()), true);
+			double worstTick = median(ticks.subList(2, ticks.size()), false);
 			double perFrame = median(outlines.subList(2, outlines.size()), true);
 			long soundsPerSecond = sounds.get(sounds.size() - 1).count();
 			System.out.println(String.format(Locale.ROOT,
-					"STRESS sounds/s=%d per-sound avg=%.2fus max=%.1fus | per-tick avg=%.1fus (%d tracked) | outlines avg=%.1fus (%d lines) | memory=%s MB | CI factor %.0f",
-					soundsPerSecond, perSound, worstSound, perTick, tracked, perFrame, lines, MemoryEstimate.megabytes(memoryStart), factor));
+					"STRESS sounds/s=%d per-sound avg=%.2fus max=%.1fus | per-tick avg=%.1fus max=%.1fus (%d tracked, %d loops, where-you-are changed %d times) | outlines avg=%.1fus (%d lines) | memory=%s MB | CI factor %.0f",
+					soundsPerSecond, perSound, worstSound, perTick, worstTick, tracked, loopsPlaying, whereChanges, perFrame, lines,
+					MemoryEstimate.megabytes(memoryStart), factor));
+			check(loopsPlaying == LOOPS, "every looping sound should still be playing, was " + loopsPlaying + " of " + LOOPS);
+			check(whereChanges >= MEASURE_SECONDS - 1, "each step should change where you are, was " + whereChanges + " changes");
 
 			check(soundsPerSecond >= 200, "the test should play a noisy farm's worth of sounds (aiming for 300 per second), was " + soundsPerSecond);
 			check(lines > 0, "outlines should be drawn during the test");
@@ -148,6 +175,12 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 					: "STRESS worst-start budget NOT met: " + worstSound + " µs >= 100 µs (may include GC or OS pauses)");
 			check(worstSound < 1000 * factor, "the worst sound start regressed: " + worstSound + " µs (budget 100 µs, ceiling 1 ms)");
 			check(perTick < 200 * factor, "the per-tick re-check should be under 0.2 ms, was " + perTick + " µs");
+			// PRD 9.1: a step in or out re-decides every playing loop in under 0.2 ms. The slowest tick in a second is that
+			// step, but it can also hold a GC or OS pause, so it is reported, with a ceiling for real problems.
+			System.out.println(worstTick < 200 * factor
+					? "STRESS step budget met: " + worstTick + " µs < 200 µs"
+					: "STRESS step budget NOT met: " + worstTick + " µs >= 200 µs (may include GC or OS pauses)");
+			check(worstTick < 1000 * factor, "the slowest tick regressed: " + worstTick + " µs (budget 200 µs, ceiling 1 ms)");
 			check(perFrame < 300 * factor, "outline drawing should be under 0.3 ms per frame, was " + perFrame + " µs");
 			check(memoryStart < MemoryEstimate.BUDGET_BYTES, "Sound Sculptor data should be under 8 MB, was " + memoryStart);
 
@@ -160,6 +193,7 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 				Zone zone = shift(withOwnSets.get(i), dx, dy, dz);
 				typicalZones.add(i < 4 ? zone : shift(zone, 100, 0, 100));
 			}
+			walk.home(context);
 			context.runOnClient(mc -> ProfileManager.update(p -> Profile.empty(p.name())
 					.withEverywhere(StressProfile.typicalEverywhere()).withZones(typicalZones)));
 			List<TimingWindow.Stats> typical = new ArrayList<>();
@@ -183,16 +217,17 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 			// Soak (11.2 step 5): keep the farm going; no errors and no memory growth.
 			long soakEnd = System.currentTimeMillis() + soakSeconds * 1000L;
 			while (System.currentTimeMillis() < soakEnd) {
-				int base = counter;
-				context.runOnClient(mc -> playBurst(mc, ids, feet, base));
-				counter += SOUNDS_PER_TICK;
-				context.waitTicks(1);
+				counter = farmTick(context, ids, feet, counter, walk);
 			}
+			walk.home(context);
+			int loopsAfterSoak = context.computeOnClient(mc -> (int) loops.stream().filter(mc.getSoundManager()::isActive).count());
+			context.runOnClient(mc -> loops.forEach(mc.getSoundManager()::stop));
 			long memoryEnd = context.computeOnClient(mc -> Diagnostics.memoryBytes());
 			long errors = context.computeOnClient(mc -> SoundHook.errorCount()) - errorsBefore;
 			System.out.println(String.format(Locale.ROOT, "SOAK %d s: memory %s MB -> %s MB, errors %d",
 					soakSeconds, MemoryEstimate.megabytes(memoryStart), MemoryEstimate.megabytes(memoryEnd), errors));
 			check(errors == 0, "no errors during the stress and soak test, was " + errors);
+			check(loopsAfterSoak == LOOPS, "every looping sound should play through the soak, was " + loopsAfterSoak + " of " + LOOPS);
 			check(memoryEnd < MemoryEstimate.BUDGET_BYTES, "memory should stay under 8 MB, was " + memoryEnd);
 			check(memoryEnd < memoryStart + 1024 * 1024, "memory should be stable during the soak: " + memoryStart + " -> " + memoryEnd);
 
@@ -207,6 +242,84 @@ public final class M8StressClientGameTest implements FabricClientGameTest {
 	private static void playBurst(Minecraft mc, List<String> ids, Vec3 feet, int base) {
 		for (int i = 0; i < SOUNDS_PER_TICK; i++) {
 			mc.getSoundManager().play(sound(ids.get((base + i) % ids.size()), feet, base + i));
+		}
+	}
+
+	/**
+	 * One tick of the farm: a burst of sounds, and every {@value #WALK_TICKS} ticks a step into or out of some zones.
+	 * Returns the next sound counter.
+	 */
+	private static int farmTick(ClientGameTestContext context, List<String> ids, Vec3 feet, int counter, Walk walk) {
+		int base = counter;
+		context.runOnClient(mc -> playBurst(mc, ids, feet, base));
+		if (counter / SOUNDS_PER_TICK % WALK_TICKS == 0) {
+			walk.step();
+		}
+		context.waitTicks(1);
+		return counter + SOUNDS_PER_TICK;
+	}
+
+	/** A looping sound in the pen, like a minecart, bees or a beacon. */
+	private static SoundInstance loop(String id, Vec3 feet, int n) {
+		double x = feet.x - 4 + (n * 7 % 9);
+		double z = feet.z - 4 + (n * 5 % 9);
+		return new SimpleSoundInstance(Identifier.parse(id), SoundSource.NEUTRAL, 1.0F, 1.0F, RandomSource.create(n),
+				true, 0, SoundInstance.Attenuation.LINEAR, x, feet.y + 0.5, z, false);
+	}
+
+	/** Steps the player between the pen and a spot a few blocks east of it that is outside some of the zones. */
+	private static final class Walk {
+		private final TestSingleplayerContext world;
+		private final Vec3 home;
+		private final double awayX;
+		private boolean away;
+
+		private Walk(TestSingleplayerContext world, Vec3 home, double awayX) {
+			this.world = world;
+			this.home = home;
+			this.awayX = awayX;
+		}
+
+		/** The nearest spot east of the pen whose feet block is in some zones but fewer than the pen's, or null. */
+		static Walk find(TestSingleplayerContext world, Vec3 feet, List<Zone> zones) {
+			int bx = (int) Math.floor(feet.x);
+			int by = (int) Math.floor(feet.y);
+			int bz = (int) Math.floor(feet.z);
+			int atHome = inside(zones, bx, by, bz);
+			for (int step = 3; step <= 12; step++) {
+				int there = inside(zones, bx + step, by, bz);
+				if (there > 0 && there < atHome) {
+					return new Walk(world, feet, feet.x + step);
+				}
+			}
+			return null;
+		}
+
+		private static int inside(List<Zone> zones, int bx, int by, int bz) {
+			int count = 0;
+			for (Zone zone : zones) {
+				if (zone.containsBlock(bx, by, bz)) {
+					count++;
+				}
+			}
+			return count;
+		}
+
+		void step() {
+			away = !away;
+			teleport(away ? awayX : home.x);
+		}
+
+		/** Back to the pen, and wait until the client has arrived. */
+		void home(ClientGameTestContext context) {
+			if (away) {
+				step();
+			}
+			context.waitTicks(5);
+		}
+
+		private void teleport(double x) {
+			world.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.3f %.3f %.3f", x, home.y, home.z));
 		}
 	}
 
