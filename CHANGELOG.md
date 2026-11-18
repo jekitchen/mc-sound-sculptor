@@ -5,8 +5,7 @@ Each release ships one jar that runs on every supported Minecraft version.
 
 ## 0.1.0-alpha (unreleased)
 
-First public alpha, for Minecraft Java Edition 26.2 and 26.3 with Fabric. One jar,
-`soundsculptor-<version>+mc26.2-26.3.jar`, runs on both.
+First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.
 
 ### Features
 - **Sounds tab:** every sound the game knows, mods and resource packs included, narrowing as you type: plain words, `|`
@@ -65,6 +64,7 @@ do. It sends nothing to servers. See "For server admins" in the README.
 - The mod was called Audio Zone during development. Settings now live in `config/soundsculptor/`.
 - Profiles from earlier test builds can't be read; they are set aside with a message.
 - Rules became Sound Sets, and Recently Played and Search became one Sounds tab.
+- Minecraft 26.2 is no longer supported; earlier test builds ran on 26.2 too.
 - Zones follow where you stand instead of where a sound comes from. Outside mode and fade edges are gone (zones that
   used them load without them), and so are personal bubbles.
 
