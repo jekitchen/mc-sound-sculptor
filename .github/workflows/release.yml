@@ -68,8 +68,9 @@ jobs:
       - name: check every version built the same jar
         run: |
           set -euo pipefail
-          jars=(builds/*/soundsculptor-*.jar)
-          if [ "${#jars[@]}" -lt 1 ] || [ ! -f "${jars[0]}" ]; then
+          # One artifact is downloaded straight into builds/, several into builds/<artifact>/, so search both.
+          mapfile -t jars < <(find builds -maxdepth 2 -name 'soundsculptor-*.jar' ! -name '*-sources.jar' | sort)
+          if [ "${#jars[@]}" -lt 1 ]; then
             echo "expected a jar from every Minecraft version, found none" >&2
             exit 1
           fi
