@@ -6,7 +6,8 @@ and the README's "For server admins" section.
 
 **Summary** (Modrinth's one-line summary and CurseForge's short description, under 256 characters):
 
-> Mute or turn down any sound, everywhere or only inside zones you draw, without ever hearing more than vanilla allows.
+> Mute or turn down any sound, everywhere or only while you stand in zones you draw, without ever hearing more than
+> vanilla allows.
 > Client-only, nothing sent to servers.
 
 ---
@@ -14,24 +15,29 @@ and the README's "For server admins" section.
 # Sound Sculptor
 
 Too many villagers? A noisy farm next to your base? An ambient sound that drives you up the wall? **Sound Sculptor** lets
-you mute or turn down any individual sound, everywhere or only inside areas you choose, and it never lets you hear more
-than vanilla Minecraft would.
+you mute or turn down any individual sound, everywhere or only while you stand in areas you choose, and it never lets
+you hear more than vanilla Minecraft would.
 
 Press <kbd>;</kbd> in game to open it.
 
 ## What you can do
 
-- **See what you're hearing.** *Recently Played* lists every sound around you as it plays, with its subtitle, how often
-  it played, and whether it's Close, Near or Far. Mute it with one click.
-- **Find any sound.** *Search* covers every sound in the game, mods and resource packs included: type `villager`,
-  `villager|zombie`, `villager -ambient` or `block.*.step`.
-- **Write rules.** Mute or turn down one sound or a whole family (`minecraft:entity.villager.*`), or just type
-  `villager hurt` in the rule and pick the sound or its family. The editor shows which
-  sounds a rule matches and warns when a more specific rule overrides it.
-- **Draw zones.** Mark two corners of your trading hall, farm or base and it becomes a zone with its own rules; nudge
-  any side in or out. Outlines show where your zones are, in their own colors, with their names.
-- **Ask why.** "Why does it sound like this?" shows every rule and zone that touched a sound, which one won, and why.
-- **One profile per server and world**, created automatically and saved across restarts.
+- **See what you're hearing.** The *Sounds* tab lists every sound in the game, mods and resource packs included, and
+  narrows as you type: `villager`, `villager|zombie`, `villager -ambient` or `block.*.step`. Turn on *Recently played*
+  to see only what you just heard, with its subtitle, how often it played, and whether it's Close, Near or Far. Mute
+  it with one click.
+- **Build Sound Sets.** A Sound Set is a named list of sounds to mute or turn down: one sound, or a whole family
+  (`minecraft:entity.villager.*`). Pick sounds from the list, or type `villager hurt` and choose the sound or its
+  family. Your sets work in every world; use one set in several places and editing it once changes them all.
+- **Draw zones.** Mark two corners of your trading hall, farm or base and it becomes a zone; nudge any side in or out.
+  While you stand in it, the Sound Sets you attach to it decide every sound you hear, wherever it comes from: silence
+  rain, music and thunder in your base and get them back as you walk out. Outlines show where your zones are, in
+  their own colors, with their names.
+- **Ask why.** "Why does it sound like this?" shows where you stood, every set that touched a sound, which entry won
+  and why, and lets you change it on the spot.
+- **Undo** any quick change within 5 seconds, with a click or <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
+- **One profile per server and world**, created automatically and saved across restarts. Copy your sets from one
+  server to another, or export a profile to share it.
 - **Bypass** with <kbd>F10</kbd> to hear plain vanilla sound at any time, without losing a single setting.
 
 Everything works with the keyboard alone and with the narrator, and the screens are tested at every GUI scale.
@@ -44,7 +50,7 @@ Minecraft's sounds and subtitles don't already tell them. This is a hard rule of
 - **Nothing sent to your server.** No custom packets, no plugin channel, no client brand change: your server sees a
   vanilla client. Verify it with any packet logger.
 - **Mute and volume only remove sound**, like vanilla's own volume sliders, just per sound.
-- **Recently Played lists only sounds the player was close enough to hear in vanilla.** Distance is Close, Near or Far,
+- **Recently played lists only sounds the player was close enough to hear in vanilla.** Distance is Close, Near or Far,
   never blocks and never a direction, and players can hide it.
 - **Zone outlines show only zones the player drew.**
 
@@ -69,8 +75,7 @@ Questions or concerns: open an issue with "fair play" in the title at
 ## Status
 
 This is an **alpha**: the features above are complete and tested, but expect rough edges. Planned for 1.0: volume boost
-above 100%, cues for muted sounds, repeat limits, the mob inspector, more zone shapes and modes, and copying settings
-between servers.
+above 100%, cues for muted sounds, repeat limits, the mob inspector and cylinder zones.
 
 Sound Sculptor is open source under the MIT license: <https://github.com/jekitchen/mc-sound-sculptor>.
 
