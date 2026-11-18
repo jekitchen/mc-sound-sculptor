@@ -10,9 +10,10 @@ def supportedMinecraft = project.supported_minecraft_versions.split(',')*.trim()
 if (!(project.minecraft_version in supportedMinecraft)) {
 	throw new GradleException("Minecraft ${project.minecraft_version} is not in supported_minecraft_versions (${supportedMinecraft.join(', ')}) in gradle.properties")
 }
-// "26.2-26.3": in the jar name and version, and in the manifest instead of the version Loom built against.
+// "26.3" (or "26.3-26.4" for two versions): in the jar name and version, and in the manifest instead of the version Loom
+// built against.
 def minecraftRange = supportedMinecraft.size() == 1 ? supportedMinecraft[0] : "${supportedMinecraft.first()}-${supportedMinecraft.last()}"
-// fabric.mod.json "minecraft" dependency: ["~26.2", "~26.3"], any one of which must match. "~26.3" is ">=26.3 <26.4-",
+// fabric.mod.json "minecraft" dependency: ["~26.3"], or one range per version, any one of which must match. "~26.3" is ">=26.3 <26.4-",
 // so each version's releases (26.3, 26.3.1, ...) are accepted and its snapshots and pre-releases, which Fabric Loader
 // orders before the release (26.3-pre.1 < 26.3), are not; the "-" also keeps out the next version's snapshots.
 def minecraftDependency = '[' + supportedMinecraft.collect { "\"~${it}\"" }.join(', ') + ']'
@@ -34,7 +35,7 @@ repositories {
 }
 
 // Mod Menu (optional, FR-12.3): compiled against, never bundled or required. One version per Minecraft version.
-def modMenuVersions = ['26.2': '20.0.3', '26.3': '21.0.0']
+def modMenuVersions = ['26.3': '21.0.0']
 def modMenuVersion = modMenuVersions[project.minecraft_version]
 if (modMenuVersion == null) {
 	throw new GradleException("No Mod Menu version for Minecraft ${project.minecraft_version}: add one to modMenuVersions in build.gradle")

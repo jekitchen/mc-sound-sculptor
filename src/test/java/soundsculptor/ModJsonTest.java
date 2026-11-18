@@ -22,9 +22,9 @@ import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import org.junit.jupiter.api.Test;
 
 /**
- * The built fabric.mod.json: one jar for Minecraft 26.2 and 26.3 (docs/PORTING.md, "One jar for every version"), so its
+ * The built fabric.mod.json: one jar for Minecraft 26.3 (docs/PORTING.md, "One jar for every version"), so its
  * "minecraft" dependency, a list of ranges of which one must match, read with Fabric Loader's own parser, must accept
- * every 26.2 and 26.3 release and refuse older versions, any snapshot or pre-release of 26.2 or 26.3, and anything of
+ * every 26.3 release and refuse older versions (26.2 included), any snapshot or pre-release of 26.3, and anything of
  * 26.4, snapshots included.
  * Update the versions here when supported_minecraft_versions in gradle.properties changes.
  */
@@ -35,11 +35,11 @@ class ModJsonTest {
 		for (JsonElement range : modJson().getAsJsonObject("depends").getAsJsonArray("minecraft")) {
 			ranges.add(VersionPredicate.parse(range.getAsString()));
 		}
-		for (String supported : new String[] {"26.2", "26.2.1", "26.2.5", "26.3", "26.3.1", "26.3.4"}) {
+		for (String supported : new String[] {"26.3", "26.3.1", "26.3.4"}) {
 			assertTrue(accepts(ranges, supported), supported + " should be accepted by " + ranges);
 		}
 		// Fabric Loader reads a snapshot such as 26.4-snapshot-1 as 26.4-alpha.1.
-		for (String other : new String[] {"26.1", "26.1.2", "26.2-alpha.1", "26.2-pre.1", "26.2-rc.1", "26.3-alpha.1",
+		for (String other : new String[] {"26.1", "26.1.2", "26.2", "26.2.1", "26.2.5", "26.2-pre.1", "26.3-alpha.1",
 				"26.3-pre.1", "26.3-rc.1", "26.4-alpha.1", "26.4-pre.1", "26.4-rc.1", "26.4", "27.1"}) {
 			assertFalse(accepts(ranges, other), other + " should be refused by " + ranges);
 		}
@@ -58,7 +58,7 @@ class ModJsonTest {
 	@Test
 	void versionNamesTheSupportedRangeNotTheBuildVersion() throws Exception {
 		String version = modJson().get("version").getAsString();
-		assertTrue(version.endsWith("+mc26.2-26.3"), version);
+		assertTrue(version.endsWith("+mc26.3"), version);
 		assertNotNull(version(version));
 	}
 

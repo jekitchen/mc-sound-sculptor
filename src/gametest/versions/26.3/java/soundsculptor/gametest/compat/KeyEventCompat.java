@@ -6,7 +6,7 @@ import net.minecraft.client.input.KeyEvent;
 /**
  * Minecraft 26.3 version: builds key events the way the game does (used by tests to send key presses with Shift or
  * Ctrl). 26.3 uses SDL3 input: {@code key} is the physical key, and vanilla matches shortcuts (Tab, arrows) on the
- * separate layout keycode, so both are filled in. Keep the public API identical to the 26.2 copy.
+ * separate layout keycode, so both are filled in. Keep the public API identical in every version's copy.
  */
 public final class KeyEventCompat {
 	private KeyEventCompat() {

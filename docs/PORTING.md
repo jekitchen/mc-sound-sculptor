@@ -2,12 +2,14 @@
 
 PRD section 7.6 requires this list. It names every place Sound Sculptor touches version-specific Minecraft code. When porting to a new Minecraft version (PRD 10.5), work through it top to bottom, then re-run the listed tests on every supported version.
 
-Supported versions: **26.2, 26.3** (`supported_minecraft_versions` in `gradle.properties`). One jar,
-`soundsculptor-<version>+mc26.2-26.3.jar`, runs on all of them. It is still built and tested against each version:
+Supported versions: **26.3** (`supported_minecraft_versions` in `gradle.properties`), so the jar is
+`soundsculptor-<version>+mc26.3.jar`. 26.2 was supported, with one jar for both, until 2026-11-17 (PRD 7.6). The
+one-jar rules and helpers below stay, ready for adding 26.4: with two versions, one jar
+(`soundsculptor-<version>+mc26.3-26.4.jar`) runs on both, and it is built and tested against each:
 
 ```
 ./gradlew build runClientGameTest                                                         # 26.3 (default)
-./gradlew build runClientGameTest -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2
+./gradlew build runClientGameTest -Pminecraft_version=<other> -Pfabric_api_version=<Fabric API for it>
 ```
 
 ### One jar for every version
@@ -17,17 +19,17 @@ the version it was built against, and each version's game tests ran exactly the 
 version and fails if the jars differ (`same jar for every Minecraft version`); check by hand with:
 
 ```
-java tools/CompareJars.java <jar built for 26.2> <jar built for 26.3>
+java tools/CompareJars.java <jar built for one version> <jar built for another>
 ```
 
 It prints `IDENTICAL` or lists every entry that differs (the `-sources` jars are out of scope). The build already
 keeps the build version out of the jar: its name, its `fabric.mod.json` version and `minecraft` range
-(`["~26.2", "~26.3"]`: releases only, no snapshots or pre-releases) and the manifest's `Fabric-Minecraft-Version` all come from `supported_minecraft_versions`. Things
+(`["~26.3"]`, one range per version: releases only, no snapshots or pre-releases) and the manifest's `Fabric-Minecraft-Version` all come from `supported_minecraft_versions`. Things
 in code that make a build differ, and what to do instead:
 
 - **Inlined constants.** javac copies `static final` primitives and strings into the class that uses them. Key codes
-  are the trap: `InputConstants.KEY_*` are GLFW codes in 26.2 and SDL3 codes in 26.3, so a jar would have the right keys
-  on one version only. Main code uses `soundsculptor.mc.compat.Keys` (values read from `InputConstants` at startup) and
+  are the trap: `InputConstants.KEY_*` were GLFW codes in 26.2 and are SDL3 codes in 26.3, so a jar would have had the
+  right keys on one version only. Main code uses `soundsculptor.mc.compat.Keys` (values read from `InputConstants` at startup) and
   never `InputConstants.KEY_*`, `KEYCODE_*`, `MOD_*` or numbers; compare keys with if/else, since `switch` needs
   constants. Add a field to `Keys` (and to `OneJarClientGameTest`) when you need a new key.
 - **A type that moved or changed.** A method whose parameter type moved package (`RenderPipeline` in 26.3) compiles to
@@ -85,7 +87,7 @@ Add a row whenever you add a Mixin, an access widener entry or a call into versi
 
 ## Known differences between 26.2 and 26.3
 
-Found at M0 by comparing the two game jars. Code that touches any of these needs a per-version implementation, or must use an API that exists in both.
+Found at M0 by comparing the two game jars, while both were supported. Kept because the helpers that bridge them are still in the code, and as a guide to the kind of change a new version brings.
 
 | Area | 26.2 | 26.3 | Affects |
 | --- | --- | --- | --- |
