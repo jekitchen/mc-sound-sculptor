@@ -30,17 +30,10 @@ One jar runs on every supported Minecraft version. The [release workflow](../.gi
 against each version, checks that every build produced the same jar, and creates a **draft** GitHub release with that
 jar attached and the changelog entry as notes. Check the draft, then publish it.
 
-To build by hand instead, build against each version and keep each jar, then compare them:
-
-```sh
-./gradlew build -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2
-mkdir -p build/mc26.2 && cp build/libs/soundsculptor-*+mc26.2-26.3.jar build/mc26.2/
-./gradlew build -Pminecraft_version=26.3 -Pfabric_api_version=0.165.2+26.3
-java tools/CompareJars.java build/mc26.2/soundsculptor-*+mc26.2-26.3.jar build/libs/soundsculptor-*+mc26.2-26.3.jar
-```
-
-Each build puts `soundsculptor-<version>+mc26.2-26.3.jar` in `build/libs/` (ignore the `-sources` jar). The compare must
-print `IDENTICAL`; if it lists differences, do not release: some code compiled differently per version (see
+To build by hand instead, run `./gradlew build`. It puts `soundsculptor-<version>+mc26.3.jar` in `build/libs/` (ignore
+the `-sources` jar). When more than one Minecraft version is supported, build against each with `-Pminecraft_version`
+and `-Pfabric_api_version`, keep each jar, and compare them with `java tools/CompareJars.java <jar> <jar>`. The compare
+must print `IDENTICAL`; if it lists differences, do not release: some code compiled differently per version (see
 [PORTING.md](PORTING.md), "One jar for every version").
 
 Smoke test the jar in a normal launcher (the official launcher with Fabric, or Prism) on **each** Minecraft version:
@@ -56,11 +49,11 @@ Upload the jar once, **Versions → Create version**:
 
 | Field | Value |
 | --- | --- |
-| Version number | `0.1.0-alpha+mc26.2-26.3` (the jar's version) |
+| Version number | `0.1.0-alpha+mc26.3` (the jar's version) |
 | Version title | `Sound Sculptor 0.1.0-alpha` |
 | Release channel | Alpha |
 | Loaders | Fabric |
-| Game versions | every supported Minecraft version: 26.2, 26.2.x, 26.3 and 26.3.x releases |
+| Game versions | every supported Minecraft version: 26.3 and its 26.3.x releases |
 | Dependencies | Fabric API: required. Mod Menu: optional |
 | Changelog | the CHANGELOG.md entry |
 
@@ -74,7 +67,7 @@ Upload the jar once, **Upload file**:
 | --- | --- |
 | Display name | `Sound Sculptor 0.1.0-alpha` |
 | Release type | Alpha |
-| Game versions | every supported Minecraft version (26.2, 26.3 and their point releases), plus **Fabric** and **Client** |
+| Game versions | every supported Minecraft version (26.3 and its point releases), plus **Fabric** and **Client** |
 | Related projects | Fabric API: required dependency. Mod Menu: optional dependency |
 | Changelog | the CHANGELOG.md entry (Markdown) |
 

@@ -10,8 +10,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - minecraft: '26.2'
-            fabric_api: '0.161.0+26.2'
           - minecraft: '26.3'
             fabric_api: '0.165.2+26.3'
     name: build (Minecraft ${{ matrix.minecraft }})
@@ -36,7 +34,8 @@ jobs:
           path: build/libs/
 
   # The jar must be byte-for-byte the same whichever Minecraft version it was compiled against, so the one jar that
-  # ships is exactly what each version's build and game tests checked.
+  # ships is exactly what each version's build and game tests checked. With one supported version there is nothing to
+  # compare; the job still collects the jar, ready for when a second version is added.
   same-jar:
     needs: build
     runs-on: ubuntu-24.04
@@ -57,12 +56,10 @@ jobs:
       - name: compare the jars
         run: |
           set -euo pipefail
-          jars=()
-          for dir in builds/*/; do
-            jars+=("$(find "$dir" -maxdepth 1 -name 'soundsculptor-*.jar' ! -name '*-sources.jar')")
-          done
-          if [ "${#jars[@]}" -lt 2 ]; then
-            echo "expected a jar from every Minecraft version, found: ${jars[*]}" >&2
+          # One artifact is downloaded straight into builds/, several into builds/<artifact>/, so search both.
+          mapfile -t jars < <(find builds -maxdepth 2 -name 'soundsculptor-*.jar' ! -name '*-sources.jar' | sort)
+          if [ "${#jars[@]}" -lt 1 ]; then
+            echo "expected a jar from every Minecraft version, found none" >&2
             exit 1
           fi
           for jar in "${jars[@]:1}"; do
@@ -82,14 +79,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Mod Menu is optional (FR-12.3): 26.2 runs without it, 26.3 with it, so every run checks both.
-          - minecraft: '26.2'
-            fabric_api: '0.161.0+26.2'
+          # Mod Menu is optional (FR-12.3): every run checks the game with it and without it.
+          - minecraft: '26.3'
+            fabric_api: '0.165.2+26.3'
             modmenu: 'false'
           - minecraft: '26.3'
             fabric_api: '0.165.2+26.3'
             modmenu: 'true'
-    name: client game tests (Minecraft ${{ matrix.minecraft }})
+    name: client game tests (Minecraft ${{ matrix.minecraft }}, Mod Menu ${{ matrix.modmenu == 'true' && 'present' || 'absent' }})
     # A game that cannot create a window hangs instead of exiting; fail fast instead of after 6 hours.
     timeout-minutes: 20
     steps:
@@ -116,7 +113,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gametest-mc${{ matrix.minecraft }}
+          name: gametest-mc${{ matrix.minecraft }}-modmenu-${{ matrix.modmenu }}
           path: |
             build/run/clientGameTest/screenshots/
             build/run/clientGameTest/logs/

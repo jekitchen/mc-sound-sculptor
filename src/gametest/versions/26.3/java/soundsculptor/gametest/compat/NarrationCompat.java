@@ -6,7 +6,7 @@ import net.minecraft.client.gui.narration.NarrationTrigger;
 import net.minecraft.client.gui.narration.ScreenNarrationCollector;
 
 /**
- * Minecraft 26.3 version of the narration helpers. Keep the public API identical to the 26.2 copy.
+ * Minecraft 26.3 version of the narration helpers. Keep the public API identical in every version's copy.
  * 26.3 added a {@link NarrationTrigger} argument; keyboard is used because Sound Sculptor narration is about
  * keyboard focus.
  */

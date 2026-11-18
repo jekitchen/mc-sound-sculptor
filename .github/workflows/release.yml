@@ -14,8 +14,6 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - minecraft: '26.2'
-            fabric_api: '0.161.0+26.2'
           - minecraft: '26.3'
             fabric_api: '0.165.2+26.3'
     name: build (Minecraft ${{ matrix.minecraft }})
@@ -70,9 +68,10 @@ jobs:
       - name: check every version built the same jar
         run: |
           set -euo pipefail
-          jars=(builds/*/soundsculptor-*.jar)
-          if [ "${#jars[@]}" -lt 2 ]; then
-            echo "expected a jar from every Minecraft version, found: ${jars[*]}" >&2
+          # One artifact is downloaded straight into builds/, several into builds/<artifact>/, so search both.
+          mapfile -t jars < <(find builds -maxdepth 2 -name 'soundsculptor-*.jar' ! -name '*-sources.jar' | sort)
+          if [ "${#jars[@]}" -lt 1 ]; then
+            echo "expected a jar from every Minecraft version, found none" >&2
             exit 1
           fi
           for jar in "${jars[@]:1}"; do

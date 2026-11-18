@@ -22,7 +22,7 @@ import java.util.zip.ZipFile;
  * identical, 1 when they differ, 2 on bad arguments. Compare the main jars only: the {@code -sources} jars are not
  * shipped and are out of scope.
  *
- * <pre>java tools/CompareJars.java build-26.2/soundsculptor-X.jar build-26.3/soundsculptor-X.jar</pre>
+ * <pre>java tools/CompareJars.java build-26.3/soundsculptor-X.jar build-26.4/soundsculptor-X.jar</pre>
  */
 public final class CompareJars {
 	private record Entry(int index, byte[] content, long time, int method) {
