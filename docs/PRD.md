@@ -10,7 +10,7 @@ maxismagical had not yet answered questions on scope, so this draft picks defaul
 
 | # | Assumption | Why this default | Sections affected |
 | --- | --- | --- | --- |
-| A1 | Initial build supports Minecraft Java 26.2 and 26.3 (decided by maxismagical). Java 26.x ships unobfuscated, so code uses Mojang's official names (e.g. `SoundEngine`, `SoundInstance`). | Matches the decided platform; Fabric dropped Yarn names after the de-obfuscation change. Verified at M0: `SoundEngine.play(SoundInstance)` and `calculateVolume` exist in both versions. | 7, 12 |
+| A1 | Initial build supports Minecraft Java 26.2 and 26.3 (decided by maxismagical); since 2026-11-17 the first release supports 26.3 only. Java 26.x ships unobfuscated, so code uses Mojang's official names (e.g. `SoundEngine`, `SoundInstance`). | Matches the decided platform; Fabric dropped Yarn names after the de-obfuscation change. Verified at M0: `SoundEngine.play(SoundInstance)` and `calculateVolume` exist in both versions. | 7, 12 |
 | A2 | MVP ships **Sound Sets** (FR-4), the single **Sounds** browser (recently played, full list and search in one tab, FR-1 and FR-3) and **basic fixed zones** (box, Inside mode, hard edge). The alpha is held until Sound Sets and the Sounds browser are done, so they are tested from day 1 (decided 2026-11-11). | Zones are the product's namesake and Sound Sets are how players say what a place sounds like, so a first release without either would miss the main promise. | 5, 10 |
 | A3 | Volume in MVP is 0–100%. Boost to 200% arrives in v1. | Boost needs the riskiest engine change (raising the gain clamp without raising range). | 5, 10 |
 | A4 | Each server or world has exactly one profile, created automatically (MVP). Copying settings from another server and import/export are v1. | Fixed zones need a server/world key from day one; full profile management is a lot of UI. | 5, 10 |
@@ -696,7 +696,7 @@ Profile file sketch (schema version 3; earlier development versions are not migr
 - All version-sensitive code lives in one package (`soundsculptor.mc`). A written porting checklist lists every Mixin target, the drawing adapter, the HUD and outline renderers, and the AC to re-run.
 - Mixins that the mod cannot work without fail at startup with a clear log message naming the missing target, instead of failing silently.
 - Pure logic (patterns, search syntax, precedence, limiter, validation, migrations) has JUnit tests that run without Minecraft, so they survive every port unchanged.
-- **Supported versions.** The first release supports Minecraft 26.2 and 26.3. **One jar runs on both** (decided 2026-11-14; until then each version had its own jar). Each version is still built and tested on its own from one source tree with `-Pminecraft_version`, and both builds must produce the same jar byte for byte, which CI checks; so the jar that ships is exactly what every version's tests ran. The code Sound Sculptor touches differs between 26.2 and 26.3 (the play path and range helper in `SoundEngine`, `SoundInstance.resolve` renamed, `InputConstants.Type` renamed, Screen narration and `LevelRenderer` changes, key codes moving from GLFW to SDL3, `RenderPipeline` moving package); main code reaches the parts that differ through helpers that look them up when the game starts, and never uses Minecraft constants that differ by version. See `docs/PORTING.md`. A later version whose differences cannot be bridged this way gets its own jar again. Every supported version runs the full test plan before each release.
+- **Supported versions.** The first release supports Minecraft 26.3 only (decided 2026-11-17: 26.3 has been out for weeks, most major mods support it, and 26.4 is due before the end of the year). 26.2 was supported until then. **One jar runs on every supported version** (decided 2026-11-14 for 26.2 and 26.3; until then each version had its own jar), and the same approach is kept for adding 26.4. Each version is built and tested on its own from one source tree with `-Pminecraft_version`, and when more than one version is supported every build must produce the same jar byte for byte, which CI checks; so the jar that ships is exactly what every version's tests ran. The code Sound Sculptor touches differed between 26.2 and 26.3 (the play path and range helper in `SoundEngine`, `SoundInstance.resolve` renamed, `InputConstants.Type` renamed, Screen narration and `LevelRenderer` changes, key codes moving from GLFW to SDL3, `RenderPipeline` moving package); main code reaches the parts that differ through helpers that look them up when the game starts, and never uses Minecraft constants that differ by version. See `docs/PORTING.md`. A later version whose differences cannot be bridged this way gets its own jar again. Every supported version runs the full test plan before each release.
 - **Release cadence.** Later versions follow Mojang's release schedule. The goal is an Sound Sculptor release on the day of each official Minecraft release, or within 7 days. To make that possible, Sound Sculptor is tested against Mojang's preview builds (snapshots, pre-releases and release candidates) before the official release. Section 10.5 describes the process.
 
 ### 7.7 Where AI-written code is most likely to go wrong
@@ -776,8 +776,8 @@ Sound Sculptor must coexist with common client mods and be defensible to server 
 
 ### 9.4 Compatibility and packaging
 
-- Java version as required by Minecraft 26.2 (Java 25 assumed; verify). Jar size under 1 MB.
-- Declared dependencies: Fabric Loader, Fabric API, Minecraft 26.2 and 26.3 for the first release (one jar, `["~26.2", "~26.3"]`: releases only, no snapshots or pre-releases; 26.4 pre-release support is planned separately), each tested; later versions added as described in 10.5. Mod Menu listed as "suggests".
+- Java version as required by Minecraft 26.3 (Java 25). Jar size under 1 MB.
+- Declared dependencies: Fabric Loader, Fabric API, Minecraft 26.3 for the first release (`["~26.3"]`: 26.3 and its point releases only, no snapshots or pre-releases; 26.4 pre-release support is planned separately), tested; later versions added as described in 10.5. Mod Menu listed as "suggests".
 - License MIT; source on a public repository; the name contains no "Minecraft".
 
 ## 10. Release plan
@@ -801,7 +801,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M8 | MVP hardening | M8a: noisy-farm stress and soak tests. M8b: accessibility checklist, Mod Menu entry, mod page with fair-play section, release preparation | Performance |
 | M8c | Sound Sets | FR-4: set library and Sound Sets tab, set editor with single-sound and group entries (mute, level 0–100%; limit and cue fields kept for M9/M11), linked sets with the Attached to panel, Duplicate, delete; Everywhere as a place (FR-8.10) and attached sets on every place in order (FR-8.6); Quick changes sets (FR-4.10); precedence in set terms (FR-4.5, FR-9, P1–P5, P13–P16); trace in set terms (FR-14); profile schema 3 and library storage (7.5, FR-11.8); profiles tab, Copy from, export and import carrying sets (FR-11) | Linked-edit bookkeeping; keeping the hot-path budgets |
 | M8d | Sounds browser | FR-1 and FR-3 in one Sounds tab (full list narrowing as you type, Recently played filter, Apply to), replacing the Recently Played and Search tabs; picker mode for adding sounds to a set (FR-1.7); Like this groups (FR-4.8) | Layout at 854 × 480 |
-| M8e | Alpha release | Zones follow where you stand (FR-8, FR-9 and FR-14 reworked on 2026-11-14: the player's feet, smallest zone first, decided at sound start, every sound in scope, Outside mode and fade removed), then re-run 11.2 stress and soak and the 11.5 checklist with Sound Sets; update the mod page, changelog and screenshots; one jar for 26.2 and 26.3; release 0.1 on Modrinth and CurseForge | Regressions from the rework |
+| M8e | Alpha release | Zones follow where you stand (FR-8, FR-9 and FR-14 reworked on 2026-11-14: the player's feet, smallest zone first, decided at sound start, every sound in scope, Outside mode and fade removed), then re-run 11.2 stress and soak and the 11.5 checklist with Sound Sets; update the mod page, changelog and screenshots; Minecraft 26.3 only (26.2 dropped on 2026-11-17); release 0.1 on Modrinth and CurseForge | Regressions from the rework |
 
 ### 10.2 v1 milestones (1.0)
 
@@ -867,7 +867,7 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 | M8 | 11.2 stress and soak, 11.5 checklist |
 | M8c | FR-4, FR-8.10, FR-11 and FR-14 AC; matrix cases P1–P5 and P13–P16; stress test (11.2) still within the 9.1 budgets |
 | M8d | FR-1 and FR-3 AC, including picker mode; 11.5 layout check passes at 854 × 480 |
-| M8e | 11.2 stress and soak, 11.5 checklist, and every MVP AC on 26.2 and 26.3 |
+| M8e | 11.2 stress and soak, 11.5 checklist, and every MVP AC on 26.3 |
 | M9 | FR-7 AC |
 | M10 | 11.3 boost-range test; FR-5 v1 AC |
 | M11–M16 | AC of the FRs each milestone covers; full matrix at M13 |
@@ -926,7 +926,7 @@ Build each case in AZ Test using a cow or villager in a boat as the source, stan
 - [ ] Sodium; Iris with a shader pack; Sound Physics Remastered; Mod Menu present and absent.
 - [ ] Vanilla server, Realms (if available) and singleplayer all work with nothing on the server.
 - [ ] Pseudo-language build: no clipped text. For the alpha (English only) this check is reported, not required: controls and hints already fit text 40% longer, and the remaining list rows at the narrowest widths are fixed in M16, before any translation ships.
-- [ ] Every test above passes on each supported Minecraft version (26.2 and 26.3 for the first release).
+- [ ] Every test above passes on each supported Minecraft version (26.3 for the first release).
 
 ## 12. Risks and assumptions
 
@@ -1013,7 +1013,7 @@ In priority order. Answers will update the decisions log and the affected sectio
 - [ ] **Q4.** Resolved: singleplayer worlds are identified by a small ID file (soundsculptor\_id.txt) in the save folder, with the folder name as fallback (FR-11.1).
 - [ ] **Q5.** Resolved, then made moot on 2026-11-14: Outside zones were removed, and zones are chosen by size, not distance (FR-9).
 - [ ] **Q6.** Resolved: ; opens the screen by default (K clashed with Iris in the M0 check of popular mods' keys); Bypass is F10, which no checked mod uses (FR-12.2, FR-13.1).
-- [ ] **Q7.** Resolved: the initial build supports 26.2 and 26.3; later versions follow Mojang's release schedule with releases on or shortly after each official Minecraft release (sections 7.6 and 10.5).
+- [ ] **Q7.** Resolved: the initial build supported 26.2 and 26.3, and the first release supports 26.3 only (2026-11-17); later versions follow Mojang's release schedule with releases on or shortly after each official Minecraft release (sections 7.6 and 10.5).
 - [ ] **Q8.** Resolved: Music, UI and Voice/Speech were excluded as vanilla-covered (2026-11-08); since 2026-11-14 every sound is in scope (section 5).
 - [ ] **Q9.** Open (Future): transition fades. When you walk into a zone, should sounds already playing that the zone would have muted fade out, and when you leave, should sounds the zone muted fade in (rain coming back gently instead of at full volume at once)? This needs a fade strength setting (Low / Medium / High, or 1 to 10) and brings back some per-tick work for playing sounds (10.3).
 
@@ -1138,3 +1138,4 @@ In priority order. Answers will update the decisions log and the affected sectio
 | 2026-11-14 | Recently played rows show the time since the last play in minutes ("<1m ago", "2m ago", ">1h ago") instead of seconds, so the row stays still while it is read (the compact form fits 854 × 480); hovering the time shows the exact time to the second, counting up. A new play updates a row in place, so a tooltip on its buttons no longer flickers each second | Project owner |
 | 2026-11-14 | Zones follow where the player stands, not where a sound comes from. While the player's feet block is inside a zone, its sets decide how every sound plays, from any source; Everywhere applies when no zone does. A sound is decided at its start, by where the player stands then; walking in or out does not change one-shot sounds or music tracks already playing, but looping sounds (minecart rolling, bee buzz, biome ambience) are decided again when the player enters or leaves a zone or edits a set, and Bypass resets every playing sound at once. Nothing is re-checked every tick. When the player is in several zones, the smallest wins, then list order. Outside mode and fade edges are removed; old profile fields for them are ignored, with no migration, since nothing has been released. Fading playing sounds in and out as the player crosses a boundary is kept as a Future idea (Q9) | Project owner |
 | 2026-11-14 | Every sound is in scope, including background music, UI clicks and Voice/Speech, which the 2026-11-08 rule left alone. Vanilla's sliders still apply first and Sound Sculptor's volume multiplies the result, so a zone can, for example, silence music only in the player's base | Project owner |
+| 2026-11-17 | Minecraft 26.2 is dropped: the first release supports 26.3 only. 26.3 has been out for a few weeks, most major mods support it, and 26.4 is due before the end of the year. The one-jar approach and its version helpers stay, ready for adding 26.4; CI builds and tests 26.3 only, with Mod Menu present and absent | Project owner |
