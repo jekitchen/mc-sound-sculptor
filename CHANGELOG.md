@@ -3,108 +3,70 @@
 All notable changes to Sound Sculptor. Versions follow `major.minor.patch`, with `-alpha` or `-beta` for test releases.
 Each release ships one jar that runs on every supported Minecraft version.
 
-## Unreleased (1.0)
+## 0.1.0-alpha (unreleased)
 
-### Changes
-- **Zones follow where you stand.** While your feet are in a zone, its Sound Sets decide how every sound you hear
-  plays, wherever the sound comes from: mute rain, music and thunder in your base, and they come back as you walk
-  out. Where zones overlap, the smallest one you stand in wins (equal sizes: the one higher in the list). A sound is
-  decided when it starts; looping sounds (a minecart rolling, bees, biome ambience) follow you in and out of zones and
-  follow your edits at once. Bypass puts every playing sound back to vanilla at once. Music, UI clicks and
-  Voice/Speech sounds can now be changed too; vanilla's sliders still apply first. The trace shows where you stood
-  ("You were in: Pen → Base → Everywhere"). Outside mode and fade edges are gone; old profiles load without them.
-- **One jar for Minecraft 26.2 and 26.3**: `soundsculptor-<version>+mc26.2-26.3.jar` replaces the separate jar for each
-  version.
-- **One Sounds tab** replaces Recently Played and Search. It lists every sound the game knows and narrows as you
-  type; turn on **Recently played** to see only what played in the last 3 minutes, with Pause and Sort. Every row has
-  Mute, Level…, Edit entry, **Add to set…** and Why?, and the filter, search and "Apply to" choice are kept while the
-  game runs.
-- **New name: Sound Sculptor** (was Audio Zone during development). Settings now live in `config/soundsculptor/`.
-- **Rules are now Sound Sets.** A Sound Set is a named list of entries, each for one sound or a group of sounds
-  (`minecraft:entity.villager.*`), that mutes them or sets their level. Your sets live in a library on the new
+First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.
+
+### Features
+- **Sounds tab:** every sound the game knows, mods and resource packs included, narrowing as you type: plain words, `|`
+  for either, `-` to exclude, `"phrases"` and `*` wildcards (`villager -ambient`, `block.*.step`). Turn on **Recently
+  played** to see only what you heard in the last 3 minutes, with its subtitle (or a readable name), category, play
+  count, how long ago ("<1m ago", "2m ago"; hover for the exact time), a Close/Near/Far distance band (can be hidden)
+  and its status. Pause and Sort. Every row has Mute, Level…, Edit entry, **Add to set…** and Why?. Press
+  <kbd>;</kbd> to open (rebindable).
+- **Sound Sets:** a Sound Set is a named list of entries, each for one sound or a group of sounds
+  (`minecraft:entity.villager.*`), that mutes them or sets their level (0 to 100%). Sets live in a library on the
   **Sound Sets** tab (New, Duplicate, Rename, Delete) and work in every world. Attach sets to **Everywhere** or to any
   zone, as many as you like and in the order you choose: the higher set wins where two disagree, and inside a set the
   more specific entry wins. A set attached in several places is linked: edit it once and every place changes. The set
-  editor's **Attached to** panel shows and changes where a set is used, and Save says which places it will change.
-  Deleting a set lists every place it is removed from first, other worlds included (by name only).
-- **Quick changes:** Mute, Level… and Edit entry on the Sounds tab go into the place's own **Quick changes**, a set
-  that belongs to Everywhere or to one zone and always comes first there. Save Quick changes to the library to reuse them.
-- **"Why does it sound like this?" in sets:** the trace lists, for Everywhere and each zone, the sets with a matching
-  entry, which entry won and why ("Higher in the list", "Exact sound ID"), and how many places use a linked set.
-  **Add to Quick changes** is offered at every place whose Quick changes has no entry for the sound, so a mute from a
-  library set can be lifted in one place without changing the set.
-- **Profiles, export and import carry Sound Sets:** profile rows count Sound Sets and zones; Copy from copies the sets on
-  Everywhere; an export includes the sets it uses, and importing adds them to your library, asking for a new name
-  when one is taken. Profiles from earlier test builds can't be read and are set aside with a message.
-- Long lists of places in the delete warning and the Save confirmation scroll, so Delete and Save stay on screen.
-- A save that Windows holds back for a moment (a virus scanner or the search indexer reading the file) is retried, and
-  is written at the latest when the game closes.
-- Buttons and choices grow to fit longer text, and long hints and Diagnostics lines wrap instead of being cut off.
-- Recently played rows say how long ago a sound played in minutes ("<1m ago", "2m ago"); hover the time to see
-  it to the second, counting up. A button's tooltip on a recently played row no longer flickers every second.
-- Unmute right after Mute puts the sound's entry back exactly as it was: a "Not muted" entry no longer keeps the Cue
-  the Mute added, and an entry's own Cue is no longer dropped.
-- An export larger than 1 MB is saved with a warning that it can't be imported as it is; only a failed write is
-  reported as a failed export.
-- A Sound Sets folder that can be read only in part still loads the sets it lists, and says so.
-- A profile or Sound Set file with an empty or malformed set or entry ID is set aside with a message naming the place.
-
-### Features
-- **Profiles tab:** every server and world with a profile, with its name, address or world, Sound Set and zone counts
-  and when you last joined. Copy another server's Sound Sets on Everywhere, personal bubbles and settings into this
-  world (fixed zones are never copied), rename, reset or delete a profile. The profile of the world you are in can be reset but not
-  deleted. In singleplayer, "Give this copy its own profile" for a copied world.
-- **Export and import:** Export saves a profile, fixed zones included, to `config/soundsculptor/exports/`. Import a file by
-  dropping it on the Profiles tab or from `config/soundsculptor/imports/`. Files are checked first, and a dialog says what
-  will change; fixed zones made for another server are skipped. A broken or out-of-range file changes nothing.
-- **Undo:** Mute, Unmute, Level… and Add to set… on the Sounds tab, On/Off, Move and Detach in a place's Sound Sets, New,
-  Duplicate, Rename and Delete on the Sound Sets tab, and On/Off and Delete on the Zones list apply at once and show a
-  5-second toast with **Undo**. Press <kbd>Ctrl</kbd>+<kbd>Z</kbd> (<kbd>Cmd</kbd>+<kbd>Z</kbd>
-  on Mac) or Tab to the button. The toast stays while Undo has focus. A new mute entry starts with the profile's Cue
-  default.
-- **Apply to:** the Sounds tab has an "Apply to" selector: Everywhere, or a zone you are standing in. With a
-  zone chosen, Mute and Edit entry work on that zone's Quick changes, so a zone entry can be made straight from a search.
-- **Edit from "Why?":** every entry line in the sound trace has On/Off, Mute and Level, every zone line has On/Off,
-  and each opens its full editor. Editing an entry of a linked set changes every place that uses it, and says so.
-  Changes save at once, the trace updates straight away ("Predicted for next play") and a toast offers Undo.
-- **Add to set…** on a Sounds row adds the sound, or one of its **Like this** groups (`minecraft:entity.villager.*`,
-  with how many sounds each matches), to a library Sound Set or a new one, with Undo.
-- **Add sounds…** in the set editor opens the Sounds picker: the same list and search with a checkbox on each row and
-  **Like this…** for groups. What the set already has is marked "In this set"; Add puts one entry per pick into the set,
-  and the set editor's Save decides.
-- **This sound / Like this** in the entry editor: plain words in the pattern field list the matching sounds; This sound
-  uses the sound's exact ID, and Like this lists its groups, closest first, each with how many sounds it matches.
-- In English, lists fit at 854 × 480 and GUI scales 1 to 4: columns and row buttons are sized from their text, and a long zone
-  name gives way so a sound's ID stays readable.
-
-## 0.1.0-alpha (unreleased)
-
-First public alpha, for Minecraft Java Edition 26.2 and 26.3 with Fabric.
-
-### Features
-- **Recently Played:** every sound you can hear, live, with its subtitle (or a readable name), ID, category, play count,
-  a Close/Near/Far distance band (can be hidden) and status (Playing, Muted). Pause, sort and filter; Mute, Edit and
-  "Why?" on every row. Press <kbd>;</kbd> to open (rebindable).
-- **Search:** every sound the game knows, including mods and resource packs, with plain words, `|` for either, `-` to
-  exclude, `"phrases"` and `*` wildcards. Same quick actions as Recently Played.
-- **Rules:** mute or turn down (0 to 100%) one sound or a whole family with wildcard patterns such as
-  `minecraft:entity.villager.*`. More specific rules win. The editor previews the matching sounds and says when a rule
-  is partly overridden. Type plain words in the pattern field (`villager hurt`) to find a sound, then pick **This sound** or
-  **Like this** for its family.
+  editor's **Attached to** panel shows where a set is used, and Save says which places it will change.
+- **Building sets:** **Add sounds…** in the set editor opens the same Sounds list with a checkbox on each row.
+  **Like this** offers a sound's groups, closest first, each with how many sounds it matches. Type plain words in an
+  entry's pattern field (`villager hurt`) to find a sound, then pick **This sound** or **Like this**. The entry editor
+  previews the sounds a pattern matches.
+- **Quick changes:** Mute, Level… and Edit entry on the Sounds tab go into the place's own **Quick changes**, a set that
+  belongs to Everywhere or to one zone and always comes first there. **Apply to** chooses the place: Everywhere, or a
+  zone you are standing in. Save Quick changes to the library to reuse them.
 - **Zones:** boxes you draw by marking two corners in the world, then fine-tune side by side (Grow, Shrink), with the
-  size shown on screen while you mark. Each zone has its own rules (new or copied from existing ones), which apply while you stand in it. Where zones overlap, the smallest wins. Outlines in the zone's color with its name, shown always,
-  only while editing, or never.
-- **Why does it sound like this?** For any sound: every rule and zone that touched it, which one won and why, and the
-  final volume. Copy as text.
-- **A profile per server and world,** created on first join and kept across restarts. Outside a world nothing changes.
-- **Bypass** (<kbd>F10</kbd>) turns every effect off at once; a broken setting or an error never stops a sound.
-- **Diagnostics:** live sounds per second, time per sound, cache hit rate, memory, and Copy report.
+  size shown while you mark. While your feet are in a zone, its Sound Sets decide how every sound you hear plays,
+  wherever the sound comes from: mute rain, music and thunder in your base, and they come back as you walk out. Where
+  zones overlap, the smallest one you stand in wins (equal sizes: the one higher in the list); Everywhere applies where
+  no zone does. Outlines in the zone's color with its name, shown always, only while editing, or never.
+- **How sounds are decided:** a sound is decided when it starts, by where you stand then. Looping sounds (a minecart
+  rolling, bees, biome ambience) follow you in and out of zones and follow your edits at once. Music, UI clicks and
+  Voice/Speech sounds can be changed too; vanilla's sliders still apply first.
+- **"Why does it sound like this?"** For any sound: where you stood ("You were in: Pen → Base → Everywhere"), the sets
+  with a matching entry, which entry won and why, how many places use a linked set, and the final volume. Every entry
+  line has On/Off, Mute and Level, and every zone line has On/Off; changes save at once and the trace updates
+  ("Predicted for next play"). **Add to Quick changes** lifts a library set's mute in one place without changing the
+  set. Copy as text.
+- **Undo:** quick actions, set and zone list actions, and edits from "Why?" apply at once and show a 5-second toast with
+  **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac).
+- **Profiles:** one per server and world, created on first join and kept across restarts. The **Profiles** tab lists
+  them with Sound Set and zone counts and when you last joined. Copy another profile's Sound Sets on Everywhere and its
+  settings into this world (zones are never copied), rename, reset or delete a profile. In singleplayer, "Give this copy
+  its own profile" for a copied world. Outside a world nothing changes.
+- **Export and import:** Export saves a profile, with its zones and the Sound Sets it uses, to
+  `config/soundsculptor/exports/`. Import a file by dropping it on the Profiles tab or from
+  `config/soundsculptor/imports/`. A dialog says what will change first; imported sets join your library, asking for a
+  new name when one is taken, and zones made for another server are skipped. A broken file changes nothing.
+- **Bypass** (<kbd>F10</kbd>) puts every sound, playing ones included, back to vanilla at once. A broken setting or an
+  error never stops a sound.
+- **Diagnostics:** sounds per second, time per sound, cache hit rate, memory, and Copy report.
 - **Mod Menu** (optional) opens the Sound Sculptor screen.
-- Keyboard-only use, narrator support, and layouts checked at every GUI scale.
+- Keyboard-only use, narrator support, and layouts checked at GUI scales 1 to 4, down to 854 × 480.
 
 ### Fair play
 Sound Sculptor only changes how loud sounds are on your own computer, and never shows more than vanilla sounds and subtitles
 do. It sends nothing to servers. See "For server admins" in the README.
 
+### For testers of earlier builds
+- The mod was called Audio Zone during development. Settings now live in `config/soundsculptor/`.
+- Profiles from earlier test builds can't be read; they are set aside with a message.
+- Rules became Sound Sets, and Recently Played and Search became one Sounds tab.
+- Minecraft 26.2 is no longer supported; earlier test builds ran on 26.2 too.
+- Zones follow where you stand instead of where a sound comes from. Outside mode and fade edges are gone (zones that
+  used them load without them), and so are personal bubbles.
+
 ### Not yet included (planned for 1.0)
-Volume boost above 100%, on-screen cues for muted sounds, repeat limits, the point-at-a-mob inspector, cylinders and personal bubbles, copying settings between servers, and import/export.
+Volume boost above 100%, on-screen cues for muted sounds, repeat limits, the point-at-a-mob inspector and cylinder zones.
