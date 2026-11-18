@@ -159,6 +159,9 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			play(context, COW, 3.0);
 			context.runOnClient(mc -> {
 				SoundsPanel panel = sounds(mc);
+				// Take in whatever played since the last refresh (the cow, or background music, which is listed too), so
+				// the measured refresh sees only the villager's first play. Nothing else can play within this one step.
+				panel.refresh();
 				Vec3 listener = mc.getSoundManager().getListenerTransform().position();
 				mc.getSoundManager().play(new SimpleSoundInstance(Identifier.parse(VILLAGER), SoundSource.NEUTRAL, 1.0F, 1.0F, RandomSource.create(),
 						false, 0, SoundInstance.Attenuation.LINEAR, listener.x() + 3, listener.y(), listener.z(), false));
