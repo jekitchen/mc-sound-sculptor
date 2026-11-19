@@ -25,6 +25,11 @@ jobs:
           distribution: 'temurin'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # Caches Gradle's downloads (dependencies, plugins, Minecraft jars and assets) between runs, so a run does not
+      # fetch them all again and a brief outage of a Maven repository does not fail it. The cache is saved from main
+      # and read everywhere else.
+      - name: setup gradle with caching
+        uses: gradle/actions/setup-gradle@v6
       - name: build and test
         run: ./gradlew build -Pminecraft_version=${{ matrix.minecraft }} -Pfabric_api_version=${{ matrix.fabric_api }}
       - name: capture build artifacts
@@ -103,6 +108,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # Caches Gradle's downloads (dependencies, plugins, Minecraft jars and assets) between runs, so a run does not
+      # fetch them all again and a brief outage of a Maven repository does not fail it. The cache is saved from main
+      # and read everywhere else.
+      - name: setup gradle with caching
+        uses: gradle/actions/setup-gradle@v6
       - name: run client game tests
         # Runners have no audio device; OpenAL Soft's silent "null" output keeps the sound engine running
         # so the sound tests (M1 onward) can observe sounds.
