@@ -12,11 +12,10 @@ import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
 
 /**
- * The zone editor's values (PRD 6.1): name, color, coordinates, shape and sizes. The zone's attached sets are edited
- * in their own editors and kept here as they are.
+ * The zone editor's values (PRD 6.1): name, color, coordinates and the box's size (zones are boxes only, FR-8.3). The
+ * zone's attached sets are edited in their own editors and kept here as they are.
  *
- * <p>Only the fields in use are checked: the sizes of the current shape.
- * The color is kept beside the zone (it belongs to the profile model): read it with {@link #color()}.
+ * <p>The color is kept beside the zone (it belongs to the profile model): read it with {@link #color()}.
  */
 public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 	/** The zone editor's fields, for mapping them to widgets. */
@@ -89,10 +88,13 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		values.put(Field.WORLD_KEY, zone.worldKey());
 		values.put(Field.DIMENSION, zone.dimension());
 		String size = Numbers.format(DEFAULT_SIZE);
-		Shape.Box box = (Shape.Box) zone.shape();
-		values.put(Field.WIDTH, Numbers.format(box.width()));
-		values.put(Field.HEIGHT, Numbers.format(box.height()));
-		values.put(Field.DEPTH, Numbers.format(box.depth()));
+		switch (zone.shape()) {
+			case Shape.Box box -> {
+				values.put(Field.WIDTH, Numbers.format(box.width()));
+				values.put(Field.HEIGHT, Numbers.format(box.height()));
+				values.put(Field.DEPTH, Numbers.format(box.depth()));
+			}
+		}
 
 		// Name, coordinates, world and dimension have no app-wide default: reset puts back the value at opening.
 		EnumMap<Field, String> defaults = new EnumMap<>(values);

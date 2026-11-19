@@ -65,6 +65,13 @@ class ProfileImportTest {
 	}
 
 	@Test
+	void aCylinderZoneIsRefusedOnImport() {
+		// Zones are boxes only (owner decision 2026-11-18): an export with a cylinder cannot be imported.
+		assertEquals("Zone 3, field shape type: \"cylinder\" is not a supported shape.",
+				problem(zoneFile("{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}")));
+	}
+
+	@Test
 	void unknownShapeIsRefused() {
 		assertEquals("Zone 3, field shape type: \"cone\" is not a supported shape.",
 				problem(zoneFile("{\"type\": \"cone\"}")));

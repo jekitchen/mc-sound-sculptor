@@ -1006,17 +1006,17 @@ public final class SoundsPanel {
 		int width = Math.min(list.getWidth(), host.width - x - Theme.PADDING);
 		int height = Math.max(SculptList.ROW_HEIGHT + Theme.WIDGET_HEIGHT + 3 * Theme.GAP,
 				host.height - SculptScreen.FOOTER_HEIGHT - Theme.PADDING - y);
-		SculptButton done = SculptButton.text(Component.translatable("soundsculptor.ui.back"), host::closeOverlay);
-		int listHeight = height - done.getHeight() - 3 * Theme.GAP;
+		SculptButton back = SculptButton.text(Component.translatable("soundsculptor.ui.back"), host::closeOverlay);
+		int listHeight = height - back.getHeight() - 3 * Theme.GAP;
 		SculptList groups = new SculptList(width - 2 * Theme.GAP, listHeight,
 				Component.translatable("soundsculptor.picker.like_this.list", soundName(soundId)));
 		groups.setPosition(x + Theme.GAP, y + Theme.GAP);
 		groups.setWidth(width - 2 * Theme.GAP);
 		groups.setHeight(listHeight);
-		done.setPosition(x + width - Theme.GAP - done.getWidth(), groups.getBottom() + Theme.GAP);
+		back.setPosition(x + width - Theme.GAP - back.getWidth(), groups.getBottom() + Theme.GAP);
 		likeThisList = groups;
 		groups.setRows(groupRows());
-		host.openOverlay(x, y, width, height, List.of(groups, done), groups, () -> {
+		host.openOverlay(x, y, width, height, List.of(groups, back), groups, () -> {
 			String sound = likeThisSound;
 			likeThisList = null;
 			likeThisSound = null;
@@ -1043,7 +1043,10 @@ public final class SoundsPanel {
 		if (pickedHere) {
 			picker.toggleGroup(pattern);
 		}
-		if (!addPicks.getAsBoolean() && pickedHere) {
+		if (addPicks.getAsBoolean()) {
+			return; // added, and the picker has closed
+		}
+		if (pickedHere) {
 			picker.toggleGroup(pattern);
 		}
 		picksChanged.run();

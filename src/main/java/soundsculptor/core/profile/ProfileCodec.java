@@ -365,11 +365,7 @@ public final class ProfileCodec {
 		Fields probe = new Fields(json, z.where(), null, null);
 		// Zones are boxes only: spheres and cylinders were dropped before release (owner decisions 2026-11-13 and
 		// 2026-11-18). Any other shape name, those included, is "not a supported shape".
-		JsonElement typeValue = json.get("type");
-		if (typeValue != null && typeValue.isJsonPrimitive() && typeValue.getAsJsonPrimitive().isString()
-				&& !"box".equals(typeValue.getAsString())) {
-			throw probe.problem("shape type", ProfileText.UNSUPPORTED_SHAPE, describe(typeValue));
-		}
+		probe.refuseAllBut("type", "shape type", "box", ProfileText.UNSUPPORTED_SHAPE);
 		String type = probe.choice("type", "shape type", "box");
 		Fields s = z.object("shape", z.where(), SHAPE_FIELDS.get(type));
 		return new Shape.Box(s.number("width", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE),
@@ -510,6 +506,18 @@ public final class ProfileCodec {
 			JsonElement value = json.get(field);
 			if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
 					&& removed.equals(value.getAsString())) {
+				throw problem(label, key, describe(value));
+			}
+		}
+
+		/**
+		 * Refuses every word but {@code kept}, with its own message {@code key} instead of the list of choices (one
+		 * choice reads badly as a list). Does nothing for a value that is not a word, which {@link #choice} reports.
+		 */
+		void refuseAllBut(String field, String label, String kept, String key) throws ProfileFormatException {
+			JsonElement value = json.get(field);
+			if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+					&& !kept.equals(value.getAsString())) {
 				throw problem(label, key, describe(value));
 			}
 		}

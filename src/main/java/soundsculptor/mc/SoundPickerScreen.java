@@ -104,10 +104,9 @@ public final class SoundPickerScreen extends SculptScreen {
 	}
 
 	/**
-	 * Adds the picks to the set editor's draft and returns to it; with more picks than the set has room for, shows the
-	 * limit and stays.
+	 * Adds every pick to the set editor's draft and returns to it. With more picks than the set has room for, shows the
+	 * limit, stays and returns false.
 	 */
-	/** Adds every pick to the draft and closes the picker; returns false, showing the limit, if they do not fit. */
 	public boolean add() {
 		// Checked against the draft as it is now (PickerModel.canAddTo), so every entry below fits.
 		SoundSet current = draft.build();
