@@ -300,7 +300,9 @@ public final class ZoneEditorScreen extends SculptScreen {
 			}
 		}
 		Zone zone = draft.build();
-		return zone.shape() instanceof Shape.Box box ? new BoxEdit.Placed(zone.anchor(), box) : null;
+		return switch (zone.shape()) {
+			case Shape.Box box -> new BoxEdit.Placed(zone.anchor(), box);
+		};
 	}
 
 	/** Puts a box's center and size into the editor (from marking corners or moving a side). */

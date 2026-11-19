@@ -42,6 +42,8 @@ import soundsculptor.mc.ui.SculptScreen;
  *   sounds already picked, and closes the picker; Back only closes the pop-up; a group the set has is marked "In this
  *   set".</li>
  *   <li>{@code likeThisAddOnFullSet}: a group's Add on a full set shows the limit and leaves nothing picked.</li>
+ *   <li>{@code likeThisByKeyboardAndClosing}: Esc and a click outside close only the pop-up; Enter on a group's Add
+ *   adds it, through the real keyboard and mouse.</li>
  *   <li>{@code overLimitShowsMessage}: picks that would pass 512 entries show the limit and the picker stays.</li>
  *   <li>{@code pickerLeavesTheTabAlone}: the picker's filter and search are its own, so the Sounds tab keeps its own;
  *   its header names the set as the set editor does.</li>
@@ -63,6 +65,7 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 			reopenMarksThemInThisSet(context);
 			likeThisAddsGroupEntry(context);
 			likeThisAddOnFullSet(context);
+			likeThisByKeyboardAndClosing(context);
 			overLimitShowsMessage(context);
 			pickerLeavesTheTabAlone(context);
 		}
@@ -245,6 +248,43 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 			SculptList.Row marked = context.computeOnClient(mc -> sounds(mc).likeThisList.findRow(COW_GROUP));
 			check(marked.buttons().isEmpty() && marked.columnTexts().contains("✔ In this set"), "the group is marked In this set");
 		} finally {
+			before.restore(context);
+		}
+	}
+
+	/** Real keys and clicks: Esc and a click outside close only the pop-up; Enter on the focused Add adds the group. */
+	private static void likeThisByKeyboardAndClosing(ClientGameTestContext context) {
+		Snapshot before = Snapshot.take(context);
+		try {
+			putSet(context, FARM);
+			openPicker(context, FARM.id());
+			showCows(context);
+
+			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			context.getInput().pressKey(InputConstants.KEY_ESCAPE);
+			context.waitTicks(1);
+			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && !picker(mc).hasOverlay()
+					&& likeThisButton(mc, COW).isFocused()), "Esc closes only the pop-up and returns to Like this…");
+
+			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			double[] outside = context.computeOnClient(mc -> {
+				double scale = mc.getWindow().getGuiScale();
+				return new double[] {4 * scale, (picker(mc).height - 4) * scale};
+			});
+			context.getInput().setCursorPos(outside[0], outside[1]);
+			context.getInput().pressMouse(0);
+			context.waitTicks(1);
+			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && !picker(mc).hasOverlay()),
+					"a click outside closes only the pop-up");
+
+			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			check(context.computeOnClient(mc -> groupAdd(mc, COW_GROUP).isFocused()), "the closest group's Add has focus");
+			context.getInput().pressKey(InputConstants.KEY_RETURN);
+			context.waitForScreen(SetEditorScreen.class);
+			check(context.computeOnClient(mc -> editor(mc).draft().entries().stream().anyMatch(e -> e.pattern().text().equals(COW_GROUP))),
+					"Enter on Add adds the group");
+		} finally {
+			context.getInput().setCursorPos(0, 0);
 			before.restore(context);
 		}
 	}

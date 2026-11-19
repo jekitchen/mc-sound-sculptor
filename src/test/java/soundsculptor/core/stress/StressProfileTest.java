@@ -47,9 +47,8 @@ class StressProfileTest {
 		// PRD 11.2: boxes of different sizes and proportions (cylinders were dropped 2026-11-18).
 		List<Zone> zones = StressProfile.zones(WORLD, OVERWORLD);
 		assertEquals(Precedence.MAX_ZONES, zones.size());
-		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box));
-		assertTrue(zones.stream().allMatch(z -> z.shape() instanceof Shape.Box));
-		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box b && b.width() != b.height()), "not only cubes");
+		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box b && b.width() != b.height()), "flat or tall boxes, not only cubes");
+		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box b && b.width() != b.depth()), "boxes longer one way than the other");
 		assertTrue(zones.stream().anyMatch(z -> z.anchor().equals(StressProfile.PLAYER)), "zones centred on the player");
 	}
 
