@@ -72,8 +72,6 @@ Questions or concerns: open an issue with "fair play" in the title at
 - Tested with Mod Menu installed and without it, and with Sodium, Iris with a shader pack, and Sound Physics
   Remastered.
 - Tested on a vanilla server and in singleplayer.
-- Realms: not tested yet. A Realm's settings are kept under its server address; if that address changes between visits,
-  Sound Sculptor may start the Realm with a fresh profile. Please report it if that happens.
 
 ## Status
 

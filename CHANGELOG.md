@@ -70,8 +70,7 @@ do. It sends nothing to servers. See "For server admins" in the README.
 
 ### Tested with
 Mod Menu (present and absent), Sodium, Iris with a shader pack and Sound Physics Remastered; a vanilla server and
-singleplayer. Realms is not tested yet: a Realm's settings are kept under its server address, so if that address
-changes between visits, the Realm may start with a fresh profile.
+singleplayer.
 
 ### Not yet included (planned for 1.0)
 Volume boost above 100%, on-screen cues for muted sounds, repeat limits and the point-at-a-mob inspector.
