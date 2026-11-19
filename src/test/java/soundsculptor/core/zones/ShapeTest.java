@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** PRD FR-8.3: box and cylinder, centred on the anchor, with size limits. Offsets are from the anchor. */
+/** PRD FR-8.3: a box (the only shape), centred on the anchor, with size limits. Offsets are from the anchor. */
 class ShapeTest {
 	@Test
 	void boxExtendsHalfItsSizeEachWay() {
@@ -20,9 +20,8 @@ class ShapeTest {
 	}
 
 	@Test
-	void volumesAreTheGeometricVolume() {
+	void volumeIsTheGeometricVolume() {
 		assertEquals(20 * 8 * 30, new Shape.Box(20, 8, 30).volume(), 1e-9);
-		assertEquals(Math.PI * 100 * 20, new Shape.Cylinder(10, 20).volume(), 1e-9);
 	}
 
 	@Test
@@ -36,7 +35,6 @@ class ShapeTest {
 
 	@Test
 	void nanSizesAreRejected() {
-		assertThrows(IllegalArgumentException.class, () -> new Shape.Cylinder(Double.NaN, 1));
 		assertThrows(IllegalArgumentException.class, () -> new Shape.Box(Double.NaN, 1, 1));
 	}
 }

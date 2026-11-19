@@ -140,8 +140,8 @@ public final class PrecedenceSetsClientGameTest implements FabricClientGameTest 
 	private static void p16(ClientGameTestContext context, String key) {
 		SoundSet farm = new SoundSet("p16-farm", "Farm animals", List.of(SetEntry.of("e1", COWS).withVolume(30)));
 		Vec3 player = context.computeOnClient(mc -> mc.player.position());
-		Zone a = new Zone("p16-a", "A", true, key, OVERWORLD, new Point(player.x, player.y, player.z), new Shape.Cylinder(4, 8), PlaceSets.EMPTY.attach(farm.id()));
-		Zone b = new Zone("p16-b", "B", true, key, OVERWORLD, new Point(player.x + 40, player.y, player.z), new Shape.Cylinder(4, 8), PlaceSets.EMPTY.attach(farm.id()));
+		Zone a = new Zone("p16-a", "A", true, key, OVERWORLD, new Point(player.x, player.y, player.z), new Shape.Box(8, 8, 8), PlaceSets.EMPTY.attach(farm.id()));
+		Zone b = new Zone("p16-b", "B", true, key, OVERWORLD, new Point(player.x + 40, player.y, player.z), new Shape.Box(8, 8, 8), PlaceSets.EMPTY.attach(farm.id()));
 		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()).withZones(List.of(a, b)),
 				ws.library().put(farm))));
 		check(play(context, AMBIENT) == 0.3F, "P16: the cow in A plays at the set's 30%");
@@ -171,7 +171,7 @@ public final class PrecedenceSetsClientGameTest implements FabricClientGameTest 
 		check(play(context, AMBIENT) == 0.6F, "P16: the cow in A plays at 60%");
 		check("A".equals(lastRow(context, AMBIENT).zoneName()), "P16: the row still names zone A");
 		String trace = traceText(context, AMBIENT);
-		check(trace.contains("You were in: A \u2192 Everywhere\n  A (Cylinder, radius 4, height 8)\n")
+		check(trace.contains("You were in: A \u2192 Everywhere\n  A (Box 8 × 8 × 8)\n")
 				&& trace.contains("    Farm animals · used in 2 places\n      minecraft:entity.cow.*: Level 60%\n"),
 				"P16: the trace shows A's Farm animals at 60%:\n" + trace);
 	}
@@ -181,14 +181,14 @@ public final class PrecedenceSetsClientGameTest implements FabricClientGameTest 
 		SetEntry muteCows = SetEntry.of("m", COWS).withMute(true);
 		Vec3 player = context.computeOnClient(mc -> mc.player.position());
 		Vec3 cow = context.computeOnClient(mc -> cowInBoat(mc).position());
-		Zone aroundPlayer = new Zone("p17", "Here", true, key, OVERWORLD, new Point(player.x, player.y, player.z), new Shape.Cylinder(3, 6),
+		Zone aroundPlayer = new Zone("p17", "Here", true, key, OVERWORLD, new Point(player.x, player.y, player.z), new Shape.Box(6, 6, 6),
 				PlaceSets.EMPTY.withQuickEntries(List.of(muteCows)));
 		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()).withZones(List.of(aroundPlayer)),
 				ws.library())));
 		check(play(context, AMBIENT) == 0.0F, "P17: the cow outside the zone you stand in is muted");
 		check("Here".equals(lastRow(context, AMBIENT).zoneName()), "P17: the row names the zone you stand in");
 
-		Zone aroundCow = new Zone("p18", "Pen", true, key, OVERWORLD, new Point(cow.x, cow.y, cow.z), new Shape.Cylinder(3, 6),
+		Zone aroundCow = new Zone("p18", "Pen", true, key, OVERWORLD, new Point(cow.x, cow.y, cow.z), new Shape.Box(6, 6, 6),
 				PlaceSets.EMPTY.withQuickEntries(List.of(muteCows)));
 		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()).withZones(List.of(aroundCow)),
 				ws.library())));

@@ -19,8 +19,8 @@ class ZoneSummaryTest {
 	private static final String WORLD = "play.example.net";
 	private static final String OVERWORLD = "minecraft:overworld";
 
-	private static Zone cylinder(double radius) {
-		return new Zone("z", "Hall", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Cylinder(radius, 2 * radius), PlaceSets.EMPTY);
+	private static Zone cube(double half) {
+		return new Zone("z", "Hall", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Box(2 * half, 2 * half, 2 * half), PlaceSets.EMPTY);
 	}
 
 	/** With the player's feet in block {@code (x, 64, 0)}. */
@@ -30,42 +30,42 @@ class ZoneSummaryTest {
 
 	@Test
 	void hereWhenThePlayerIsInside() {
-		assertEquals("Here", where(cylinder(10), WORLD, OVERWORLD, 3));
+		assertEquals("Here", where(cube(10), WORLD, OVERWORLD, 3));
 	}
 
 	@Test
 	void roundedBlocksFromTheFeetBlockCenterToTheAnchorWhenOutside() {
-		assertEquals("120 blocks away", where(cylinder(10), WORLD, OVERWORLD, 119));
-		assertEquals("121 blocks away", where(cylinder(10), WORLD, OVERWORLD, 120));
-		assertEquals(LocationKind.AWAY, ZoneSummary.location(cylinder(10), WORLD, OVERWORLD, new FeetBlock(50, 64, 0)).kind());
+		assertEquals("120 blocks away", where(cube(10), WORLD, OVERWORLD, 119));
+		assertEquals("121 blocks away", where(cube(10), WORLD, OVERWORLD, 120));
+		assertEquals(LocationKind.AWAY, ZoneSummary.location(cube(10), WORLD, OVERWORLD, new FeetBlock(50, 64, 0)).kind());
 	}
 
 	@Test
 	void theEdgeBlockIsHereAndTheNextIsNot() {
-		// Radius 10 from x = 0: block 9's center (9.5) is inside, block 10's (10.5) is not.
-		assertEquals("Here", where(cylinder(10), WORLD, OVERWORLD, 9));
-		assertEquals("11 blocks away", where(cylinder(10), WORLD, OVERWORLD, 10));
+		// Half-width 10 from x = 0: block 9's center (9.5) is inside, block 10's (10.5) is not.
+		assertEquals("Here", where(cube(10), WORLD, OVERWORLD, 9));
+		assertEquals("11 blocks away", where(cube(10), WORLD, OVERWORLD, 10));
 	}
 
 	@Test
 	void aZoneThatIsOffIsStillHere() {
-		assertEquals("Here", where(cylinder(10).withEnabled(false), WORLD, OVERWORLD, 3));
+		assertEquals("Here", where(cube(10).withEnabled(false), WORLD, OVERWORLD, 3));
 	}
 
 	@Test
 	void otherWorldBeforeOtherDimension() {
-		assertEquals("Other world", where(cylinder(10), "other.example.net", "minecraft:the_nether", 0));
-		assertEquals("Other dimension", where(cylinder(10), WORLD, "minecraft:the_nether", 0));
+		assertEquals("Other world", where(cube(10), "other.example.net", "minecraft:the_nether", 0));
+		assertEquals("Other dimension", where(cube(10), WORLD, "minecraft:the_nether", 0));
 	}
 
 
 	@Test
 	void shapeAndWhereChips() {
-		assertEquals(List.of("Cylinder, radius 10, height 20", "Here"), chips(cylinder(10)));
+		assertEquals(List.of("Box 20 × 20 × 20", "Here"), chips(cube(10)));
 		Zone box = new Zone("b", "Farm", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Box(20, 8, 30.5), PlaceSets.EMPTY);
 		assertEquals(List.of("Box 20 × 8 × 30.5", "51 blocks away"), chipsAt(box, 50));
-		Zone tower = new Zone("c", "Tower", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Cylinder(6, 40), PlaceSets.EMPTY);
-		assertEquals(List.of("Cylinder, radius 6, height 40", "Here"), chips(tower));
+		Zone tower = new Zone("c", "Tower", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Box(12, 40, 12), PlaceSets.EMPTY);
+		assertEquals(List.of("Box 12 × 40 × 12", "Here"), chips(tower));
 	}
 
 	private static List<String> chips(Zone zone) {

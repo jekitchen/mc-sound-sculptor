@@ -269,7 +269,7 @@ public final class ProfilesClientGameTest implements FabricClientGameTest {
 	}
 
 	private static Zone zone(String id, String key) {
-		return new Zone(id, "Zone " + id, true, key, "minecraft:overworld", new Point(0, -60, 0), new Shape.Cylinder(8, 16), PlaceSets.EMPTY);
+		return new Zone(id, "Zone " + id, true, key, "minecraft:overworld", new Point(0, -60, 0), new Shape.Box(16, 16, 16), PlaceSets.EMPTY);
 	}
 
 	private static void check(boolean condition, String message) {

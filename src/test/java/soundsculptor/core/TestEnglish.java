@@ -125,7 +125,6 @@ public final class TestEnglish implements Translator {
 			Map.entry("soundsculptor.summary.rule.matches", "Matching sounds: %s"),
 			// Zone summaries (Zones tab row, PRD 6.1)
 			Map.entry("soundsculptor.summary.shape.box", "Box %1$s × %2$s × %3$s"),
-			Map.entry("soundsculptor.summary.shape.cylinder", "Cylinder, radius %1$s, height %2$s"),
 			Map.entry("soundsculptor.summary.zone.here", "Here"),
 			Map.entry("soundsculptor.summary.zone.away", "%s blocks away"),
 			Map.entry("soundsculptor.summary.zone.other_world", "Other world"),

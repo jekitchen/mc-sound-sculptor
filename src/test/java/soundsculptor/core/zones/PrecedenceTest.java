@@ -144,15 +144,15 @@ class PrecedenceTest {
 	}
 
 	@Test
-	void cylindersContainTheBlocksWhoseCentresAreInside() {
-		Zone c = new Zone("c", "c", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(5, 10),
+	void boxesContainTheBlocksWhoseCentresAreInside() {
+		Zone c = new Zone("c", "c", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(10, 10, 10),
 				quick(villagers("rc").withMute(true)));
 		Precedence p = precedence(List.of(), List.of(c));
 		SoundDecision out = new SoundDecision();
 		p.decide(VILLAGER, at(p, WORLD, OVERWORLD, 4, 0, 0), out);
-		assertEquals(0, out.volumePercent(), 1e-6, "block 4's centre is 4.5 from the axis");
+		assertEquals(0, out.volumePercent(), 1e-6, "block 4's centre is 4.5 from the anchor, inside the half-width 5");
 		p.decide(VILLAGER, at(p, WORLD, OVERWORLD, 5, 0, 0), out);
-		assertEquals(100, out.volumePercent(), 1e-6, "block 5's centre is 5.5 from the axis");
+		assertEquals(100, out.volumePercent(), 1e-6, "block 5's centre is 5.5 from the anchor, outside");
 	}
 
 	@Test

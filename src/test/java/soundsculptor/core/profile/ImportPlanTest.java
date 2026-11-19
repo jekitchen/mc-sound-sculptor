@@ -31,11 +31,11 @@ class ImportPlanTest {
 	private static final TestEnglish EN = new TestEnglish();
 
 	private static Zone fixedOn(String id, String worldKey) {
-		return new Zone(id, "Z", true, worldKey, "minecraft:overworld", new Point(1, 2, 3), new Shape.Cylinder(5, 10), PlaceSets.EMPTY);
+		return new Zone(id, "Z", true, worldKey, "minecraft:overworld", new Point(1, 2, 3), new Shape.Box(10, 10, 10), PlaceSets.EMPTY);
 	}
 
 	private static final Profile CURRENT = new Profile("This server", new ProfileSettings(true),
-			quick(List.of(SetEntry.of("old", "x:old").withMute(true))), List.of(fixed("mine", new Shape.Cylinder(4, 8))),
+			quick(List.of(SetEntry.of("old", "x:old").withMute(true))), List.of(fixed("mine", new Shape.Box(8, 8, 8))),
 			java.util.Map.of("mine", 0x111111));
 
 	private static final SoundSet FARM = new SoundSet("set-farm", "Farm animals", List.of(SetEntry.of("e1", "*cow*").withVolume(40)));

@@ -64,9 +64,9 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 			context.runOnClient(mc -> ProfileManager.setBypass(false));
 			Vec3 origin = context.computeOnClient(mc -> mc.getSoundManager().getListenerTransform().position());
 			Point pen = new Point(origin.x + 6, origin.y, origin.z);
-			// The sound plays 4 blocks from the zone's anchor, so a 2-block radius no longer holds it.
+			// The sound plays 4 blocks from the zone's anchor, so a 2-block-wide box no longer holds it.
 			Point spot = new Point(pen.x() + 4, pen.y(), pen.z());
-			Zone penZone = new Zone("pen", "Pen", true, key, OVERWORLD, pen, new Shape.Cylinder(10, 20), PlaceSets.EMPTY.attach(FARM.id()));
+			Zone penZone = new Zone("pen", "Pen", true, key, OVERWORLD, pen, new Shape.Box(20, 20, 20), PlaceSets.EMPTY.attach(FARM.id()));
 
 			usedInTwoPlacesShown(context, spot, penZone);
 			twoSetsOnEverywhereNamesHigherSet(context, spot);
@@ -446,7 +446,7 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 
 	/**
 	 * AC: type 250 into a level field in the panel: an error shows and nothing changes. AC: "Open full editor" on a zone
-	 * line opens the zone editor; change the radius, return: the trace shows it.
+	 * line opens the zone editor; change the width, return: the trace shows it.
 	 */
 	private static void levelOf250RefusedAndZoneLineOpensZoneEditor(ClientGameTestContext context, Point spot, Zone penZone) {
 		Snapshot before = Snapshot.take(context);
@@ -478,13 +478,13 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 			context.waitForScreen(ZoneEditorScreen.class);
 			context.runOnClient(mc -> {
 				ZoneEditorScreen editor = (ZoneEditorScreen) mc.gui.screen();
-				editor.radiusField.setValue("2");
+				editor.widthField.setValue("2");
 				editor.save();
 			});
 			context.waitForScreen(TraceScreen.class);
 			context.runOnClient(mc -> {
 				TraceScreen t = trace(mc);
-				check(!t.text().contains("  Pen (Cylinder"), "the smaller zone no longer holds you:\n" + t.text());
+				check(!t.text().contains("  Pen (Box"), "the smaller zone no longer holds you:\n" + t.text());
 				check(t.trace().volumePercent() == 100 && t.isPredicted(), "the trace should be recomputed as a prediction");
 			});
 			closeTrace(context);

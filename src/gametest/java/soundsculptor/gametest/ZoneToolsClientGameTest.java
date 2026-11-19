@@ -37,7 +37,7 @@ public final class ZoneToolsClientGameTest implements FabricClientGameTest {
 			context.waitForScreen(SoundSculptorScreen.class);
 			context.runOnClient(mc -> mc.gui.setScreen(ZoneEditorScreen.create(mc.gui.screen())));
 			context.waitForScreen(ZoneEditorScreen.class);
-			check(editor(context, e -> e.markCornersButton != null && e.sideDropdown != null && e.shapeDropdown == null),
+			check(editor(context, e -> e.markCornersButton != null && e.sideDropdown != null),
 					"a new zone is a box with the drawing tools and no shape choice");
 
 			// Mark corners: corner 1 where the player stands, corner 2 after moving; the editor returns with that box.

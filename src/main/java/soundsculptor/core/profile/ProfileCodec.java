@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
  * its entries written as in a Sound Set file ({@link SetCodec}).
  *
  * <p>Reading checks every value (PRD FR-11.6) and names the problem and its place in plain words, for example
- * "Zone 3, field radius: 900 is above the maximum 256." Schema 1 and 2 files come from earlier test builds and are
+ * "Zone 3, field width: 900 is above the maximum 512." Schema 1 and 2 files come from earlier test builds and are
  * refused ({@link ProfileMigrations#OLD_BUILD}); later schemas will be migrated first (PRD 7.6).
  */
 public final class ProfileCodec {
@@ -65,8 +65,7 @@ public final class ProfileCodec {
 			"sets", "quickChanges");
 	private static final Set<String> ANCHOR_FIELDS = Set.of("type", "x", "y", "z", "dimension", "worldKey");
 	private static final Map<String, Set<String>> SHAPE_FIELDS = Map.of(
-			"box", Set.of("type", "width", "height", "depth"),
-			"cylinder", Set.of("type", "radius", "height"));
+			"box", Set.of("type", "width", "height", "depth"));
 
 	private ProfileCodec() {
 	}
@@ -169,11 +168,6 @@ public final class ProfileCodec {
 				shape.addProperty("width", b.width());
 				shape.addProperty("height", b.height());
 				shape.addProperty("depth", b.depth());
-			}
-			case Shape.Cylinder c -> {
-				shape.addProperty("type", "cylinder");
-				shape.addProperty("radius", c.radius());
-				shape.addProperty("height", c.height());
 			}
 		}
 		json.add("shape", shape);
@@ -369,17 +363,18 @@ public final class ProfileCodec {
 		}
 		JsonObject json = raw.getAsJsonObject();
 		Fields probe = new Fields(json, z.where(), null, null);
-		// Sphere shapes were dropped before release (owner decision 2026-11-13): refused like any other value out of spec.
-		probe.refuse("type", "shape type", "sphere", ProfileText.UNSUPPORTED_SHAPE);
-		String type = probe.choice("type", "shape type", "box", "cylinder");
+		// Zones are boxes only: spheres and cylinders were dropped before release (owner decisions 2026-11-13 and
+		// 2026-11-18). Any other shape name, those included, is "not a supported shape".
+		JsonElement typeValue = json.get("type");
+		if (typeValue != null && typeValue.isJsonPrimitive() && typeValue.getAsJsonPrimitive().isString()
+				&& !"box".equals(typeValue.getAsString())) {
+			throw probe.problem("shape type", ProfileText.UNSUPPORTED_SHAPE, describe(typeValue));
+		}
+		String type = probe.choice("type", "shape type", "box");
 		Fields s = z.object("shape", z.where(), SHAPE_FIELDS.get(type));
-		return switch (type) {
-			case "box" -> new Shape.Box(s.number("width", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE),
-					s.number("height", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE),
-					s.number("depth", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE));
-			default -> new Shape.Cylinder(s.number("radius", Shape.Cylinder.MIN_RADIUS, Shape.Cylinder.MAX_RADIUS),
-					s.number("height", Shape.Cylinder.MIN_HEIGHT, Shape.Cylinder.MAX_HEIGHT));
-		};
+		return new Shape.Box(s.number("width", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE),
+				s.number("height", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE),
+				s.number("depth", Shape.Box.MIN_SIDE, Shape.Box.MAX_SIDE));
 	}
 
 	/** Plain words with a location, e.g. "The file is not valid JSON (line 1, column 44).", instead of parser jargon. */

@@ -32,7 +32,7 @@ class ProfileOpsTest {
 	private static final TestEnglish EN = new TestEnglish();
 
 	private static Zone fixedOn(String id, String worldKey) {
-		return new Zone(id, "Z", true, worldKey, "minecraft:overworld", new Point(1, 2, 3), new Shape.Cylinder(5, 10), PlaceSets.EMPTY);
+		return new Zone(id, "Z", true, worldKey, "minecraft:overworld", new Point(1, 2, 3), new Shape.Box(10, 10, 10), PlaceSets.EMPTY);
 	}
 
 	/** Server A: 2 global rules and two zones. */
@@ -42,7 +42,7 @@ class ProfileOpsTest {
 
 	/** Server B: its own rule and two zones. */
 	private static final Profile B = new Profile("Server B", ProfileSettings.DEFAULTS, quick(List.of(SetEntry.of("b1", "x:b"))),
-			List.of(fixed("bFixed", new Shape.Cylinder(6, 12)), fixed("bOther", new Shape.Box(8, 8, 8))),
+			List.of(fixed("bFixed", new Shape.Box(12, 12, 12)), fixed("bOther", new Shape.Box(8, 8, 8))),
 			Map.of("bFixed", 3, "bOther", 4));
 
 	private static final SoundSet FARM = new SoundSet("set-farm", "Farm animals", List.of(SetEntry.of("e1", "*cow*").withVolume(40)));
@@ -65,7 +65,7 @@ class ProfileOpsTest {
 
 	@Test
 	void copyFromKeepsTargetZones() {
-		Profile target = B.withZones(List.of(fixed("bFixed", new Shape.Cylinder(6, 12)).withSets(PlaceSets.EMPTY.attach("set-farm")),
+		Profile target = B.withZones(List.of(fixed("bFixed", new Shape.Box(12, 12, 12)).withSets(PlaceSets.EMPTY.attach("set-farm")),
 				fixed("bOther", new Shape.Box(8, 8, 8)))).withZoneColor("bFixed", 3);
 		Profile source = A.withZones(List.of(fixedOn("aFixed", SERVER).withSets(PlaceSets.EMPTY.attach("set-farm"))));
 		ProfileOps.Copy copy = ProfileOps.copyFrom(source, target, LIB);

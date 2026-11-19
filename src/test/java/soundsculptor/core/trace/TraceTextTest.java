@@ -35,8 +35,8 @@ class TraceTextTest {
 		return new LastPlay(true, WORLD, OVERWORLD, x, 0, 0, volume, dropped, cueShown);
 	}
 
-	private static Zone cylinder(String id, double x, double radius, SetEntry... rules) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Cylinder(radius, 2 * radius), quick(List.of(rules)));
+	private static Zone cube(String id, double x, double half, SetEntry... rules) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), quick(List.of(rules)));
 	}
 
 	private static PlaceSets attached(String... setIds) {
@@ -122,16 +122,16 @@ class TraceTextTest {
 
 	@Test
 	void zonesYouStoodInShowSmallestFirstWithTheirShapeSetsAndTheWinners() {
-		Zone pen = cylinder("Pen", 3, 10, SetEntry.of("rn", "*villager*").withVolume(20));
-		Zone base = cylinder("Base", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
+		Zone pen = cube("Pen", 3, 10, SetEntry.of("rn", "*villager*").withVolume(20));
+		Zone base = cube("Base", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
 		String text = text(precedence(List.of(), List.of(base, pen)), playAt(0, 20, false, false), false);
 		assertTrue(text.contains(String.join("\n",
 				"You were in: Pen → Base → Everywhere",
-				"  Pen (Cylinder, radius 10, height 20)",
+				"  Pen (Box 20 × 20 × 20)",
 				"    Quick changes",
 				"      *:*villager*: Level 20%",
 				"        Decides loudness (Only matching entry)",
-				"  Base (Cylinder, radius 20, height 40)",
+				"  Base (Box 40 × 40 × 40)",
 				"    Quick changes",
 				"      *:*villager*: Level 80%",
 				"        Decides loudness (Only matching entry)",
@@ -175,15 +175,15 @@ class TraceTextTest {
 
 	@Test
 	void unnamedZonesShowTheirId() {
-		Zone unnamed = new Zone("z7", "", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(20, 40),
+		Zone unnamed = new Zone("z7", "", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(40, 40, 40),
 				quick(List.of(SetEntry.of("r", "*").withMute(true))));
 		String text = text(precedence(List.of(), List.of(unnamed)), playAt(16, 0, false, false), false);
-		assertTrue(text.contains("You were in: z7 → Everywhere\n  z7 (Cylinder, radius 20, height 40)"), text);
+		assertTrue(text.contains("You were in: z7 → Everywhere\n  z7 (Box 40 × 40 × 40)"), text);
 	}
 
 	@Test
 	void everywhereDecidesWhatNoZoneSets() {
-		Zone cueOnly = cylinder("Pen", 0, 10, SetEntry.of("c", "*villager*").withCue(true));
+		Zone cueOnly = cube("Pen", 0, 10, SetEntry.of("c", "*villager*").withCue(true));
 		String text = text(precedence(List.of(SetEntry.of("g", AMBIENT).withVolume(40)), List.of(cueOnly)),
 				playAt(0, 40, false, false), false);
 		assertTrue(text.contains(String.join("\n",

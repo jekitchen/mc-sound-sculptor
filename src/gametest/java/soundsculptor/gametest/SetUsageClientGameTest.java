@@ -42,7 +42,7 @@ public final class SetUsageClientGameTest implements FabricClientGameTest {
 			String key = context.computeOnClient(mc -> ProfileManager.key());
 			SoundSet farm = new SoundSet("usage-farm", "Usage farm", List.of(SetEntry.of("e1", "minecraft:entity.cow.ambient")));
 			Zone secret = new Zone("secret-zone", "Secret zone", true, OTHER, "minecraft:overworld", new Point(0, 64, 0),
-					new Shape.Cylinder(10, 20), PlaceSets.EMPTY.attach(farm.id()));
+					new Shape.Box(20, 20, 20), PlaceSets.EMPTY.attach(farm.id()));
 			Profile other = Profile.empty("Other server").withZones(List.of(secret));
 			context.runOnClient(mc -> {
 				ProfileManager.change(ws -> new Workspace(ws.profile().withEverywhere(PlaceSets.EMPTY.attach(farm.id())),
