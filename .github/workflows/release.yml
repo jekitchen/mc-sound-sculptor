@@ -29,6 +29,11 @@ jobs:
           distribution: 'temurin'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # Caches Gradle's downloads (dependencies, plugins, Minecraft jars and assets) between runs, so a run does not
+      # fetch them all again and a brief outage of a Maven repository does not fail it. The cache is saved from main
+      # and read everywhere else.
+      - name: setup gradle with caching
+        uses: gradle/actions/setup-gradle@v6
       - name: check the tag matches mod_version
         run: |
           version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
