@@ -218,7 +218,7 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			pointAtList(context);
 			context.waitTicks(SETTLE);
 			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held while the pointer is over the list");
-			check(countLabel(context).endsWith(" · Held"), "the count says Held, was " + countLabel(context));
+			check(countLabel(context).matches("\\d+ sounds? · Held( · \\d+ new)?"), "the count says Held (background music may already wait), was " + countLabel(context));
 
 			play(context, ZOMBIE, 3.0);
 			play(context, COW, 3.0);

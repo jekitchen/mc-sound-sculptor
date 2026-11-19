@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -117,6 +118,8 @@ public final class SoundsPanel {
 	private final PickerModel picker;
 	/** Told after every tick or untick, so the picker's footer follows. */
 	private final Runnable picksChanged;
+	/** Picker mode: adds every pick to the set and closes the picker; false if nothing was added (the set is full). */
+	private final BooleanSupplier addPicks;
 	public SculptTextField searchField;
 	public SculptButton helpButton;
 	public SculptToggle recentToggle;
@@ -192,14 +195,15 @@ public final class SoundsPanel {
 
 	/** The Sounds tab. */
 	public SoundsPanel(SculptScreen host) {
-		this(host, TAB_STATE, null, null);
+		this(host, TAB_STATE, null, null, null);
 	}
 
-	private SoundsPanel(SculptScreen host, Remembered state, PickerModel picker, Runnable picksChanged) {
+	private SoundsPanel(SculptScreen host, Remembered state, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks) {
 		this.host = host;
 		this.state = state;
 		this.picker = picker;
 		this.picksChanged = picksChanged;
+		this.addPicks = addPicks;
 	}
 
 	/**
@@ -208,9 +212,11 @@ public final class SoundsPanel {
 	 * are remembered apart from the Sounds tab's.
 	 *
 	 * @param picksChanged runs after every tick or untick
+	 * @param addPicks     adds every pick to the set and closes the picker, as its Add does; returns false if nothing was
+	 *                     added (the set is full), when the picker stays open
 	 */
-	public static SoundsPanel picker(SculptScreen host, PickerModel picker, Runnable picksChanged) {
-		return new SoundsPanel(host, PICKER_STATE, picker, picksChanged);
+	public static SoundsPanel picker(SculptScreen host, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks) {
+		return new SoundsPanel(host, PICKER_STATE, picker, picksChanged, addPicks);
 	}
 
 	/**
@@ -986,8 +992,9 @@ public final class SoundsPanel {
 	}
 
 	/**
-	 * Like this… (FR-4.8): the sound's groups in a pop-up, closest first, each with how many known sounds it matches and
-	 * a checkbox, or "In this set" when the set has the group. Esc or Done closes it and returns to the row's Like this….
+	 * Like this… (FR-1.7, FR-4.8): the sound's groups in a pop-up, closest first, each with how many known sounds it
+	 * matches and Add, or "In this set" when the set has the group. Add adds the group, with any sounds already picked,
+	 * and closes the picker. Back, Esc or a click outside closes only the pop-up and returns to the row's Like this….
 	 */
 	public void openLikeThis(String soundId) {
 		host.closeOverlay();
@@ -999,7 +1006,7 @@ public final class SoundsPanel {
 		int width = Math.min(list.getWidth(), host.width - x - Theme.PADDING);
 		int height = Math.max(SculptList.ROW_HEIGHT + Theme.WIDGET_HEIGHT + 3 * Theme.GAP,
 				host.height - SculptScreen.FOOTER_HEIGHT - Theme.PADDING - y);
-		SculptButton done = SculptButton.text(Component.translatable("soundsculptor.ui.done"), host::closeOverlay);
+		SculptButton done = SculptButton.text(Component.translatable("soundsculptor.ui.back"), host::closeOverlay);
 		int listHeight = height - done.getHeight() - 3 * Theme.GAP;
 		SculptList groups = new SculptList(width - 2 * Theme.GAP, listHeight,
 				Component.translatable("soundsculptor.picker.like_this.list", soundName(soundId)));
@@ -1024,14 +1031,30 @@ public final class SoundsPanel {
 		}
 	}
 
-	/** Ticks or unticks a Like this group; nothing for a group the set has. */
-	public void toggleGroup(String pattern) {
-		if (picker == null || likeThisList == null) {
+	/**
+	 * A Like this group's Add: picks the group and adds every pick, closing the picker. If the set is full nothing is
+	 * added, the group is not left picked and the pop-up stays open (the picker shows the limit).
+	 */
+	public void addGroup(String pattern) {
+		if (picker == null || likeThisList == null || picker.groupInSet(pattern)) {
 			return;
 		}
-		picker.toggleGroup(pattern);
-		likeThisList.setRows(groupRows());
+		boolean pickedHere = !picker.groupPicked(pattern);
+		if (pickedHere) {
+			picker.toggleGroup(pattern);
+		}
+		if (!addPicks.getAsBoolean() && pickedHere) {
+			picker.toggleGroup(pattern);
+		}
 		picksChanged.run();
+	}
+
+	/** "Add this group", or "Add this group and 2 picked sounds" when sounds are already picked. */
+	private Component addGroupTip() {
+		int sounds = picker.pickedCount();
+		return sounds == 0 ? Component.translatable("soundsculptor.picker.add_group.tip")
+				: sounds == 1 ? Component.translatable("soundsculptor.picker.add_group.tip.one")
+				: Component.translatable("soundsculptor.picker.add_group.tip.many", sounds);
 	}
 
 	private List<SculptList.Row> groupRows() {
@@ -1045,8 +1068,8 @@ public final class SoundsPanel {
 					new SculptList.Row.Column(() -> pattern, 0, 0),
 					new SculptList.Row.Column(() -> mark, SculptList.Row.Column.widthFor(IN_SET), 0),
 					new SculptList.Row.Column(() -> matches, 0, 1));
-			List<SculptButton> buttons = inSet ? List.of() : List.of(new SculptCheckbox(Component.translatable("soundsculptor.picker.pick"),
-					Component.translatable("soundsculptor.picker.pick_group.tip"), picker.groupPicked(pattern), () -> toggleGroup(pattern)));
+			List<SculptButton> buttons = inSet ? List.of() : List.of(Tooltips.describe(
+					SculptButton.text(Component.translatable("soundsculptor.picker.add_group"), () -> addGroup(pattern)), addGroupTip()));
 			rows.add(new SculptList.Row(pattern, columns, buttons));
 		}
 		return rows;
