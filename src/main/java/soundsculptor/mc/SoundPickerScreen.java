@@ -92,7 +92,7 @@ public final class SoundPickerScreen extends SculptScreen {
 
 	@Override
 	protected void buildTab(int index, Body body) {
-		panel = SoundsPanel.picker(this, picker, this::updateAddButton);
+		panel = SoundsPanel.picker(this, picker, this::updateAddButton, this::add);
 		panel.build(body);
 	}
 
@@ -107,13 +107,14 @@ public final class SoundPickerScreen extends SculptScreen {
 	 * Adds the picks to the set editor's draft and returns to it; with more picks than the set has room for, shows the
 	 * limit and stays.
 	 */
-	public void add() {
+	/** Adds every pick to the draft and closes the picker; returns false, showing the limit, if they do not fit. */
+	public boolean add() {
 		// Checked against the draft as it is now (PickerModel.canAddTo), so every entry below fits.
 		SoundSet current = draft.build();
 		Message full = picker.canAddTo(current);
 		if (full != null) {
 			showToast(ProfileManager.component(full), null);
-			return;
+			return false;
 		}
 		for (SetEntry entry : picker.addTo(current).entries()) {
 			if (draft.entry(entry.id()) == null) {
@@ -121,6 +122,7 @@ public final class SoundPickerScreen extends SculptScreen {
 			}
 		}
 		closeNow();
+		return true;
 	}
 
 	@Override
