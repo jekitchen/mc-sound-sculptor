@@ -30,6 +30,8 @@ public final class Theme {
 	public static final int ROW_HOVER = 0x30FFFFFF;
 	/** Toast background. */
 	public static final int TOAST = 0xF0202020;
+	/** Laid over the whole screen behind a pop-up, so what is behind it reads as out of reach. */
+	public static final int SCRIM = 0x99000000;
 
 	/** Keyboard focus ring (PRD A-1). */
 	public static final int FOCUS = 0xFFFFFFFF;

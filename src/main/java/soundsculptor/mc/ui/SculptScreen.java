@@ -366,6 +366,8 @@ public abstract class SculptScreen extends Screen {
 			toast.draw(g, mouseX, mouseY, partialTick);
 		}
 		if (overlayOpen) {
+			// Dim everything behind the pop-up: its buttons cannot be pressed (a click outside only closes the pop-up).
+			Draw.fill(g, 0, 0, width, height, Theme.SCRIM);
 			Draw.fill(g, overlayX - 1, overlayY - 1, overlayWidth + 2, overlayHeight + 2, Theme.SEPARATOR);
 			Draw.fill(g, overlayX, overlayY, overlayWidth, overlayHeight, Theme.TOAST);
 		}
