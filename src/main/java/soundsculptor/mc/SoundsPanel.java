@@ -14,6 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Util;
 import soundsculptor.core.browser.BrowserRow;
+import soundsculptor.core.browser.HoldOrder;
 import soundsculptor.core.browser.LikeThis;
 import soundsculptor.core.browser.PickerModel;
 import soundsculptor.core.browser.SoundBrowser;
@@ -63,6 +64,11 @@ import soundsculptor.mc.ui.Tooltips;
  * <p>In picker mode ({@link #picker}, FR-1.7) the same browser serves {@link SoundPickerScreen}: each row has a checkbox
  * (or "✔ In this set" and no checkbox) and Like this… instead of the quick actions, and there is no Apply to, Pause or
  * Sort.
+ *
+ * <p>While the mouse pointer is over the list it is held ({@link HoldOrder}, FR-1.3), so a row does not move away as
+ * the player aims at it: no row moves, joins or leaves, the rows' values still update, and the count says "Held" and
+ * how many sounds wait. The player's own search, filter, sort and Apply to changes are not held, and a row action
+ * rebuilds rows in their place. Leaving the list catches up at the next refresh.
  *
  * <p>The filter, search text, sort, pause and Apply to choice are remembered while the game runs, apart for the tab and
  * the picker, so the picker never changes the tab's filter: the filter starts on the first time each opens and then
@@ -136,6 +142,8 @@ public final class SoundsPanel {
 	private List<SoundEntry> entries = List.of();
 	private SearchQuery query = SearchQuery.parse("");
 	private int count;
+	/** Sounds a held list has not shown yet. */
+	private int waiting;
 	private boolean searchPending;
 	private long searchChangedAt;
 	private int ticks;
@@ -152,6 +160,8 @@ public final class SoundsPanel {
 	private long shownSecond;
 	private boolean shownAnyRecent;
 	private int shownPickVersion;
+	/** Whether the last refresh held the list (the pointer was over it). */
+	private boolean shownHeld;
 	/** Counts ticks and unticks in picker mode, so a refresh after one is not skipped. */
 	private int pickVersion;
 	/** The Like this… pop-up's sound and its groups (counted once when it opens). */
@@ -249,7 +259,7 @@ public final class SoundsPanel {
 			buildPlaceRow(body);
 		}
 
-		body.label(() -> Component.translatable(count == 1 ? "soundsculptor.sounds.count.one" : "soundsculptor.sounds.count", count));
+		body.label(this::countText);
 		list = new SculptList(body.width(), 100, Component.translatable("soundsculptor.sounds.list"));
 		list.setEmptyText(() -> Component.translatable(!state.recentOnly ? "soundsculptor.sounds.empty"
 				: query.isEmpty() ? "soundsculptor.sounds.empty_recent" : "soundsculptor.sounds.empty_recent_filtered"));
@@ -353,6 +363,29 @@ public final class SoundsPanel {
 		return count;
 	}
 
+	/**
+	 * Whether the list is held because the pointer is over it (FR-1.3): rows keep their place and new sounds wait. A
+	 * paused list is frozen anyway, so it is not called held.
+	 */
+	public boolean isHeld() {
+		return shownHeld && !(state.recentOnly && state.paused);
+	}
+
+	/** How many sounds wait to join the held list. */
+	public int waiting() {
+		return waiting;
+	}
+
+	/** "42 sounds", or "42 sounds · Held" and "42 sounds · Held · 3 new" while held. */
+	private Component countText() {
+		Component sounds = Component.translatable(count == 1 ? "soundsculptor.sounds.count.one" : "soundsculptor.sounds.count", count);
+		if (!isHeld()) {
+			return sounds;
+		}
+		return waiting > 0 ? Component.translatable("soundsculptor.sounds.held.new", sounds, waiting)
+				: Component.translatable("soundsculptor.sounds.held", sounds);
+	}
+
 	// ---- Refresh ----
 
 	/**
@@ -411,11 +444,15 @@ public final class SoundsPanel {
 		ApplyTarget target = applyTarget();
 		boolean distance = SoundSculptorSettings.showDistance();
 		long second = now / 1000;
+		// Held while the pointer is over a list with rows, unless the player changed what it lists: their own search,
+		// filter, sort or Apply to shows at once.
+		boolean ownChange = query != shownQuery || state.recentOnly != shownRecentOnly || state.sort != shownSort || !target.equals(shownTarget);
+		boolean hold = !ownChange && list.isHovered() && !list.children().isEmpty();
 		// workspace() is a new record each call: compare its parts, which change identity only when changed.
 		if (ws.profile() != shownProfile || ws.library() != shownLibrary || !target.equals(shownTarget) || distance != shownDistance) {
 			rowCache.clear();
 		} else if (log.generation() == shownGeneration && query == shownQuery && state.recentOnly == shownRecentOnly && state.sort == shownSort
-				&& pickVersion == shownPickVersion && (!shownAnyRecent || second == shownSecond)) {
+				&& pickVersion == shownPickVersion && hold == shownHeld && (!shownAnyRecent || second == shownSecond)) {
 			return;
 		}
 		shownProfile = ws.profile();
@@ -455,6 +492,14 @@ public final class SoundsPanel {
 			rows.add(cached.row());
 		}
 		shownAnyRecent = anyRecent;
+		shownHeld = hold;
+		if (hold) {
+			HoldOrder.Held<SculptList.Row> held = HoldOrder.hold(list.children(), rows, SculptList.Row::key);
+			rows = held.rows();
+			waiting = held.waiting();
+		} else {
+			waiting = 0;
+		}
 		count = rows.size();
 		if (!sameRows(rows, list.children())) {
 			list.setRows(rows);

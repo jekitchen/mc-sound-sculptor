@@ -72,6 +72,7 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			addToSetCreatesEntryInChosenSet(context);
 			filterStateRememberedAcrossReopen(context);
 			idleRefreshRebuildsNothing(context);
+			holdWhilePointing(context);
 		}
 		applyToForgottenInAnotherWorld(context);
 	}
@@ -196,6 +197,88 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 		} finally {
 			cleanUp(context);
 		}
+	}
+
+	/**
+	 * FR-1.3: while the pointer is over the list it is held. Rows keep their place and new sounds wait, but values update;
+	 * the player's own search and row actions are not held; leaving the list catches up. Background music may add rows,
+	 * so only the order of this test's own sounds is checked.
+	 */
+	private static void holdWhilePointing(ClientGameTestContext context) {
+		open(context);
+		try {
+			System.out.println("HOLD cursor starts over the list: " + context.computeOnClient(mc -> sounds(mc).list.isHovered()));
+			play(context, ZOMBIE, 3.0);
+			play(context, VILLAGER, 3.0);
+			check(before(context, VILLAGER, ZOMBIE), "most recent first: villager, then zombie, was " + keys(context));
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held while the pointer is elsewhere");
+
+			pointAtList(context);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held while the pointer is over the list");
+			check(countLabel(context).endsWith(" · Held"), "the count says Held, was " + countLabel(context));
+
+			play(context, ZOMBIE, 3.0);
+			play(context, COW, 3.0);
+			check(before(context, VILLAGER, ZOMBIE), "a replay does not move the zombie up while held, was " + keys(context));
+			check(rowTexts(context, COW) == null, "a new sound waits while held");
+			check(context.computeOnClient(mc -> sounds(mc).waiting()) >= 1, "the cow is counted as waiting");
+			check(countLabel(context).contains(" · Held · ") && countLabel(context).endsWith(" new"),
+					"the count says how many are waiting, was " + countLabel(context));
+			check(rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×2")), "the held zombie row still updates its count, was "
+					+ rowTexts(context, ZOMBIE));
+
+			// The player's own search is not held.
+			search(context, "entity");
+			check(rowTexts(context, COW) != null, "a search shows the cow at once, pointer or not");
+			search(context, "");
+
+			// A row action rebuilds rows in their place: nothing moves or joins.
+			List<String> shown = keys(context);
+			context.runOnClient(mc -> press(mc, VILLAGER, SoundsPanel.BUTTON_MUTE));
+			context.waitTicks(SETTLE);
+			check(button(context, VILLAGER, SoundsPanel.BUTTON_MUTE).equals("Unmute"), "the pressed row shows its new state");
+			check(keys(context).equals(shown), "Mute keeps every row in its place while held, was " + keys(context) + ", before " + shown);
+			context.runOnClient(mc -> main(mc).pressUndo());
+
+			// Leaving the list catches up, even with nothing new played since.
+			play(context, ZOMBIE, 3.0);
+			check(before(context, COW, ZOMBIE), "still held: the zombie stays below the cow, was " + keys(context));
+			pointAway(context);
+			context.waitTicks(SETTLE);
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held once the pointer leaves");
+			check(before(context, ZOMBIE, COW), "leaving catches up: the zombie played last, was " + keys(context));
+			check(!countLabel(context).contains("Held"), "the count no longer says Held, was " + countLabel(context));
+		} finally {
+			pointAway(context);
+			cleanUp(context);
+		}
+	}
+
+	private static void pointAtList(ClientGameTestContext context) {
+		double[] at = context.computeOnClient(mc -> {
+			SculptList list = sounds(mc).list;
+			double scale = mc.getWindow().getGuiScale();
+			return new double[] {(list.getX() + list.getWidth() / 2.0) * scale, (list.getY() + list.getHeight() / 2.0) * scale};
+		});
+		context.getInput().setCursorPos(at[0], at[1]);
+		context.waitTicks(2);
+	}
+
+	private static void pointAway(ClientGameTestContext context) {
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(2);
+	}
+
+	private static boolean before(ClientGameTestContext context, String first, String second) {
+		List<String> keys = keys(context);
+		int a = keys.indexOf(first);
+		int b = keys.indexOf(second);
+		return a >= 0 && b >= 0 && a < b;
+	}
+
+	private static String countLabel(ClientGameTestContext context) {
+		return labels(context).stream().filter(t -> t.matches("\\d+ sounds?.*")).findFirst().orElse("");
 	}
 
 	private static long medianRefreshMicros(SoundsPanel panel, int runs) {
