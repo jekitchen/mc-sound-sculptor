@@ -3,7 +3,6 @@ package soundsculptor.mc;
 import soundsculptor.core.editor.FieldError;
 import soundsculptor.core.editor.ZoneDraft;
 import soundsculptor.core.editor.ZoneDraft.Field;
-import soundsculptor.core.editor.ZoneDraft.ShapeKind;
 import soundsculptor.core.outline.ZoneColors;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.zones.BoxEdit;
@@ -35,14 +34,13 @@ import net.minecraft.world.phys.Vec3;
  * The zone editor (PRD 6.1 Zones, FR-8 MVP, FR-10.4): name, on/off, color, the center with "My position" and "Block
  * I'm looking at" (FR-8.1), and the box's size (FR-8.3), drawn by marking two corners in the world or moved one side at
  * a time (M8 review). The zone's attached Sound Sets are edited on their own screen ("Sound Sets…", FR-8.6). Save and Cancel with the unsaved-changes dialog (FR-12.4), errors under the fields that
- * disable Save (FR-12.7). Cylinders arrive in M13; an existing cylinder keeps its shape.
+ * disable Save (FR-12.7). Zones are boxes only.
  */
 public final class ZoneEditorScreen extends SculptScreen {
 	private static final int NAME_WIDTH = 200;
 	private static final int ENABLED_WIDTH = 100;
 	private static final int COORD_WIDTH = 60;
 	private static final int SIZE_WIDTH = 50;
-	private static final int SHAPE_WIDTH = 170;
 	/** The least width of My position and Looking at; they grow to fit a longer label. */
 	private static final int POSITION_WIDTH = 90;
 	private static final int MARK_WIDTH = 110;
@@ -61,8 +59,6 @@ public final class ZoneEditorScreen extends SculptScreen {
 	public SculptTextField zField;
 	public SculptButton myPositionButton;
 	public SculptButton lookingAtButton;
-	public SculptDropdown<ShapeKind> shapeDropdown;
-	public SculptTextField radiusField;
 	public SculptTextField widthField;
 	public SculptTextField heightField;
 	public SculptTextField depthField;
@@ -95,8 +91,6 @@ public final class ZoneEditorScreen extends SculptScreen {
 		String name = Component.translatable("soundsculptor.zone_editor.default_name", profile.zones().size() + 1).getString();
 		ZoneDraft draft = ZoneDraft.blank(id, name, ProfileManager.key(), WorldSession.dimension(minecraft), playerPosition(minecraft),
 				ZoneColors.next(used));
-		// New zones are boxes, drawn by marking corners and adjusted side by side (M8 review).
-		draft.setShape(ShapeKind.BOX);
 		return new ZoneEditorScreen(parent, draft, id, true);
 	}
 
@@ -190,45 +184,26 @@ public final class ZoneEditorScreen extends SculptScreen {
 				Component.translatable("soundsculptor.zone_editor.looking_at.tip"));
 		body.flow(xField, yField, zField, myPositionButton, lookingAtButton);
 
-		shapeDropdown = null;
-		markCornersButton = null;
-		sideDropdown = null;
-		radiusField = textField(Field.RADIUS, SIZE_WIDTH, "radius");
 		widthField = textField(Field.WIDTH, SIZE_WIDTH, "width");
 		heightField = textField(Field.HEIGHT, SIZE_WIDTH, "height");
 		depthField = textField(Field.DEPTH, SIZE_WIDTH, "depth");
-		if (draft.shape() == ShapeKind.BOX) {
-			// Size, then the drawing tools: mark two corners in the world, or move one side at a time.
-			markCornersButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.mark_corners"), MARK_WIDTH,
-					this::markCorners), Component.translatable("soundsculptor.zone_editor.mark_corners.tip", soundsculptor.SoundSculptorClient.openKey.getTranslatedKeyMessage()));
-			body.label(() -> Component.translatable("soundsculptor.zone_editor.size_label"));
-			body.row(widthField, heightField, depthField, markCornersButton);
-			sideDropdown = Tooltips.describe(new SculptDropdown<>(SIDE_WIDTH, Component.translatable("soundsculptor.zone_editor.side"),
-					List.of(BoxEdit.Side.values()),
-					side -> Component.translatable("soundsculptor.zone_editor.side." + side.name().toLowerCase(Locale.ROOT)),
-					selectedSide, side -> selectedSide = side), Component.translatable("soundsculptor.zone_editor.side.tip"));
-			shrinkButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.shrink"), STEP_WIDTH,
-					() -> moveSide(-1)), Component.translatable("soundsculptor.zone_editor.shrink.tip"));
-			growButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.grow"), STEP_WIDTH,
-					() -> moveSide(1)), Component.translatable("soundsculptor.zone_editor.grow.tip"));
-			body.row(sideDropdown, shrinkButton, growButton);
-		} else {
-			// A cylinder (v1) keeps its shape, and can become a box.
-			shapeDropdown = Tooltips.describe(new SculptDropdown<>(SHAPE_WIDTH, Component.translatable("soundsculptor.zone_editor.shape"),
-					List.of(draft.shape(), ShapeKind.BOX),
-					shape -> Component.translatable("soundsculptor.zone_editor.shape." + shape.name().toLowerCase(Locale.ROOT)),
-					draft.shape(), this::setShape), Component.translatable("soundsculptor.zone_editor.shape.tip"));
-			List<AbstractWidget> shapeRow = new ArrayList<>();
-			shapeRow.add(shapeDropdown);
-			shapeRow.add(radiusField);
-			if (draft.shape() == ShapeKind.CYLINDER) {
-				shapeRow.add(heightField);
-			}
-			body.row(shapeRow.toArray(new AbstractWidget[0]));
-		}
+		// Size, then the drawing tools: mark two corners in the world, or move one side at a time.
+		markCornersButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.mark_corners"), MARK_WIDTH,
+				this::markCorners), Component.translatable("soundsculptor.zone_editor.mark_corners.tip", soundsculptor.SoundSculptorClient.openKey.getTranslatedKeyMessage()));
+		body.label(() -> Component.translatable("soundsculptor.zone_editor.size_label"));
+		body.row(widthField, heightField, depthField, markCornersButton);
+		sideDropdown = Tooltips.describe(new SculptDropdown<>(SIDE_WIDTH, Component.translatable("soundsculptor.zone_editor.side"),
+				List.of(BoxEdit.Side.values()),
+				side -> Component.translatable("soundsculptor.zone_editor.side." + side.name().toLowerCase(Locale.ROOT)),
+				selectedSide, side -> selectedSide = side), Component.translatable("soundsculptor.zone_editor.side.tip"));
+		shrinkButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.shrink"), STEP_WIDTH,
+				() -> moveSide(-1)), Component.translatable("soundsculptor.zone_editor.shrink.tip"));
+		growButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.grow"), STEP_WIDTH,
+				() -> moveSide(1)), Component.translatable("soundsculptor.zone_editor.grow.tip"));
+		body.row(sideDropdown, shrinkButton, growButton);
 
 		// After Save was refused, keep every error visible.
-		for (SculptTextField field : List.of(nameField, xField, yField, zField, radiusField, widthField, heightField, depthField)) {
+		for (SculptTextField field : List.of(nameField, xField, yField, zField, widthField, heightField, depthField)) {
 			if (field.error() != null && saveAttempted) {
 				field.revealError();
 			}
@@ -346,16 +321,6 @@ public final class ZoneEditorScreen extends SculptScreen {
 		return draft.error(Field.COLOR) == null ? draft.color() : ZoneColors.next(List.of());
 	}
 
-	public void setShape(ShapeKind shape) {
-		if (shape == draft.shape()) {
-			return;
-		}
-		draft.setShape(shape);
-		rebuildWidgets();
-		// A box has no shape choice (it is the only shape new zones get), so focus moves to its width.
-		setInitialFocus(shapeDropdown != null ? shapeDropdown : widthField);
-	}
-
 	/** FR-8.1 "Set to my position": the player's feet, in this world and dimension. */
 	public void setToMyPosition() {
 		setPosition(playerPosition(minecraft));
@@ -410,7 +375,7 @@ public final class ZoneEditorScreen extends SculptScreen {
 	protected boolean saveChanges() {
 		saveAttempted = true;
 		if (!draft.attemptSave()) {
-			for (SculptTextField field : List.of(nameField, xField, yField, zField, radiusField, widthField, heightField, depthField)) {
+			for (SculptTextField field : List.of(nameField, xField, yField, zField, widthField, heightField, depthField)) {
 				field.revealError();
 			}
 			return false;

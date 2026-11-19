@@ -40,7 +40,7 @@ class ProfileZonesTest {
 
 	@Test
 	void quickActionsKeepTheZones() {
-		Profile p = Profile.empty("A").withZones(List.of(fixed("z1", new Shape.Cylinder(10, 20))))
+		Profile p = Profile.empty("A").withZones(List.of(fixed("z1", new Shape.Box(20, 20, 20))))
 				.withZoneColor("z1", 0xE69F00);
 		Profile muted = p.withEverywhere(p.everywhere().withQuickEntries(List.of(SetEntry.of("q1", "minecraft:a").withMute(true))))
 				.withSettings(new ProfileSettings(false));
@@ -57,7 +57,7 @@ class ProfileZonesTest {
 
 	@Test
 	void replacingZonesDropsColorsOfRemovedZones() {
-		Profile p = Profile.empty("A").withZones(List.of(fixed("z1", new Shape.Cylinder(10, 20)), fixed("z2", new Shape.Cylinder(5, 10))))
+		Profile p = Profile.empty("A").withZones(List.of(fixed("z1", new Shape.Box(20, 20, 20)), fixed("z2", new Shape.Box(10, 10, 10))))
 				.withZoneColor("z1", 1).withZoneColor("z2", 2);
 		Profile q = p.withZones(List.of(p.zones().get(1)));
 		assertEquals(Map.of("z2", 2), q.zoneColors());
@@ -67,12 +67,12 @@ class ProfileZonesTest {
 
 	@Test
 	void zonesRoundTripThroughTheFile() throws ProfileFormatException {
-		Zone round = fixed("z1", new Shape.Cylinder(12.5, 25));
+		Zone cube = fixed("z1", new Shape.Box(25, 25, 25));
 		Zone box = fixed("z2", new Shape.Box(20, 8, 30));
-		Zone cylinder = new Zone("z3", "Tower", false, SERVER, "minecraft:the_nether", new Point(-5, 70, 9),
-				new Shape.Cylinder(4, 40), quick(List.of(new SetEntry("r9", false, soundsculptor.core.sets.SoundPattern.of("minecraft:block.*"),
+		Zone tower = new Zone("z3", "Tower", false, SERVER, "minecraft:the_nether", new Point(-5, 70, 9),
+				new Shape.Box(8, 40, 8), quick(List.of(new SetEntry("r9", false, soundsculptor.core.sets.SoundPattern.of("minecraft:block.*"),
 						null, 150, new Limit(2, 500, true), false))));
-		Profile p = Profile.empty("Server").withZones(List.of(round, box, cylinder))
+		Profile p = Profile.empty("Server").withZones(List.of(cube, box, tower))
 				.withZoneColor("z1", 0xE69F00).withZoneColor("z3", 0x123456);
 		Profile back = ProfileCodec.fromJson(ProfileCodec.toJson(p));
 		assertEquals(p, back);
@@ -81,13 +81,12 @@ class ProfileZonesTest {
 	@Test
 	void fileMatchesTheSketchAndOmitsUnsetProperties() {
 		Profile p = Profile.empty("Server").withZones(List.of(fixed("z1", new Shape.Box(20, 8, 30)),
-				fixed("z2", new Shape.Cylinder(4, 8)))).withZoneColor("z1", 0xE69F00);
+				fixed("z2", new Shape.Box(8, 8, 8)))).withZoneColor("z1", 0xE69F00);
 		String json = ProfileCodec.toJson(p);
 		assertTrue(json.contains("\"color\": \"#E69F00\""), json);
 		assertTrue(json.contains("\"type\": \"fixed\""), json);
 		assertTrue(json.contains("\"worldKey\": \"play.example.net\""), json);
 		assertTrue(json.contains("\"type\": \"box\""), json);
-		assertTrue(json.contains("\"type\": \"cylinder\""), json);
 		assertFalse(json.contains("\"mode\""), "Outside mode was removed on 2026-11-14: " + json);
 		assertFalse(json.contains("\"edge\""), "fade edges were removed on 2026-11-14: " + json);
 		// The second zone has no color.

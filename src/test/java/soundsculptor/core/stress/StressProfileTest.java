@@ -44,11 +44,12 @@ class StressProfileTest {
 
 	@Test
 	void hasTheMaximumSixtyFourZonesOfEveryKind() {
-		// PRD 11.2: boxes and cylinders of different sizes.
+		// PRD 11.2: boxes of different sizes and proportions (cylinders were dropped 2026-11-18).
 		List<Zone> zones = StressProfile.zones(WORLD, OVERWORLD);
 		assertEquals(Precedence.MAX_ZONES, zones.size());
 		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box));
-		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Cylinder));
+		assertTrue(zones.stream().allMatch(z -> z.shape() instanceof Shape.Box));
+		assertTrue(zones.stream().anyMatch(z -> z.shape() instanceof Shape.Box b && b.width() != b.height()), "not only cubes");
 		assertTrue(zones.stream().anyMatch(z -> z.anchor().equals(StressProfile.PLAYER)), "zones centred on the player");
 	}
 

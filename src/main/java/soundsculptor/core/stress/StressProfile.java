@@ -21,7 +21,7 @@ import soundsculptor.core.zones.Zone;
  *
  * <ul>
  *   <li><b>Stress:</b> Everywhere attaches 2 library Sound Sets of 25 entries each, mixing single sounds and groups;
- *       64 zones (the maximum, boxes and cylinders of many sizes) that all contain the player's feet block in the middle
+ *       64 zones (the maximum, boxes of many sizes and proportions) that all contain the player's feet block in the middle
  *       of a 9 x 9 pen centred on (0, {@value #PEN_Y}, 0) each attach 1
  *       to 3 sets from a pool of 8, so most pool sets are shared by several zones. The pool is drawn so the zones weigh
  *       what the 64 zones of 1 to 3 rules weighed before Sound Sets (see {@link #POOL_SEED}), keeping the worst case
@@ -184,8 +184,9 @@ public final class StressProfile {
 
 	/**
 	 * The stress profile's 64 zones that all contain the player's feet block ({@link #FEET_X}, {@link #FEET_Y},
-	 * {@link #FEET_Z}): boxes and cylinders anchored up to 20 blocks away, cylinders around the pen centre, and boxes
-	 * centred on the player. Each attaches 1 to 3 different sets from the pool in {@link #library()}.
+	 * {@link #FEET_Z}): boxes anchored up to 20 blocks away, cubes around the pen centre, and cubes centred on the
+	 * player. Each attaches 1 to 3 different sets from the pool in {@link #library()}. (Some were cylinders until
+	 * cylinders were dropped, 2026-11-18; the random draws are unchanged, so every zone keeps its entries.)
 	 */
 	public static List<Zone> zones(String worldKey, String dimension) {
 		return generate(worldKey, dimension).stress();
@@ -217,16 +218,18 @@ public final class StressProfile {
 			Shape shape;
 			switch (i % 8) {
 				case 0, 1 -> {
-					// A cube or an upright cylinder whose half-size reaches past the pen centre.
+					// A cube whose half-size reaches past the pen centre.
 					double reach = Math.sqrt(ax * ax + dy * dy + az * az);
-					double r = Math.min(Shape.Cylinder.MAX_RADIUS, Math.ceil(reach) + 2 + random.nextInt(18));
-					shape = i % 8 == 0 ? cube(r) : new Shape.Cylinder(r, Math.min(Shape.Cylinder.MAX_HEIGHT, 2 * r));
+					shape = cube(Math.ceil(reach) + 2 + random.nextInt(18));
 				}
 				case 2, 3 -> shape = new Shape.Box(side(Math.abs(ax), random), side(dy, random), side(Math.abs(az), random));
-				case 4, 5 -> shape = new Shape.Cylinder(
-						Math.min(Shape.Cylinder.MAX_RADIUS, Math.ceil(Math.hypot(ax, az)) + 2 + random.nextInt(18)), side(dy, random));
+				case 4, 5 -> {
+					// A flat or tall box, square across, whose half-width reaches past the pen centre in any direction.
+					double across = Math.min(Shape.Box.MAX_SIDE, 2 * (Math.ceil(Math.hypot(ax, az)) + 2 + random.nextInt(18)));
+					shape = new Shape.Box(across, side(dy, random), across);
+				}
 				case 6 -> {
-					// Was an Outside zone far away (removed 2026-11-14): now an upright cylinder around the pen centre.
+					// Was an Outside zone far away (removed 2026-11-14): now a cube around the pen centre.
 					// The draws stay, so every later zone keeps the entries it had.
 					random.nextDouble();
 					random.nextInt(21);
@@ -234,7 +237,7 @@ public final class StressProfile {
 					ax = 0;
 					ay = PEN_Y;
 					az = 0;
-					shape = new Shape.Cylinder(r, 2 * r);
+					shape = cube(r);
 				}
 				default -> {
 					// Centred on the player: the zones nearest to most sounds in the pen.

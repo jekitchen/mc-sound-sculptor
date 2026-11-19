@@ -17,7 +17,7 @@ class OutlineVisibilityTest {
 	private static final String OVERWORLD = "minecraft:overworld";
 
 	private static Zone zoneAt(String id, double x, double radius) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Cylinder(radius, 2 * radius), PlaceSets.EMPTY);
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), PlaceSets.EMPTY);
 	}
 
 	private static boolean draws(Zone zone, OutlineMode mode, String editingId) {
@@ -63,7 +63,7 @@ class OutlineVisibilityTest {
 
 	@Test
 	void disabledZonesAreDrawnOnlyWhileEdited() {
-		Zone off = new Zone("a", "A", false, WORLD, OVERWORLD, new Point(10, 0, 0), new Shape.Cylinder(5, 10), PlaceSets.EMPTY);
+		Zone off = new Zone("a", "A", false, WORLD, OVERWORLD, new Point(10, 0, 0), new Shape.Box(10, 10, 10), PlaceSets.EMPTY);
 		assertFalse(draws(off, OutlineMode.ALWAYS, null));
 		assertTrue(draws(off, OutlineMode.ALWAYS, "a"));
 		assertTrue(draws(off, OutlineMode.EDITING, "a"));

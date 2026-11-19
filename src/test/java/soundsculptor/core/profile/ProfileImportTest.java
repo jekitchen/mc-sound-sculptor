@@ -35,8 +35,8 @@ class ProfileImportTest {
 	}
 
 	private static String zoneFile(String shape) {
-		return "{\"schemaVersion\": 3, \"zones\": [" + fixedZone("z1", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}") + ", "
-				+ fixedZone("z2", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}") + ", " + fixedZone("z3", shape) + "]}";
+		return "{\"schemaVersion\": 3, \"zones\": [" + fixedZone("z1", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}") + ", "
+				+ fixedZone("z2", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}") + ", " + fixedZone("z3", shape) + "]}";
 	}
 
 	private static String fixedZone(String id, String shape) {
@@ -46,27 +46,27 @@ class ProfileImportTest {
 
 	@Test
 	void aValidFileIsAccepted() throws ProfileFormatException {
-		Profile p = Profile.empty("A").withZones(List.of(ProfileZonesTest.fixed("z1", new Shape.Cylinder(9, 18))));
+		Profile p = Profile.empty("A").withZones(List.of(ProfileZonesTest.fixed("z1", new Shape.Box(18, 18, 18))));
 		ExportCodec.Read checked = ProfileImport.check(ProfileCodec.toJson(p));
 		assertEquals(p, checked.profile());
 		assertTrue(checked.warnings().isEmpty(), checked.warnings().toString());
 	}
 
 	@Test
-	void radiusAboveTheMaximumNamesTheZoneAndField() {
-		assertEquals("Zone 3, field radius: 900 is above the maximum 256.",
-				problem(zoneFile("{\"type\": \"cylinder\", \"radius\": 900, \"height\": 10}")));
+	void sizeAboveTheMaximumNamesTheZoneAndField() {
+		assertEquals("Zone 3, field width: 1800 is above the maximum 512.",
+				problem(zoneFile("{\"type\": \"box\", \"width\": 1800, \"height\": 10, \"depth\": 1800}")));
 	}
 
 	@Test
 	void sizeBelowTheMinimumNamesTheZoneAndField() {
 		assertEquals("Zone 3, field height: 0.5 is below the minimum 1.",
-				problem(zoneFile("{\"type\": \"cylinder\", \"radius\": 3, \"height\": 0.5}")));
+				problem(zoneFile("{\"type\": \"box\", \"width\": 6, \"height\": 0.5, \"depth\": 6}")));
 	}
 
 	@Test
 	void unknownShapeIsRefused() {
-		assertEquals("Zone 3, field shape type: \"cone\" is not one of: box, cylinder.",
+		assertEquals("Zone 3, field shape type: \"cone\" is not a supported shape.",
 				problem(zoneFile("{\"type\": \"cone\"}")));
 	}
 
@@ -77,8 +77,8 @@ class ProfileImportTest {
 
 	@Test
 	void wrongTypeIsNamed() {
-		assertEquals("Zone 3, field radius: \"big\" is not a number.",
-				problem(zoneFile("{\"type\": \"cylinder\", \"radius\": \"big\", \"height\": 10}")));
+		assertEquals("Zone 3, field width: \"big\" is not a number.",
+				problem(zoneFile("{\"type\": \"box\", \"width\": \"big\", \"height\": 10, \"depth\": 10}")));
 	}
 
 	@Test
@@ -91,7 +91,7 @@ class ProfileImportTest {
 	@Test
 	void zoneEntryProblemsNameTheZoneAndTheEntry() {
 		String zone = "{\"id\": \"z1\", \"anchor\": {\"type\": \"fixed\", \"x\": 0, \"y\": 0, \"z\": 0, \"dimension\":"
-				+ " \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"cylinder\", \"radius\": 4, \"height\": 10},"
+				+ " \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"box\", \"width\": 8, \"height\": 10, \"depth\": 8},"
 				+ " \"sets\": [{\"set\": \"quick\"}], \"quickChanges\": {\"id\": \"quick\", \"entries\": [{\"id\": \"r\", \"target\": \"a:b:c\"}]}}";
 		String message = problem("{\"schemaVersion\": 3, \"zones\": [" + zone + "]}");
 		assertEquals("Zone 1, Quick changes, entry 1, target: Use at most one :.", message);
@@ -118,21 +118,21 @@ class ProfileImportTest {
 	void moreThanSixtyFourZonesIsRefused() {
 		StringBuilder zones = new StringBuilder();
 		for (int i = 0; i < 65; i++) {
-			zones.append(i == 0 ? "" : ",").append(fixedZone("z" + i, "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}"));
+			zones.append(i == 0 ? "" : ",").append(fixedZone("z" + i, "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}"));
 		}
 		assertEquals("The file has 65 zones; the maximum is 64.", problem("{\"schemaVersion\": 3, \"zones\": [" + zones + "]}"));
 	}
 
 	@Test
 	void duplicateZoneIdsAreRefused() {
-		String z = fixedZone("same", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}");
+		String z = fixedZone("same", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}");
 		assertEquals("Zone 2, field id: \"same\" is already used by zone 1.",
 				problem("{\"schemaVersion\": 3, \"zones\": [" + z + ", " + z + "]}"));
 	}
 
 	@Test
 	void badColorIsNamed() {
-		String zone = fixedZone("z1", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}").replace("\"name\"", "\"color\": \"#12\", \"name\"");
+		String zone = fixedZone("z1", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}").replace("\"name\"", "\"color\": \"#12\", \"name\"");
 		assertEquals("Zone 1, field color: \"#12\" is not a color like #E69F00.",
 				problem("{\"schemaVersion\": 3, \"zones\": [" + zone + "]}"));
 	}
@@ -140,14 +140,14 @@ class ProfileImportTest {
 	@Test
 	void aRetiredFadeEdgeIsIgnoredEvenOutOfRange() throws ProfileFormatException {
 		// Fade edges were removed on 2026-11-14: an old file still loads.
-		String zone = fixedZone("z1", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10}").replace("\"name\"",
+		String zone = fixedZone("z1", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10}").replace("\"name\"",
 				"\"edge\": {\"mode\": \"fade\", \"fade\": 40}, \"name\"");
 		assertEquals(1, ProfileCodec.fromJson("{\"schemaVersion\": 3, \"zones\": [" + zone + "]}").zones().size());
 	}
 
 	@Test
 	void unknownFieldsAreWarningsNotErrors() throws ProfileFormatException {
-		String zone = fixedZone("z1", "{\"type\": \"cylinder\", \"radius\": 5, \"height\": 10, \"spin\": 1}");
+		String zone = fixedZone("z1", "{\"type\": \"box\", \"width\": 10, \"height\": 10, \"depth\": 10, \"spin\": 1}");
 		ExportCodec.Read checked = ProfileImport.check("{\"schemaVersion\": 3, \"extra\": true,"
 				+ " \"everywhere\": {\"sets\": [{\"set\": \"quick\"}], \"quickChanges\": {\"id\": \"quick\", \"entries\": ["
 				+ "{\"id\": \"a\", \"target\": \"x:a\", \"loud\": 1}]}}, \"zones\": [" + zone + "]}");

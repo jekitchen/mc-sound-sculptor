@@ -54,8 +54,8 @@ class SoundStartDeciderTest {
 		return SoundStartDecider.limiterKey(null, SoundSet.QUICK_ID, entryId);
 	}
 
-	private static Zone cylinder(String id, double x, double radius, SetEntry... rules) {
-		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Cylinder(radius, 2 * radius), quick(List.of(rules)));
+	private static Zone cube(String id, double x, double radius, SetEntry... rules) {
+		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), quick(List.of(rules)));
 	}
 
 	private void profile(List<SetEntry> global, Zone... zones) {
@@ -123,7 +123,7 @@ class SoundStartDeciderTest {
 	@Test
 	void p11MuteAllSilencesMusicAndUiToo() {
 		// Every sound is in scope (section 5, decided 2026-11-14).
-		profile(List.of(), cylinder("a", 0, 10, SetEntry.of("all", "*").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, SetEntry.of("all", "*").withMute(true)));
 		for (String id : List.of("minecraft:music.game", "minecraft:ui.button.click", "minecraft:entity.generic.eat")) {
 			SoundStart s = villagerAt(0);
 			s.soundId = id;
@@ -173,7 +173,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p1ZoneOverridesGlobalInsideAndNamesTheZone() {
-		Zone a = cylinder("a", 0, 10, villagers("z1").withVolume(50));
+		Zone a = cube("a", 0, 10, villagers("z1").withVolume(50));
 		profile(List.of(villagers("g1").withMute(true)), a);
 
 		SoundStartResult inside = start(villagerAt(0));
@@ -189,8 +189,8 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p3SmallestZoneYouStandInWins() {
-		Zone small = cylinder("a", 3, 10, villagers("ra").withVolume(20));
-		Zone big = cylinder("b", 9, 20, villagers("rb").withVolume(80));
+		Zone small = cube("a", 3, 10, villagers("ra").withVolume(20));
+		Zone big = cube("b", 9, 20, villagers("rb").withVolume(80));
 		profile(List.of(), big, small);
 		assertEquals(0.2F, start(villagerAt(0)).factor(), 1e-6, "in both: the smaller wins, whatever the list order");
 		assertEquals(0.8F, start(villagerAt(20)).factor(), 1e-6, "only in the big one");
@@ -198,7 +198,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p17ASoundOutsideTheZoneYouStandInFollowsThatZone() {
-		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("ra").withMute(true)));
 		SoundStart s = villagerAt(0);
 		s.x = 50; // the villager is far outside zone a; you are inside it
 		assertEquals(PlayStatus.MUTED, start(s).status());
@@ -206,7 +206,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p18ASoundInsideAZoneYouAreNotInIsNotChanged() {
-		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("ra").withMute(true)));
 		SoundStart s = villagerAt(50);
 		s.x = 0; // the villager is in zone a; you are not
 		assertEquals(PlayStatus.PLAYING, start(s).status());
@@ -215,7 +215,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void withoutAFeetBlockOnlyEverywhereApplies() {
-		profile(List.of(villagers("g1").withVolume(40)), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(villagers("g1").withVolume(40)), cube("a", 0, 10, villagers("ra").withMute(true)));
 		SoundStart s = villagerAt(0);
 		s.feetKnown = false;
 		assertEquals(0.4F, start(s).factor(), 1e-6);
@@ -223,7 +223,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p10FixedZonesStayInTheirDimension() {
-		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("ra").withMute(true)));
 		SoundStart s = villagerAt(0);
 		s.dimension = NETHER;
 		SoundStartResult r = start(s);
@@ -234,7 +234,7 @@ class SoundStartDeciderTest {
 	@Test
 	void p12AMutedLoopStartsSilentlySoItCanComeBack() {
 		// FR-8.8: a minecart rolling in a muting zone starts at volume 0, and follows you out of the zone.
-		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("ra").withMute(true)));
 		SoundStart s = villagerAt(0);
 		s.looping = true;
 		SoundStartResult r = start(s);
@@ -245,9 +245,9 @@ class SoundStartDeciderTest {
 
 	@Test
 	void aMutedOneShotDoesNotStartWhereverTheMuteComesFrom() {
-		profile(List.of(villagers("g1").withMute(true)), cylinder("far", 500, 10, villagers("z1").withVolume(50)));
+		profile(List.of(villagers("g1").withMute(true)), cube("far", 500, 10, villagers("z1").withVolume(50)));
 		assertTrue(start(villagerAt(0)).cancel(), "from Everywhere");
-		profile(List.of(), cylinder("a", 0, 10, villagers("ra").withMute(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("ra").withMute(true)));
 		assertTrue(start(villagerAt(0)).cancel(), "from a zone");
 	}
 
@@ -264,7 +264,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void disabledZonesNeverOverride() {
-		Zone a = new Zone("a", "A", false, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(10, 20),
+		Zone a = new Zone("a", "A", false, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(20, 20, 20),
 				quick(List.of(villagers("z1").withVolume(50))));
 		profile(List.of(villagers("g1").withMute(true)), a);
 		assertTrue(start(villagerAt(0)).cancel());
@@ -292,7 +292,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p8CueOnlyZoneKeepsTheGlobalBoost() {
-		profile(List.of(villagers("g1").withVolume(150)), cylinder("a", 0, 10, villagers("z1").withCue(true)));
+		profile(List.of(villagers("g1").withVolume(150)), cube("a", 0, 10, villagers("z1").withCue(true)));
 		assertEquals(1.5F, start(villagerAt(0)).factor(), 1e-6);
 	}
 
@@ -341,8 +341,8 @@ class SoundStartDeciderTest {
 
 	@Test
 	void p4MutedWithLimitFromAnotherZone() {
-		Zone a = cylinder("a", 2, 10, villagers("ra").withMute(true).withCue(true));
-		Zone b = cylinder("b", 6, 10, villagers("rb").withLimit(TWO_PER_SECOND));
+		Zone a = cube("a", 2, 10, villagers("ra").withMute(true).withCue(true));
+		Zone b = cube("b", 6, 10, villagers("rb").withLimit(TWO_PER_SECOND));
 		profile(List.of(), a, b);
 		assertEquals(PlayStatus.MUTED, start(villagerAt(0), 1_000).status());
 		assertTrue(out.cue());
@@ -357,7 +357,7 @@ class SoundStartDeciderTest {
 	void zoneLimitWinsInsideTheZone() {
 		// FR-6 AC: global limit 5/s, zone limit 1/s on the same sound: inside the zone, at most 1 per second plays.
 		profile(List.of(villagers("g1").withLimit(new Limit(5, 1000, false))),
-				cylinder("a", 0, 10, villagers("z1").withLimit(new Limit(1, 1000, false))));
+				cube("a", 0, 10, villagers("z1").withLimit(new Limit(1, 1000, false))));
 		int played = 0;
 		for (int i = 0; i < 10; i++) {
 			if (start(villagerAt(0), 1_000 + i * 50).status() != PlayStatus.LIMITED) {
@@ -371,7 +371,7 @@ class SoundStartDeciderTest {
 	void globalAndZoneRulesWithTheSameIdHaveTheirOwnCounters() {
 		// Entry IDs are unique within one set only, so Everywhere's "r1" and zone a's "r1" are different entries (FR-6.7).
 		SetEntry global = SetEntry.of("r1", "minecraft:entity.cow.*").withLimit(new Limit(1, 1000, false));
-		Zone a = cylinder("a", 0, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
+		Zone a = cube("a", 0, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
 		profile(List.of(global), a);
 
 		SoundStart cow = villagerAt(100); // outside the zone: the global rule decides
@@ -410,8 +410,8 @@ class SoundStartDeciderTest {
 
 	@Test
 	void twoZonesWithTheSameRuleIdHaveTheirOwnCounters() {
-		Zone a = cylinder("a", 0, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
-		Zone b = cylinder("b", 100, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
+		Zone a = cube("a", 0, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
+		Zone b = cube("b", 100, 10, villagers("r1").withLimit(new Limit(1, 1000, false)));
 		profile(List.of(), a, b);
 		assertEquals(PlayStatus.PLAYING, start(villagerAt(0), 1_000).status());
 		assertEquals(PlayStatus.PLAYING, start(villagerAt(100), 1_001).status());
@@ -499,7 +499,7 @@ class SoundStartDeciderTest {
 
 	@Test
 	void aZoneMuteShowsACueWhileYouStandInIt() {
-		profile(List.of(), cylinder("a", 0, 10, villagers("z1").withMute(true).withCue(true)));
+		profile(List.of(), cube("a", 0, 10, villagers("z1").withMute(true).withCue(true)));
 		assertTrue(start(villagerAt(0)).cue());
 		assertFalse(start(villagerAt(50)).cue(), "outside the zone the sound plays");
 	}

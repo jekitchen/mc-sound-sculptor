@@ -37,12 +37,12 @@ class SoundTracerTest {
 		return new LastPlay(true, WORLD, OVERWORLD, x, y, z, volume, false, false);
 	}
 
-	private static Zone cylinder(String id, double x, double radius, SetEntry... rules) {
-		return cylinder(id, x, radius, quick(List.of(rules)));
+	private static Zone cube(String id, double x, double radius, SetEntry... rules) {
+		return cube(id, x, radius, quick(List.of(rules)));
 	}
 
-	private static Zone cylinder(String id, double x, double radius, PlaceSets sets) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Cylinder(radius, 2 * radius), sets);
+	private static Zone cube(String id, double x, double radius, PlaceSets sets) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), sets);
 	}
 
 	private static PlaceSets attached(String... setIds) {
@@ -129,8 +129,8 @@ class SoundTracerTest {
 	@Test
 	void theZonesYouStoodInAreListedSmallestFirstAndTheSmallestWins() {
 		// FR-14.2: "You were in: Pen -> Base -> Everywhere", with the smaller zone as winner.
-		Zone pen = cylinder("pen", 3, 10, SetEntry.of("rn", "*villager*").withVolume(20));
-		Zone base = cylinder("base", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
+		Zone pen = cube("pen", 3, 10, SetEntry.of("rn", "*villager*").withVolume(20));
+		Zone base = cube("base", 9, 20, SetEntry.of("rf", "*villager*").withVolume(80));
 		SoundTrace t = trace(precedence(List.of(), List.of(base, pen)), AMBIENT, playAt(0, 0, 0, 20));
 
 		assertEquals(2, t.zones().size());
@@ -167,7 +167,7 @@ class SoundTracerTest {
 	@Test
 	void yourOwnEatingSoundIsDecidedByTheZoneYouStoodIn() {
 		// FR-14 AC: Why? on your own eating sound, played while you stand in a zone that mutes it, names that zone.
-		Zone all = cylinder("a", 0, 10, SetEntry.of("r", "*").withMute(true));
+		Zone all = cube("a", 0, 10, SetEntry.of("r", "*").withMute(true));
 		SoundTrace t = trace(precedence(List.of(), List.of(all)), "minecraft:entity.generic.eat", playAt(0, 0, 0, 0));
 		assertSame(all, t.zoneWinners().get(TraceProperty.LOUDNESS).zone());
 		assertEquals(0, t.volumePercent(), 1e-6);
@@ -175,7 +175,7 @@ class SoundTracerTest {
 
 	@Test
 	void aSoundNotHeardYetIsPredictedForWhereYouStandNow() {
-		Zone all = cylinder("a", 0, 10, SetEntry.of("r", "*").withMute(true));
+		Zone all = cube("a", 0, 10, SetEntry.of("r", "*").withMute(true));
 		Precedence p = precedence(List.of(), List.of(all));
 		SoundTrace here = SoundTracer.trace(p, SetLibrary.EMPTY, AMBIENT, null, new Standing(true, WORLD, OVERWORLD, 0, 0, 0), false);
 		assertTrue(here.notices().contains(TraceNotice.NOT_HEARD_YET));
@@ -188,7 +188,7 @@ class SoundTracerTest {
 
 	@Test
 	void aPlayWithoutAFeetBlockListsNoZones() {
-		Zone all = cylinder("a", 0, 10, SetEntry.of("r", "*").withMute(true));
+		Zone all = cube("a", 0, 10, SetEntry.of("r", "*").withMute(true));
 		LastPlay play = new LastPlay(false, "", "", 0, 0, 0, 100, false, false);
 		SoundTrace t = trace(precedence(List.of(), List.of(all)), AMBIENT, play);
 		assertTrue(t.zones().isEmpty());
@@ -263,16 +263,16 @@ class SoundTracerTest {
 
 	@Test
 	void zoneWinReasonsMatchTheDecision() {
-		Zone small = new Zone("s", "s", true, WORLD, OVERWORLD, new Point(5, 0, 0), new Shape.Cylinder(6, 12),
+		Zone small = new Zone("s", "s", true, WORLD, OVERWORLD, new Point(5, 0, 0), new Shape.Box(12, 12, 12),
 				quick(List.of(SetEntry.of("rs", "*villager*").withVolume(20))));
-		Zone big = new Zone("b", "b", true, WORLD, OVERWORLD, new Point(0, 5, 0), new Shape.Cylinder(10, 20),
+		Zone big = new Zone("b", "b", true, WORLD, OVERWORLD, new Point(0, 5, 0), new Shape.Box(20, 20, 20),
 				quick(List.of(SetEntry.of("rb", "*villager*").withVolume(80))));
 		ZoneWinner w = trace(precedence(List.of(), List.of(big, small)), AMBIENT, playAt(0, 0, 0, 20))
 				.zoneWinners().get(TraceProperty.LOUDNESS);
 		assertSame(small, w.zone());
 		assertEquals(ZoneWinReason.SMALLEST, w.reason());
 
-		Zone twin = new Zone("t", "t", true, WORLD, OVERWORLD, new Point(0, 0, 3), new Shape.Cylinder(10, 20),
+		Zone twin = new Zone("t", "t", true, WORLD, OVERWORLD, new Point(0, 0, 3), new Shape.Box(20, 20, 20),
 				quick(List.of(SetEntry.of("rt", "*villager*").withVolume(50))));
 		ZoneWinner order = trace(precedence(List.of(), List.of(big, twin)), AMBIENT, playAt(0, 0, 0, 80))
 				.zoneWinners().get(TraceProperty.LOUDNESS);
@@ -282,7 +282,7 @@ class SoundTracerTest {
 
 	@Test
 	void singleZoneWinsAsTheOnlyOne() {
-		Zone a = cylinder("a", 0, 10, SetEntry.of("r", "*villager*").withLimit(new Limit(2, 1000, false)));
+		Zone a = cube("a", 0, 10, SetEntry.of("r", "*villager*").withLimit(new Limit(2, 1000, false)));
 		SoundTrace t = trace(precedence(List.of(), List.of(a)), AMBIENT, playAt(0, 0, 0, 100));
 		assertEquals(ZoneWinReason.ONLY_ZONE, t.zoneWinners().get(TraceProperty.LIMIT).reason());
 		assertEquals(new Limit(2, 1000, false), t.limit());
@@ -290,13 +290,13 @@ class SoundTracerTest {
 
 	@Test
 	void zonesYouWereNotInAreLeftOut() {
-		Zone away = cylinder("away", 100, 10, SetEntry.of("r", "*villager*").withMute(true));
+		Zone away = cube("away", 100, 10, SetEntry.of("r", "*villager*").withMute(true));
 		assertTrue(trace(precedence(List.of(), List.of(away)), AMBIENT, playAt(0, 0, 0, 100)).zones().isEmpty());
 	}
 
 	@Test
 	void containingZoneWithoutMatchingEntriesIsListedButDecidesNothing() {
-		Zone cows = cylinder("cows", 0, 10, SetEntry.of("r", "minecraft:entity.cow.*").withMute(true));
+		Zone cows = cube("cows", 0, 10, SetEntry.of("r", "minecraft:entity.cow.*").withMute(true));
 		SoundTrace t = trace(precedence(List.of(), List.of(cows)), AMBIENT, playAt(0, 0, 0, 100));
 		assertEquals(1, t.zones().size());
 		assertTrue(t.zones().get(0).sets().sets().isEmpty());
@@ -306,7 +306,7 @@ class SoundTracerTest {
 	@Test
 	void zoneWithALibrarySetIsTracedInSetTerms() {
 		SetLibrary library = new SetLibrary(List.of(new SoundSet("farm", "Farm animals", List.of(SetEntry.of("e1", "*villager*").withVolume(25)))));
-		Zone pen = cylinder("pen", 0, 10, attached("farm"));
+		Zone pen = cube("pen", 0, 10, attached("farm"));
 		SoundTrace t = trace(library, PlaceSets.EMPTY, List.of(pen), AMBIENT, playAt(0, 0, 0, 25));
 		PlaceTrace sets = t.zones().get(0).sets();
 		assertEquals("Farm animals", sets.sets().get(0).setName());
@@ -319,8 +319,8 @@ class SoundTracerTest {
 	@Test
 	void finalResultAlwaysMatchesTheRealDecision() {
 		SetEntry global = SetEntry.of("g", "*villager*").withMute(true).withCue(true);
-		Zone a = cylinder("a", 2, 10, SetEntry.of("ra", "*villager*").withVolume(40));
-		Zone b = cylinder("b", 6, 10, SetEntry.of("rb", "*villager*").withLimit(new Limit(2, 1000, false)));
+		Zone a = cube("a", 2, 10, SetEntry.of("ra", "*villager*").withVolume(40));
+		Zone b = cube("b", 6, 10, SetEntry.of("rb", "*villager*").withLimit(new Limit(2, 1000, false)));
 		Precedence p = precedence(List.of(global), List.of(a, b));
 		SoundDecision d = new SoundDecision();
 		p.decide(AMBIENT, soundsculptor.core.Fixtures.at(p, WORLD, OVERWORLD, 0, 0, 0), d);
@@ -334,7 +334,7 @@ class SoundTracerTest {
 
 	@Test
 	void soundNotHeardYetShowsOnlyEverywhere() {
-		Zone a = cylinder("a", 0, 10, SetEntry.of("r", "*villager*").withMute(true));
+		Zone a = cube("a", 0, 10, SetEntry.of("r", "*villager*").withMute(true));
 		SoundTrace t = trace(precedence(List.of(SetEntry.of("g", "*villager*").withVolume(30)), List.of(a)), AMBIENT, null);
 		assertTrue(t.notices().contains(TraceNotice.NOT_HEARD_YET));
 		assertTrue(t.zones().isEmpty());

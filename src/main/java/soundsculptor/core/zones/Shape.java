@@ -1,8 +1,9 @@
 package soundsculptor.core.zones;
 
 /**
- * A zone's shape, centred on its anchor (PRD FR-8.3): a box (MVP) or a vertical cylinder (v1). Positions are given as
- * offsets from the anchor. Points on the boundary count as inside.
+ * A zone's shape, centred on its anchor (PRD FR-8.3): a box aligned with the world grid, the only shape (spheres and
+ * cylinders were dropped before release). Positions are given as offsets from the anchor. Points on the boundary count
+ * as inside.
  */
 public sealed interface Shape {
 	/** Whether the offset {@code (dx, dy, dz)} from the anchor is inside the shape. */
@@ -41,36 +42,6 @@ public sealed interface Shape {
 			double oy = Math.max(0, Math.abs(dy) - height / 2);
 			double oz = Math.max(0, Math.abs(dz) - depth / 2);
 			return Math.sqrt(ox * ox + oy * oy + oz * oz);
-		}
-	}
-
-	/** Vertical cylinder (v1): radius 1 to 256 blocks, height 1 to 512, centred on the anchor. */
-	record Cylinder(double radius, double height) implements Shape {
-		public static final double MIN_RADIUS = 1;
-		public static final double MAX_RADIUS = 256;
-		public static final double MIN_HEIGHT = 1;
-		public static final double MAX_HEIGHT = 512;
-
-		public Cylinder {
-			requireRange("radius", radius, MIN_RADIUS, MAX_RADIUS);
-			requireRange("height", height, MIN_HEIGHT, MAX_HEIGHT);
-		}
-
-		@Override
-		public boolean contains(double dx, double dy, double dz) {
-			return Math.abs(dy) <= height / 2 && dx * dx + dz * dz <= radius * radius;
-		}
-
-		@Override
-		public double volume() {
-			return Math.PI * radius * radius * height;
-		}
-
-		@Override
-		public double distanceOutside(double dx, double dy, double dz) {
-			double radial = Math.max(0, Math.sqrt(dx * dx + dz * dz) - radius);
-			double vertical = Math.max(0, Math.abs(dy) - height / 2);
-			return Math.sqrt(radial * radial + vertical * vertical);
 		}
 	}
 

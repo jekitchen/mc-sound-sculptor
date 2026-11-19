@@ -84,7 +84,7 @@ class WorldIdsTest {
 	// "Give this copy its own profile" (FR-11.1)
 
 	private static Zone fixed(String id, String worldKey) {
-		return new Zone(id, "Hall " + id, true, worldKey, "minecraft:overworld", new Point(1, 64, 2), new Shape.Cylinder(8, 16),
+		return new Zone(id, "Hall " + id, true, worldKey, "minecraft:overworld", new Point(1, 64, 2), new Shape.Box(16, 16, 16),
 				quick(List.of(SetEntry.of("r1", "*villager*").withVolume(50))));
 	}
 

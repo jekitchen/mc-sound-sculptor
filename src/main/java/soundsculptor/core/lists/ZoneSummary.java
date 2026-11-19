@@ -17,7 +17,6 @@ import soundsculptor.core.zones.Zone;
  */
 public final class ZoneSummary {
 	public static final String BOX = "soundsculptor.summary.shape.box";
-	public static final String CYLINDER = "soundsculptor.summary.shape.cylinder";
 
 	private ZoneSummary() {
 	}
@@ -37,7 +36,6 @@ public final class ZoneSummary {
 	public static SummaryPart shapePart(Shape shape) {
 		return switch (shape) {
 			case Shape.Box b -> SummaryPart.of(BOX, Numbers.plain(b.width()), Numbers.plain(b.height()), Numbers.plain(b.depth()));
-			case Shape.Cylinder c -> SummaryPart.of(CYLINDER, Numbers.plain(c.radius()), Numbers.plain(c.height()));
 		};
 	}
 

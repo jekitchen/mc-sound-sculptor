@@ -39,7 +39,7 @@ class ProfileCodecTest {
 		Zone hall = new Zone("z1", "Trading hall", true, "play.example.net", "minecraft:overworld", new Point(120.5, 64, -33.5),
 				new Shape.Box(20, 8, 30), PlaceSets.EMPTY.attach("set-4b2e").attach("set-9aa0").setEnabled("set-9aa0", false));
 		Zone tower = new Zone("z2", "Tower", true, "play.example.net", "minecraft:the_nether", new Point(0, 70, 0),
-				new Shape.Cylinder(8, 16), quick(zoneEntry));
+				new Shape.Box(16, 16, 16), quick(zoneEntry));
 		return new Profile("play.example.net", ProfileSettings.DEFAULTS, everywhere, List.of(hall, tower),
 				Map.of("z1", 0xE69F00));
 	}
@@ -111,8 +111,8 @@ class ProfileCodecTest {
 				problem(sets("{\"sets\": SETS}", "[{\"set\": \"deleted\"}]")));
 		assertEquals("Zone 1, set 1, field set: \"con\" is a reserved name and can't be used as a Sound Set ID.",
 				problem("{\"schemaVersion\": 3, \"zones\": [{\"id\": \"z1\", \"anchor\": {\"type\": \"fixed\", \"x\": 0, \"y\": 0,"
-						+ " \"z\": 0, \"dimension\": \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"cylinder\","
-						+ " \"radius\": 8, \"height\": 16}, \"sets\": [{\"set\": \"con\"}]}]}"));
+						+ " \"z\": 0, \"dimension\": \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"box\","
+						+ " \"width\": 16, \"height\": 16, \"depth\": 16}, \"sets\": [{\"set\": \"con\"}]}]}"));
 	}
 
 	@Test
@@ -141,8 +141,8 @@ class ProfileCodecTest {
 
 		items.add("{\"set\": \"set-32\"}");
 		String zone = "{\"schemaVersion\": 3, \"zones\": [{\"id\": \"z1\", \"anchor\": {\"type\": \"fixed\", \"x\": 0, \"y\": 0,"
-				+ " \"z\": 0, \"dimension\": \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"cylinder\","
-				+ " \"radius\": 8, \"height\": 16}, \"sets\": [" + String.join(", ", items) + "]}]}";
+				+ " \"z\": 0, \"dimension\": \"minecraft:overworld\", \"worldKey\": \"a.net\"}, \"shape\": {\"type\": \"box\","
+				+ " \"width\": 16, \"height\": 16, \"depth\": 16}, \"sets\": [" + String.join(", ", items) + "]}]}";
 		assertEquals("Zone 1, field sets: 33 Sound Sets is more than the maximum 32.", problem(zone));
 	}
 
@@ -164,6 +164,13 @@ class ProfileCodecTest {
 	}
 
 	@Test
+	void aCylinderShapeIsRefusedWithItsPlace() {
+		// Cylinder shapes were dropped too (owner decision 2026-11-18): zones are boxes only.
+		assertEquals("Zone 2, field shape type: \"cylinder\" is not a supported shape.",
+				problem(zoneFile("fixed", "{\"type\": \"cylinder\", \"radius\": 8, \"height\": 4}")));
+	}
+
+	@Test
 	void aBubbleAnchorIsRefusedWithItsPlace() {
 		// Personal bubble zones were dropped (owner decision 2026-11-13): every zone has fixed coordinates.
 		assertEquals("Zone 2, field anchor type: \"bubble\" is not a supported anchor.",
@@ -171,12 +178,12 @@ class ProfileCodecTest {
 	}
 
 	@Test
-	void otherUnknownShapesAndAnchorsStillListTheChoices() {
-		assertEquals("Zone 2, field shape type: \"cone\" is not one of: box, cylinder.",
+	void otherUnknownShapesAreUnsupportedAndAnchorsListTheChoices() {
+		assertEquals("Zone 2, field shape type: \"cone\" is not a supported shape.",
 				problem(zoneFile("fixed", "{\"type\": \"cone\"}")));
 		assertEquals("Zone 2, field anchor type: \"moving\" is not one of: fixed.",
 				problem(zoneFile("moving", "{\"type\": \"box\", \"width\": 4, \"height\": 4, \"depth\": 4}")));
-		assertEquals("Zone 2, field shape type: 3 is not one of: box, cylinder.",
+		assertEquals("Zone 2, field shape type: 3 is not one of: box.",
 				problem(zoneFile("fixed", "{\"type\": 3}")));
 	}
 

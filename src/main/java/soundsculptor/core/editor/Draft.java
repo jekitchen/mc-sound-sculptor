@@ -13,8 +13,7 @@ import java.util.Map;
  *   <li>{@link #shownError} is what the UI shows under a field: only once the field has been edited, or after Save
  *       was pressed ({@link #attemptSave}).</li>
  *   <li>{@link #isDirty} drives the Save / Discard / Keep editing dialog. A value counts as changed only if it means
- *       something different ("10" and "10.0" are the same), and only fields that are in use count (a box's width does
- *       not matter while the shape is a cylinder).</li>
+ *       something different ("10" and "10.0" are the same), and only fields that are in use count ({@link #inUse}).</li>
  *   <li>{@link #resetToDefault} is the reset button next to each value.</li>
  * </ul>
  *

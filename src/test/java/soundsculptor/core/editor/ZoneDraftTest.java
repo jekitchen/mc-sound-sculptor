@@ -12,7 +12,6 @@ import java.util.List;
 
 import soundsculptor.core.sets.PlaceSets;
 import soundsculptor.core.editor.ZoneDraft.Field;
-import soundsculptor.core.editor.ZoneDraft.ShapeKind;
 import soundsculptor.core.outline.ColorError;
 import soundsculptor.core.outline.ZoneColor;
 import soundsculptor.core.sets.SetEntry;
@@ -36,7 +35,6 @@ class ZoneDraftTest {
 		ZoneDraft d = ZoneDraft.blank("z1", "Trading hall", WORLD, OVERWORLD, new Point(120.5, 64, -33.5), ORANGE);
 		assertTrue(d.canSave());
 		assertFalse(d.isDirty());
-		assertEquals(ShapeKind.BOX, d.shape());
 		assertEquals("120.5", d.text(Field.X), "the field shows the player's position");
 		Zone z = d.build();
 		assertEquals(new Shape.Box(10, 10, 10), z.shape());
@@ -47,25 +45,12 @@ class ZoneDraftTest {
 	}
 
 	@Test
-	void aCylindersShapeResetsToABox() {
-		// FR-8.3: boxes are the MVP shape; a (v1) cylinder keeps its shape and can become a box.
-		ZoneDraft d = ZoneDraft.of(new Zone("z1", "Pen", true, WORLD, OVERWORLD, new Point(0, 64, 0), new Shape.Cylinder(12, 24),
-				quick(RULES)), ORANGE, ORANGE);
-		assertEquals(ShapeKind.CYLINDER, d.shape());
-		assertFalse(d.isDefault(Field.SHAPE));
-		d.resetToDefault(Field.SHAPE);
-		assertEquals(ShapeKind.BOX, d.shape());
-		assertTrue(d.isDefault(Field.SHAPE));
-	}
-
-	@Test
 	void existingZonesRoundTrip() {
-		Zone pen = new Zone("z1", "Pen", true, WORLD, OVERWORLD, new Point(1.25, 64, -3), new Shape.Cylinder(12.5, 9.5),
-				quick(RULES));
+		Zone pen = new Zone("z1", "Pen", true, WORLD, OVERWORLD, new Point(1, 64, -3), new Shape.Box(12, 10, 12), quick(RULES));
 		Zone outside = new Zone("z2", "Farm", false, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(20, 8, 30), quick(RULES));
-		Zone cylinder = new Zone("z3", "Tower", true, WORLD, "minecraft:the_nether", new Point(5, 70, 5),
-				new Shape.Cylinder(6, 40), PlaceSets.EMPTY);
-		for (Zone z : List.of(pen, outside, cylinder)) {
+		Zone tower = new Zone("z3", "Tower", true, WORLD, "minecraft:the_nether", new Point(5, 70, 5),
+				new Shape.Box(6, 40, 6), PlaceSets.EMPTY);
+		for (Zone z : List.of(pen, outside, tower)) {
 			ZoneDraft d = ZoneDraft.of(z, SKY, ORANGE);
 			assertTrue(d.canSave(), z.id());
 			assertFalse(d.isDirty(), z.id());
@@ -77,14 +62,8 @@ class ZoneDraftTest {
 	@Test
 	void sizesUseTheFr83Limits() {
 		ZoneDraft d = draft();
-		d.set(Field.RADIUS, "900");
-		// The PRD's own example: "radius: 900 is above the maximum 256".
-		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("1", "256")), d.error(Field.RADIUS));
-		d.setShape(ShapeKind.CYLINDER);
-		d.set(Field.RADIUS, "6");
 		d.set(Field.HEIGHT, "600");
 		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("1", "512")), d.error(Field.HEIGHT));
-		d.setShape(ShapeKind.BOX);
 		d.set(Field.HEIGHT, "8");
 		d.set(Field.WIDTH, "0");
 		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("1", "512")), d.error(Field.WIDTH));
@@ -95,17 +74,6 @@ class ZoneDraftTest {
 		assertEquals(FieldError.NOT_WHOLE_NUMBER, d.error(Field.WIDTH).translationKey());
 		d.set(Field.WIDTH, "3");
 		assertEquals(new Shape.Box(3, 8, 10), d.build().shape());
-	}
-
-	@Test
-	void onlyTheCurrentShapesSizesAreChecked() {
-		ZoneDraft d = draft();
-		d.setShape(ShapeKind.BOX);
-		d.set(Field.WIDTH, "9999");
-		d.setShape(ShapeKind.CYLINDER);
-		assertNull(d.error(Field.WIDTH));
-		assertTrue(d.canSave());
-		assertEquals(new Shape.Cylinder(10, 20), d.build().shape());
 	}
 
 	@Test
@@ -144,12 +112,12 @@ class ZoneDraftTest {
 	@Test
 	void dirtyIgnoresHowANumberOrColorIsWritten() {
 		ZoneDraft d = ZoneDraft.of(new Zone("z1", "Pen", true, WORLD, OVERWORLD, new Point(120.5, 64, 0),
-				new Shape.Cylinder(10, 20), quick(RULES)), ORANGE, ORANGE);
+				new Shape.Box(10, 20, 10), quick(RULES)), ORANGE, ORANGE);
 		d.set(Field.X, "120.50");
-		d.set(Field.RADIUS, "10.0");
+		d.set(Field.WIDTH, "10.0");
 		d.set(Field.COLOR, "e69f00");
 		assertFalse(d.isDirty());
-		d.set(Field.RADIUS, "11");
+		d.set(Field.WIDTH, "11");
 		assertTrue(d.isDirty());
 	}
 
@@ -161,15 +129,15 @@ class ZoneDraftTest {
 		assertEquals("40.25", d.text(Field.Y));
 		assertTrue(d.isDirty());
 		Zone z = d.build();
-		assertEquals(new Point(-8, 40.25, 3), z.anchor());
+		assertEquals(new Point(-8, 40, 3), z.anchor(), "on the block grid");
 		assertEquals("minecraft:the_nether", z.dimension());
 	}
 
 	@Test
 	void resetToDefaultPerValue() {
 		ZoneDraft d = ZoneDraft.of(new Zone("z1", "Pen", false, WORLD, OVERWORLD, new Point(1, 2, 3),
-				new Shape.Cylinder(30, 60), quick(RULES)), SKY, ORANGE);
-		for (Field f : List.of(Field.ENABLED, Field.COLOR, Field.SHAPE, Field.RADIUS, Field.HEIGHT)) {
+				new Shape.Box(30, 60, 30), quick(RULES)), SKY, ORANGE);
+		for (Field f : List.of(Field.ENABLED, Field.COLOR, Field.WIDTH, Field.HEIGHT, Field.DEPTH)) {
 			assertFalse(d.isDefault(f), f.name());
 			d.resetToDefault(f);
 			assertTrue(d.isDefault(f), f.name());
@@ -183,14 +151,12 @@ class ZoneDraftTest {
 	@Test
 	void choicesAreSetThroughTheirOwnMethods() {
 		ZoneDraft d = draft();
-		assertThrows(IllegalArgumentException.class, () -> d.set(Field.SHAPE, "TORUS"));
 		assertThrows(IllegalArgumentException.class, () -> d.set(Field.DIMENSION, "minecraft:the_end"));
 	}
 
 	@Test
 	void saveShowsEveryError() {
 		ZoneDraft d = draft();
-		d.setShape(ShapeKind.BOX);
 		d.set(Field.WIDTH, "1000");
 		ZoneDraft fresh = ZoneDraft.blank("z9", "", WORLD, OVERWORLD, new Point(0, 0, 0), ORANGE);
 		assertNull(fresh.shownError(Field.NAME));
@@ -199,9 +165,9 @@ class ZoneDraftTest {
 		assertThrows(IllegalStateException.class, d::build);
 	}
 
-	/** An unsaved-looking cylinder zone, so the field tests are not affected by box snapping. */
+	/** A saved-looking 10-block box zone. */
 	private static ZoneDraft draft() {
-		return ZoneDraft.of(new Zone("z1", "Trading hall", true, WORLD, OVERWORLD, new Point(120.5, 64, -33.5),
-				new Shape.Cylinder(10, 20), PlaceSets.EMPTY), ORANGE, ORANGE);
+		return ZoneDraft.of(new Zone("z1", "Trading hall", true, WORLD, OVERWORLD, new Point(120, 64, -33),
+				new Shape.Box(10, 10, 10), PlaceSets.EMPTY), ORANGE, ORANGE);
 	}
 }

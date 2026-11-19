@@ -49,8 +49,8 @@ class TraceEditorTest {
 		return place;
 	}
 
-	private static Zone cylinder(String id, double radius, PlaceSets sets) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Cylinder(radius, 2 * radius), sets);
+	private static Zone cube(String id, double radius, PlaceSets sets) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), sets);
 	}
 
 	private static Workspace ws(List<SoundSet> sets, PlaceSets everywhere, Zone... zones) {
@@ -87,7 +87,7 @@ class TraceEditorTest {
 
 	@Test
 	void editWinningEntryLevelUpdatesPrediction() {
-		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, cylinder("hall", 10, attached("farm")));
+		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, cube("hall", 10, attached("farm")));
 		TraceEditContext ctx = context(PLAY);
 		assertEquals(50, ctx.trace(start).volumePercent(), 1e-6);
 
@@ -108,7 +108,7 @@ class TraceEditorTest {
 	@Test
 	void editingALibraryEntryChangesEveryPlaceThatUsesTheSet() {
 		// Sets are linked (FR-4.9): an edit shown on Everywhere's line also changes the zone that uses the set.
-		Workspace start = ws(List.of(farm()), attached("farm"), cylinder("hall", 10, attached("farm")));
+		Workspace start = ws(List.of(farm()), attached("farm"), cube("hall", 10, attached("farm")));
 		TraceEditResult result = ok(TraceEditor.edit(context(PLAY), start, inLibrary(PlaceRef.EVERYWHERE, "farm", "e1"),
 				new EntryEdit.Volume(20)));
 		SetEntry inZone = result.predicted().zones().get(0).sets().winners().get(TraceProperty.LOUDNESS).entry();
@@ -193,7 +193,7 @@ class TraceEditorTest {
 
 	@Test
 	void lineOfSetUsedInTwoZonesSaysTwoPlaces() {
-		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, cylinder("a", 10, attached("farm")), cylinder("b", 20, attached("farm")));
+		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, cube("a", 10, attached("farm")), cube("b", 20, attached("farm")));
 
 		SoundTrace t = context(PLAY).trace(start);
 
@@ -254,7 +254,7 @@ class TraceEditorTest {
 
 	@Test
 	void unknownSetEntryOrZoneIsRefused() {
-		Workspace start = ws(List.of(farm()), attached("farm"), cylinder("hall", 10, PlaceSets.EMPTY));
+		Workspace start = ws(List.of(farm()), attached("farm"), cube("hall", 10, PlaceSets.EMPTY));
 		Message noEntry = TraceEditError.ENTRY_NOT_FOUND.message();
 		Message noZone = TraceEditError.ZONE_NOT_FOUND.message();
 		assertEquals(noEntry, TraceEditor.edit(context(PLAY), start, inLibrary(PlaceRef.EVERYWHERE, "gone", "e1"),
@@ -271,7 +271,7 @@ class TraceEditorTest {
 	@Test
 	void editingAQuickEntryChangesOnlyThatPlace() {
 		PlaceSets everywhere = PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("e1", AMBIENT).withVolume(60)));
-		Zone hall = cylinder("hall", 10, PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("e1", "*villager*").withVolume(50))));
+		Zone hall = cube("hall", 10, PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("e1", "*villager*").withVolume(50))));
 		Workspace start = ws(List.of(farm()), everywhere, hall);
 
 		Workspace after = ok(TraceEditor.edit(context(PLAY), start, inQuick(PlaceRef.EVERYWHERE, "e1"), new EntryEdit.Volume(40))).after();
@@ -285,7 +285,7 @@ class TraceEditorTest {
 	void editsLeaveTheOtherEntriesAndSetsAlone() {
 		SetEntry cows = SetEntry.of("e2", "*cow*").withMute(true);
 		SoundSet birds = new SoundSet("birds", "Birds", List.of(SetEntry.of("e1", "*parrot*").withMute(true)));
-		Zone hall = cylinder("hall", 10, attached("farm", "birds"));
+		Zone hall = cube("hall", 10, attached("farm", "birds"));
 		Workspace start = ws(List.of(farm(SetEntry.of("e1", "*villager*").withVolume(50), cows), birds), PlaceSets.EMPTY, hall);
 
 		Workspace after = ok(TraceEditor.edit(context(PLAY), start, inLibrary(HALL, "farm", "e1"), new EntryEdit.Volume(20))).after();
@@ -308,7 +308,7 @@ class TraceEditorTest {
 
 	@Test
 	void disablingAZoneLineDropsItFromThePrediction() {
-		Zone hall = cylinder("hall", 10, attached("farm"));
+		Zone hall = cube("hall", 10, attached("farm"));
 		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, hall);
 
 		TraceEditResult result = ok(TraceEditor.setZoneEnabled(context(PLAY), start, "hall", false));
@@ -324,7 +324,7 @@ class TraceEditorTest {
 
 	@Test
 	void disabledZoneKeepsEverythingElse() {
-		Zone far = cylinder("far", 8, attached("farm"));
+		Zone far = cube("far", 8, attached("farm"));
 		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, far);
 		Zone off = ok(TraceEditor.setZoneEnabled(context(PLAY), start, "far", false)).after().profile().zone("far");
 		assertEquals(far.withEnabled(false), off);
@@ -334,7 +334,7 @@ class TraceEditorTest {
 
 	@Test
 	void addToQuickChangesInAZoneCreatesASingleSoundEntryThere() {
-		Zone hall = cylinder("hall", 10, attached("farm"));
+		Zone hall = cube("hall", 10, attached("farm"));
 		Workspace start = ws(List.of(farm()), PlaceSets.EMPTY, hall);
 
 		TraceEditResult result = ok(TraceEditor.addToQuickChanges(context(PLAY), start, HALL, new EntryEdit.Volume(25)));

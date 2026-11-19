@@ -4,7 +4,7 @@ import soundsculptor.core.Message;
 
 /**
  * The messages about profile files, imports and the Profiles tab (PRD FR-11.2 to FR-11.8), as translation keys
- * (PRD 9.3). A problem with a place in the file reads like "Zone 3, field radius: 900 is above the maximum 256.": the
+ * (PRD 9.3). A problem with a place in the file reads like "Zone 3, field width: 900 is above the maximum 512.": the
  * place, the field as it is named in the file, and what is wrong, which translators can put in any order.
  */
 final class ProfileText {

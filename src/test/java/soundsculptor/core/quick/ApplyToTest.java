@@ -26,8 +26,8 @@ class ApplyToTest {
 	/** The player's feet block at {@link #HOME}. */
 	private static final FeetBlock FEET = new FeetBlock(100, 64, 100);
 
-	private static Zone cylinder(String id, String world, String dimension, Point anchor, double radius) {
-		return new Zone(id, "Zone " + id, true, world, dimension, anchor, new Shape.Cylinder(radius, 2 * radius), PlaceSets.EMPTY);
+	private static Zone cube(String id, String world, String dimension, Point anchor, double radius) {
+		return new Zone(id, "Zone " + id, true, world, dimension, anchor, new Shape.Box(2 * radius, 2 * radius, 2 * radius), PlaceSets.EMPTY);
 	}
 
 	private static Profile profile(Zone... zones) {
@@ -48,57 +48,57 @@ class ApplyToTest {
 
 	@Test
 	void offersOnlyZonesThePlayerIsStandingInInProfileListOrder() {
-		Zone far = cylinder("far", WORLD, OVERWORLD, new Point(500, 64, 500), 10);
-		Zone big = cylinder("big", WORLD, OVERWORLD, HOME, 50);
-		Zone small = cylinder("small", WORLD, OVERWORLD, new Point(103, 64, 100), 5);
+		Zone far = cube("far", WORLD, OVERWORLD, new Point(500, 64, 500), 10);
+		Zone big = cube("big", WORLD, OVERWORLD, HOME, 50);
+		Zone small = cube("small", WORLD, OVERWORLD, new Point(103, 64, 100), 5);
 		assertEquals(List.of("everywhere", "big", "small"), ids(ApplyTo.choices(profile(far, big, small), WORLD, OVERWORLD, FEET)));
 		assertEquals(List.of("everywhere", "small", "big"), ids(ApplyTo.choices(profile(small, far, big), WORLD, OVERWORLD, FEET)));
 	}
 
 	@Test
 	void fixedZonesCountOnlyInTheirOwnWorldAndDimension() {
-		Zone otherServer = cylinder("other", "other.example.net", OVERWORLD, HOME, 50);
-		Zone nether = cylinder("nether", WORLD, NETHER, HOME, 50);
-		Zone here = cylinder("here", WORLD, OVERWORLD, HOME, 50);
+		Zone otherServer = cube("other", "other.example.net", OVERWORLD, HOME, 50);
+		Zone nether = cube("nether", WORLD, NETHER, HOME, 50);
+		Zone here = cube("here", WORLD, OVERWORLD, HOME, 50);
 		assertEquals(List.of("everywhere", "here"), ids(ApplyTo.choices(profile(otherServer, nether, here), WORLD, OVERWORLD, FEET)));
 		assertEquals(List.of("everywhere", "nether"), ids(ApplyTo.choices(profile(otherServer, nether, here), WORLD, NETHER, FEET)));
 	}
 
 	@Test
 	void theEdgeOfAZoneCountsAsInside() {
-		Zone edge = cylinder("edge", WORLD, OVERWORLD, new Point(110, 64, 100), 10);
+		Zone edge = cube("edge", WORLD, OVERWORLD, new Point(110, 64, 100), 10);
 		assertEquals(List.of("everywhere", "edge"), ids(ApplyTo.choices(profile(edge), WORLD, OVERWORLD, FEET)));
 	}
 
 	@Test
 	void noFeetBlockOffersOnlyEverywhere() {
-		Zone here = cylinder("here", WORLD, OVERWORLD, HOME, 50);
+		Zone here = cube("here", WORLD, OVERWORLD, HOME, 50);
 		assertEquals(List.of("everywhere"), ids(ApplyTo.choices(profile(here), WORLD, OVERWORLD, null)));
 	}
 
 	@Test
 	void disabledZonesAreNotOffered() {
-		Zone off = new Zone("off", "Off", false, WORLD, OVERWORLD, HOME, new Shape.Cylinder(50, 100), PlaceSets.EMPTY);
+		Zone off = new Zone("off", "Off", false, WORLD, OVERWORLD, HOME, new Shape.Box(100, 100, 100), PlaceSets.EMPTY);
 		assertEquals(List.of("everywhere"), ids(ApplyTo.choices(profile(off), WORLD, OVERWORLD, FEET)));
 	}
 
 	@Test
 	void zoneLabelsUseTheZoneName() {
-		ApplyTarget target = ApplyTo.choices(profile(cylinder("z1", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD, FEET).get(1);
+		ApplyTarget target = ApplyTo.choices(profile(cube("z1", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD, FEET).get(1);
 		assertEquals("soundsculptor.sounds.apply_to.zone", target.translationKey());
 		assertEquals(List.of("Zone z1"), target.args());
 	}
 
 	@Test
 	void eachChoiceIsAPlaceWhoseQuickChangesTheActionsEdit() {
-		List<ApplyTarget> choices = ApplyTo.choices(profile(cylinder("z1", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD, FEET);
+		List<ApplyTarget> choices = ApplyTo.choices(profile(cube("z1", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD, FEET);
 		assertEquals(List.of(PlaceRef.EVERYWHERE, PlaceRef.zone("z1")), choices.stream().map(ApplyTarget::place).toList());
 	}
 
 	@Test
 	void selectKeepsTheLastChoiceWhileItIsStillOffered() {
-		Zone a = cylinder("a", WORLD, OVERWORLD, HOME, 5);
-		Zone b = cylinder("b", WORLD, OVERWORLD, HOME, 10);
+		Zone a = cube("a", WORLD, OVERWORLD, HOME, 5);
+		Zone b = cube("b", WORLD, OVERWORLD, HOME, 10);
 		List<ApplyTarget> choices = ApplyTo.choices(profile(a, b), WORLD, OVERWORLD, FEET);
 		assertSame(choices.get(2), ApplyTo.select(choices, "b"));
 		assertSame(ApplyTarget.EVERYWHERE, ApplyTo.select(choices, null));
@@ -106,7 +106,7 @@ class ApplyToTest {
 
 	@Test
 	void selectFallsBackToEverywhereWhenTheLastZoneIsNoLongerOffered() {
-		List<ApplyTarget> choices = ApplyTo.choices(profile(cylinder("a", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD,
+		List<ApplyTarget> choices = ApplyTo.choices(profile(cube("a", WORLD, OVERWORLD, HOME, 5)), WORLD, OVERWORLD,
 				new FeetBlock(0, 64, 0));
 		assertSame(ApplyTarget.EVERYWHERE, ApplyTo.select(choices, "a"));
 		assertTrue(ApplyTo.select(choices, "gone").isEverywhere());

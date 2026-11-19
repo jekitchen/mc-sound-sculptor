@@ -44,7 +44,7 @@ class SetImportPlanTest {
 	}
 
 	private static Zone hall(String id, PlaceSets sets) {
-		return new Zone(id, "Hall", true, "a.net", "minecraft:overworld", new Point(0, 0, 0), new Shape.Cylinder(4, 8), sets);
+		return new Zone(id, "Hall", true, "a.net", "minecraft:overworld", new Point(0, 0, 0), new Shape.Box(8, 8, 8), sets);
 	}
 
 	/** The file's profile: Everywhere has Quick changes and the farm set; a zone attaches rain and farm. */

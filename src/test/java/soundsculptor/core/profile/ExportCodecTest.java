@@ -36,7 +36,7 @@ class ExportCodecTest {
 	/** Everywhere: Quick changes and farm; z1: rain and farm; b1: rain. */
 	private static final Profile PROFILE = Profile.empty("Export")
 			.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("q", "*bee*"))).attach("set-farm"))
-			.withZones(List.of(fixed("z1", new Shape.Cylinder(5, 10)).withSets(PlaceSets.EMPTY.attach("set-rain").attach("set-farm")),
+			.withZones(List.of(fixed("z1", new Shape.Box(10, 10, 10)).withSets(PlaceSets.EMPTY.attach("set-rain").attach("set-farm")),
 					fixed("b1", new Shape.Box(8, 8, 8)).withSets(PlaceSets.EMPTY.attach("set-rain"))));
 
 	private static String problem(String text) {

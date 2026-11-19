@@ -31,14 +31,8 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		/** Set with the anchor by {@link #setPosition}. */
 		WORLD_KEY(false),
 		DIMENSION(false),
-		SHAPE(false),
-		/** Cylinder. */
-		RADIUS(true),
-		/** Box. */
 		WIDTH(true),
-		/** Box and cylinder. */
 		HEIGHT(true),
-		/** Box. */
 		DEPTH(true);
 
 		private final boolean text;
@@ -53,13 +47,7 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		}
 	}
 
-	/** The zone's shape type, chosen in the editor. */
-	public enum ShapeKind {
-		BOX,
-		CYLINDER
-	}
-
-	/** Size of a new zone, and what a size's reset button puts back: a 10-block box or cylinder. */
+	/** Size of a new zone, and what a size's reset button puts back: a 10-block box. */
 	public static final double DEFAULT_SIZE = 10;
 
 	private final String id;
@@ -101,30 +89,16 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		values.put(Field.WORLD_KEY, zone.worldKey());
 		values.put(Field.DIMENSION, zone.dimension());
 		String size = Numbers.format(DEFAULT_SIZE);
-		values.put(Field.RADIUS, size);
-		values.put(Field.WIDTH, size);
-		values.put(Field.HEIGHT, size);
-		values.put(Field.DEPTH, size);
-		switch (zone.shape()) {
-			case Shape.Box b -> {
-				values.put(Field.SHAPE, ShapeKind.BOX.name());
-				values.put(Field.WIDTH, Numbers.format(b.width()));
-				values.put(Field.HEIGHT, Numbers.format(b.height()));
-				values.put(Field.DEPTH, Numbers.format(b.depth()));
-			}
-			case Shape.Cylinder c -> {
-				values.put(Field.SHAPE, ShapeKind.CYLINDER.name());
-				values.put(Field.RADIUS, Numbers.format(c.radius()));
-				values.put(Field.HEIGHT, Numbers.format(c.height()));
-			}
-		}
+		Shape.Box box = (Shape.Box) zone.shape();
+		values.put(Field.WIDTH, Numbers.format(box.width()));
+		values.put(Field.HEIGHT, Numbers.format(box.height()));
+		values.put(Field.DEPTH, Numbers.format(box.depth()));
 
 		// Name, coordinates, world and dimension have no app-wide default: reset puts back the value at opening.
 		EnumMap<Field, String> defaults = new EnumMap<>(values);
 		defaults.put(Field.ENABLED, "true");
 		defaults.put(Field.COLOR, ZoneColors.format(defaultRgb));
-		defaults.put(Field.SHAPE, ShapeKind.BOX.name());
-		for (Field f : List.of(Field.RADIUS, Field.WIDTH, Field.HEIGHT, Field.DEPTH)) {
+		for (Field f : List.of(Field.WIDTH, Field.HEIGHT, Field.DEPTH)) {
 			defaults.put(f, size);
 		}
 		return new ZoneDraft(zone.id(), zone.sets(), values, defaults);
@@ -149,19 +123,10 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 
 	/** A box zone at {@code center} with {@code box}'s size, e.g. from marking corners or moving a side. */
 	public void setBox(Point center, Shape.Box box, String worldKey, String dimension) {
-		setShape(ShapeKind.BOX);
 		setPosition(center, worldKey, dimension);
 		put(Field.WIDTH, Numbers.format(box.width()));
 		put(Field.HEIGHT, Numbers.format(box.height()));
 		put(Field.DEPTH, Numbers.format(box.depth()));
-	}
-
-	public ShapeKind shape() {
-		return ShapeKind.valueOf(text(Field.SHAPE));
-	}
-
-	public void setShape(ShapeKind value) {
-		put(Field.SHAPE, value.name());
 	}
 
 	/** The color as {@code 0xRRGGBB}. Valid only while the color field has no error. */
@@ -178,22 +143,9 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 				yield error == null ? null : FieldError.of(error.translationKey());
 			}
 			case X, Y, Z -> Numbers.checkNumber(text);
-			case RADIUS -> Numbers.checkDecimal(text, Shape.Cylinder.MIN_RADIUS, Shape.Cylinder.MAX_RADIUS);
 			// Boxes line up with the block grid: whole-block sizes (M8 review).
-			case HEIGHT -> shape() == ShapeKind.BOX
-					? Numbers.checkWhole(text, (int) Shape.Box.MIN_SIDE, (int) Shape.Box.MAX_SIDE)
-					: Numbers.checkDecimal(text, Shape.Cylinder.MIN_HEIGHT, Shape.Cylinder.MAX_HEIGHT);
-			case WIDTH, DEPTH -> Numbers.checkWhole(text, (int) Shape.Box.MIN_SIDE, (int) Shape.Box.MAX_SIDE);
+			case WIDTH, HEIGHT, DEPTH -> Numbers.checkWhole(text, (int) Shape.Box.MIN_SIDE, (int) Shape.Box.MAX_SIDE);
 			default -> null;
-		};
-	}
-
-	@Override
-	protected boolean inUse(Field field) {
-		return switch (field) {
-			case RADIUS -> shape() == ShapeKind.CYLINDER;
-			case WIDTH, DEPTH -> shape() == ShapeKind.BOX;
-			default -> true;
 		};
 	}
 
@@ -206,22 +158,16 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 				ZoneColors.Parsed pb = ZoneColors.parseHex(b);
 				yield pa.error() == null && pb.error() == null ? pa.rgb() == pb.rgb() : a.trim().equals(b.trim());
 			}
-			case X, Y, Z, RADIUS, WIDTH, HEIGHT, DEPTH -> Numbers.same(a, b);
+			case X, Y, Z, WIDTH, HEIGHT, DEPTH -> Numbers.same(a, b);
 			default -> a.equals(b);
 		};
 	}
 
 	@Override
 	protected Zone create() {
-		Shape shape = switch (shape()) {
-			case BOX -> new Shape.Box(number(Field.WIDTH), number(Field.HEIGHT), number(Field.DEPTH));
-			case CYLINDER -> new Shape.Cylinder(number(Field.RADIUS), number(Field.HEIGHT));
-		};
-		Point anchor = new Point(number(Field.X), number(Field.Y), number(Field.Z));
-		if (shape instanceof Shape.Box box) {
-			// Every edge on a block boundary, however the center was set (typed, My position, Looking at).
-			anchor = BoxEdit.snap(anchor, box).center();
-		}
+		Shape.Box shape = new Shape.Box(number(Field.WIDTH), number(Field.HEIGHT), number(Field.DEPTH));
+		// Every edge on a block boundary, however the center was set (typed, My position, Looking at).
+		Point anchor = BoxEdit.snap(new Point(number(Field.X), number(Field.Y), number(Field.Z)), shape).center();
 		return new Zone(id, text(Field.NAME).trim(), enabled(), text(Field.WORLD_KEY), text(Field.DIMENSION), anchor, shape,
 				sets);
 	}
