@@ -70,6 +70,8 @@ loom {
 		matching { it.name == 'clientGameTest' }.configureEach {
 			vmArg '-Dsoundsculptor.logSounds=false'
 			vmArg "-Dsoundsculptor.soakSeconds=${project.findProperty('soak') ?: '20'}"
+			// -Pscreenshots=<folder> also saves the mod page screenshots there (ModPageScreenshotsClientGameTest).
+			vmArg "-Dsoundsculptor.screenshotsDir=${project.hasProperty('screenshots') ? file(project.property('screenshots')).absolutePath : ''}"
 		}
 	}
 }
