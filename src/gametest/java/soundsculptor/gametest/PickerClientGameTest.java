@@ -261,21 +261,23 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 			showCows(context);
 
 			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			check(context.computeOnClient(mc -> picker(mc).hasOverlay()), "Like this… opens");
 			context.getInput().pressKey(InputConstants.KEY_ESCAPE);
 			context.waitTicks(1);
 			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && !picker(mc).hasOverlay()
 					&& likeThisButton(mc, COW).isFocused()), "Esc closes only the pop-up and returns to Like this…");
 
 			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			check(context.computeOnClient(mc -> picker(mc).hasOverlay()), "Like this… opens again");
 			double[] outside = context.computeOnClient(mc -> {
 				double scale = mc.getWindow().getGuiScale();
 				return new double[] {4 * scale, (picker(mc).height - 4) * scale};
 			});
 			context.getInput().setCursorPos(outside[0], outside[1]);
-			context.getInput().pressMouse(0);
+			context.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 			context.waitTicks(1);
-			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && !picker(mc).hasOverlay()),
-					"a click outside closes only the pop-up");
+			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && !picker(mc).hasOverlay()
+					&& likeThisButton(mc, COW).isFocused()), "a click outside closes only the pop-up and returns to Like this…");
 
 			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
 			check(context.computeOnClient(mc -> groupAdd(mc, COW_GROUP).isFocused()), "the closest group's Add has focus");
