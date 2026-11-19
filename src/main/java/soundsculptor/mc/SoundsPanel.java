@@ -2,9 +2,11 @@ package soundsculptor.mc;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -162,6 +164,17 @@ public final class SoundsPanel {
 	private int shownPickVersion;
 	/** Whether the last refresh held the list (the pointer was over it). */
 	private boolean shownHeld;
+	/**
+	 * Whether the mouse has moved since the panel was built or the last key press. Vanilla puts the cursor in the middle
+	 * of the window when a screen opens, which is usually over the list: a cursor that only rests there, or that a
+	 * keyboard player left there, must not hold it.
+	 */
+	private boolean pointerMoved;
+	private double restX;
+	private double restY;
+	private int seenKeyPresses;
+	/** The mute predicate for this refresh, made once when the first row needs it. */
+	private Predicate<String> refreshMuted;
 	/** Counts ticks and unticks in picker mode, so a refresh after one is not skipped. */
 	private int pickVersion;
 	/** The Like this… pop-up's sound and its groups (counted once when it opens). */
@@ -237,6 +250,7 @@ public final class SoundsPanel {
 	// ---- Building ----
 
 	public void build(SculptScreen.Body body) {
+		restPointer();
 		Font font = Minecraft.getInstance().font;
 		recentToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(Component.translatable("soundsculptor.sounds.recent_only")),
 				Component.translatable("soundsculptor.sounds.recent_only"), state.recentOnly, this::setRecentOnly),
@@ -371,6 +385,25 @@ public final class SoundsPanel {
 		return shownHeld && !(state.recentOnly && state.paused);
 	}
 
+	/** Whether the player is pointing at the list with the mouse: it moved since the build or the last key press. */
+	private boolean pointing() {
+		if (host.keyPresses() != seenKeyPresses) {
+			restPointer();
+		} else if (!pointerMoved) {
+			Minecraft mc = Minecraft.getInstance();
+			pointerMoved = mc.mouseHandler.xpos() != restX || mc.mouseHandler.ypos() != restY;
+		}
+		return pointerMoved && list.isHovered();
+	}
+
+	private void restPointer() {
+		Minecraft mc = Minecraft.getInstance();
+		restX = mc.mouseHandler.xpos();
+		restY = mc.mouseHandler.ypos();
+		seenKeyPresses = host.keyPresses();
+		pointerMoved = false;
+	}
+
 	/** How many sounds wait to join the held list. */
 	public int waiting() {
 		return waiting;
@@ -430,6 +463,10 @@ public final class SoundsPanel {
 	 * rebuilds every row, because the Mute buttons and the columns depend on them. Does nothing while a pop-up is open,
 	 * so focus stays in it.
 	 *
+	 * <p>While the player points at the list with the mouse it is held ({@link HoldOrder}): the rows keep their order,
+	 * new ones wait, and rows that left the fresh list stay, brought up to date from the data they were built with.
+	 * Entering or leaving the hold always refreshes.
+	 *
 	 * <p>In picker mode a tick or untick also counts as a change, and a row's inputs include whether it is picked and
 	 * whether the set has it, so a tick rebuilds only its own row.
 	 */
@@ -447,9 +484,12 @@ public final class SoundsPanel {
 		// Held while the pointer is over a list with rows, unless the player changed what it lists: their own search,
 		// filter, sort or Apply to shows at once.
 		boolean ownChange = query != shownQuery || state.recentOnly != shownRecentOnly || state.sort != shownSort || !target.equals(shownTarget);
-		boolean hold = !ownChange && list.isHovered() && !list.children().isEmpty();
+		boolean hold = !ownChange && pointing() && !list.children().isEmpty();
 		// workspace() is a new record each call: compare its parts, which change identity only when changed.
+		// A held list may keep rows that left the fresh list; if the cache is cleared they are rebuilt from their old entry.
+		Map<String, CachedRow> previous = rowCache;
 		if (ws.profile() != shownProfile || ws.library() != shownLibrary || !target.equals(shownTarget) || distance != shownDistance) {
+			previous = hold ? new HashMap<>(rowCache) : Map.of();
 			rowCache.clear();
 		} else if (log.generation() == shownGeneration && query == shownQuery && state.recentOnly == shownRecentOnly && state.sort == shownSort
 				&& pickVersion == shownPickVersion && hold == shownHeld && (!shownAnyRecent || second == shownSecond)) {
@@ -468,32 +508,34 @@ public final class SoundsPanel {
 		// Read after the snapshot, which drops expired rows.
 		shownGeneration = log.generation();
 		List<BrowserRow> found = SoundBrowser.rows(recent, entries, query, state.recentOnly, state.sort);
-		Predicate<String> muted = null;
+		refreshMuted = null;
 		boolean anyRecent = false;
 		List<SculptList.Row> rows = new ArrayList<>(found.size());
+		Set<String> foundIds = hold ? new HashSet<>(found.size() * 2) : null;
 		for (BrowserRow row : found) {
-			Object inputs = rowInputs(row, log);
-			if (picker != null) {
-				inputs = new PickInputs(inputs, picker.inSet(row.soundId()), picker.picked(row.soundId()));
-			}
-			CachedRow cached = rowCache.get(row.soundId());
-			if (cached == null || !cached.inputs().equals(inputs)) {
-				if (muted == null && picker == null) {
-					muted = mutedAtApplyTarget();
-				}
-				LiveRecent live = row.recent() == null ? null : new LiveRecent(row.recent(), recentMark(row.soundId()));
-				cached = new CachedRow(inputs, toListRow(row, live, muted), live);
-				rowCache.put(row.soundId(), cached);
-				rowsBuilt++;
-			} else if (cached.live() != null) {
+			CachedRow cached = cachedRow(row, log);
+			if (cached.live() != null) {
 				cached.live().update(row.recent());
 			}
 			anyRecent |= row.recent() != null;
 			rows.add(cached.row());
+			if (foundIds != null) {
+				foundIds.add(row.soundId());
+			}
 		}
 		shownAnyRecent = anyRecent;
 		shownHeld = hold;
 		if (hold) {
+			// Rows kept on screen that left the fresh list (their sound left the log) are brought up to date too, from the
+			// data they were built with: a row the player acts on must show its new state (Unmute, a tick).
+			for (SculptList.Row shown : list.children()) {
+				if (shown.key() instanceof String id && !foundIds.contains(id)) {
+					CachedRow old = rowCache.containsKey(id) ? rowCache.get(id) : previous.get(id);
+					if (old != null) {
+						rows.add(cachedRow(old.source(), log).row());
+					}
+				}
+			}
 			HoldOrder.Held<SculptList.Row> held = HoldOrder.hold(list.children(), rows, SculptList.Row::key);
 			rows = held.rows();
 			waiting = held.waiting();
@@ -541,7 +583,26 @@ public final class SoundsPanel {
 	}
 
 	/** A built row, what it was built from, and its recent values ({@code null} for a row without recent data). */
-	private record CachedRow(Object inputs, SculptList.Row row, LiveRecent live) {
+	private record CachedRow(Object inputs, SculptList.Row row, LiveRecent live, BrowserRow source) {
+	}
+
+	/** The cached row for a browser row, rebuilt if what it is built from changed. */
+	private CachedRow cachedRow(BrowserRow row, RecentSounds log) {
+		Object inputs = rowInputs(row, log);
+		if (picker != null) {
+			inputs = new PickInputs(inputs, picker.inSet(row.soundId()), picker.picked(row.soundId()));
+		}
+		CachedRow cached = rowCache.get(row.soundId());
+		if (cached == null || !cached.inputs().equals(inputs)) {
+			if (refreshMuted == null && picker == null) {
+				refreshMuted = mutedAtApplyTarget();
+			}
+			LiveRecent live = row.recent() == null ? null : new LiveRecent(row.recent(), recentMark(row.soundId()));
+			cached = new CachedRow(inputs, toListRow(row, live, refreshMuted), live, row);
+			rowCache.put(row.soundId(), cached);
+			rowsBuilt++;
+		}
+		return cached;
 	}
 
 	/**

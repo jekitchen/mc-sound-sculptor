@@ -22,6 +22,7 @@ public final class KeyEventCompat {
 			case InputConstants.KEY_TAB -> InputConstants.KEYCODE_TAB;
 			case InputConstants.KEY_LEFT -> InputConstants.KEYCODE_LEFT;
 			case InputConstants.KEY_RIGHT -> InputConstants.KEYCODE_RIGHT;
+			case InputConstants.KEY_DOWN -> InputConstants.KEYCODE_DOWN;
 			case InputConstants.KEY_HOME -> InputConstants.KEYCODE_HOME;
 			case InputConstants.KEY_END -> InputConstants.KEYCODE_END;
 			default -> throw new IllegalArgumentException("no keycode mapping for key " + key + "; add it here");
