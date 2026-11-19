@@ -339,6 +339,8 @@
 	"soundsculptor.sounds.help.7.meaning": "* stands for any characters",
 	"soundsculptor.sounds.count": "%s sounds",
 	"soundsculptor.sounds.count.one": "1 sound",
+	"soundsculptor.sounds.held": "%s · Held",
+	"soundsculptor.sounds.held.new": "%s · Held · %s new",
 	"soundsculptor.sounds.seen_as": "Seen as: %s",
 	"soundsculptor.sounds.list": "Sounds",
 	"soundsculptor.sounds.empty": "No sound matches. Try fewer or shorter words.",

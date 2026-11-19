@@ -32,8 +32,10 @@ import soundsculptor.mc.SetNameScreen;
 import soundsculptor.mc.SoundSculptorScreen;
 import soundsculptor.mc.SoundSculptorSettings;
 import soundsculptor.mc.SoundsPanel;
+import soundsculptor.mc.compat.Keys;
 import soundsculptor.mc.ui.SculptList;
 import soundsculptor.mc.ui.SculptScreen;
+import soundsculptor.gametest.compat.KeyEventCompat;
 
 /**
  * The Sounds tab (PRD FR-1, FR-3, FR-12.1, M8d), one browser replacing Recently Played and Search:
@@ -72,6 +74,8 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			addToSetCreatesEntryInChosenSet(context);
 			filterStateRememberedAcrossReopen(context);
 			idleRefreshRebuildsNothing(context);
+			holdWhilePointing(context);
+			holdNeedsTheMouse(context);
 		}
 		applyToForgottenInAnotherWorld(context);
 	}
@@ -196,6 +200,136 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 		} finally {
 			cleanUp(context);
 		}
+	}
+
+	/**
+	 * FR-1.3: while the pointer is over the list it is held. Rows keep their place and new sounds wait, but values update;
+	 * the player's own search and row actions are not held; leaving the list catches up. Background music may add rows,
+	 * so only the order of this test's own sounds is checked.
+	 */
+	private static void holdWhilePointing(ClientGameTestContext context) {
+		open(context);
+		try {
+			play(context, ZOMBIE, 3.0);
+			play(context, VILLAGER, 3.0);
+			check(before(context, VILLAGER, ZOMBIE), "most recent first: villager, then zombie, was " + keys(context));
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held while the pointer is elsewhere");
+
+			pointAtList(context);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held while the pointer is over the list");
+			check(countLabel(context).endsWith(" · Held"), "the count says Held, was " + countLabel(context));
+
+			play(context, ZOMBIE, 3.0);
+			play(context, COW, 3.0);
+			check(before(context, VILLAGER, ZOMBIE), "a replay does not move the zombie up while held, was " + keys(context));
+			check(rowTexts(context, COW) == null, "a new sound waits while held");
+			check(context.computeOnClient(mc -> sounds(mc).waiting()) >= 1, "the cow is counted as waiting");
+			check(countLabel(context).contains(" · Held · ") && countLabel(context).endsWith(" new"),
+					"the count says how many are waiting, was " + countLabel(context));
+			check(rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×2")), "the held zombie row still updates its count, was "
+					+ rowTexts(context, ZOMBIE));
+
+			// The player's own search is not held.
+			search(context, "entity");
+			check(rowTexts(context, COW) != null, "a search shows the cow at once, pointer or not");
+			search(context, "");
+
+			// A row action rebuilds rows in their place: nothing moves or joins.
+			List<String> shown = keys(context);
+			context.runOnClient(mc -> press(mc, VILLAGER, SoundsPanel.BUTTON_MUTE));
+			context.waitTicks(SETTLE);
+			check(button(context, VILLAGER, SoundsPanel.BUTTON_MUTE).equals("Unmute"), "the pressed row shows its new state");
+			check(keys(context).equals(shown), "Mute keeps every row in its place while held, was " + keys(context) + ", before " + shown);
+			context.runOnClient(mc -> main(mc).pressUndo());
+			context.waitTicks(SETTLE);
+
+			// A row that left the log while held stays, and an action on it still shows its new state.
+			context.runOnClient(mc -> RecentLog.get().sounds().clear());
+			context.waitTicks(SETTLE);
+			check(rowTexts(context, VILLAGER) != null, "a row that left the log stays while held");
+			context.runOnClient(mc -> press(mc, VILLAGER, SoundsPanel.BUTTON_MUTE));
+			context.waitTicks(SETTLE);
+			check(button(context, VILLAGER, SoundsPanel.BUTTON_MUTE).equals("Unmute"),
+					"a kept row that left the log shows its new state after Mute, was " + button(context, VILLAGER, SoundsPanel.BUTTON_MUTE));
+			context.runOnClient(mc -> main(mc).pressUndo());
+			play(context, VILLAGER, 3.0);
+			play(context, COW, 3.0);
+
+			// Leaving the list catches up, even with nothing new played since.
+			play(context, ZOMBIE, 3.0);
+			check(before(context, COW, ZOMBIE), "still held: the zombie stays below the cow, was " + keys(context));
+			pointAway(context);
+			context.waitTicks(SETTLE);
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held once the pointer leaves");
+			check(before(context, ZOMBIE, COW), "leaving catches up: the zombie played last, was " + keys(context));
+			check(!countLabel(context).contains("Held"), "the count no longer says Held, was " + countLabel(context));
+		} finally {
+			pointAway(context);
+			cleanUp(context);
+		}
+	}
+
+	/**
+	 * The hold needs the mouse: a cursor that rests over the list when the screen opens (vanilla puts it in the middle
+	 * of the window) does not hold it, moving it does, and keyboard use ends the hold.
+	 */
+	private static void holdNeedsTheMouse(ClientGameTestContext context) {
+		open(context);
+		try {
+			play(context, ZOMBIE, 3.0);
+			play(context, VILLAGER, 3.0);
+			// Vanilla moves the cursor before a screen is built, so a screen built with the cursor already over the list is
+			// what opening looks like: here the tab is rebuilt with the cursor resting on it.
+			double[] at = listCentre(context);
+			context.getInput().setCursorPos(at[0], at[1]);
+			context.waitTicks(2);
+			context.runOnClient(mc -> main(mc).selectTab(SoundSculptorScreen.TAB_SOUNDS));
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).list.isHovered()), "the cursor rests over the list after the rebuild");
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "a cursor resting over the list since it was built does not hold it");
+
+			context.getInput().setCursorPos(at[0] + 3, at[1]);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "moving the mouse over the list holds it");
+
+			context.runOnClient(mc -> mc.gui.screen().keyPressed(KeyEventCompat.of(Keys.DOWN, 0)));
+			context.waitTicks(SETTLE);
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "keyboard use ends the hold");
+		} finally {
+			pointAway(context);
+			cleanUp(context);
+		}
+	}
+
+	private static double[] listCentre(ClientGameTestContext context) {
+		return context.computeOnClient(mc -> {
+			SculptList list = sounds(mc).list;
+			double scale = mc.getWindow().getGuiScale();
+			return new double[] {(list.getX() + list.getWidth() / 2.0) * scale, (list.getY() + list.getHeight() / 2.0) * scale};
+		});
+	}
+
+	private static void pointAtList(ClientGameTestContext context) {
+		double[] at = listCentre(context);
+		context.getInput().setCursorPos(at[0], at[1]);
+		context.waitTicks(2);
+	}
+
+	private static void pointAway(ClientGameTestContext context) {
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(2);
+	}
+
+	private static boolean before(ClientGameTestContext context, String first, String second) {
+		List<String> keys = keys(context);
+		int a = keys.indexOf(first);
+		int b = keys.indexOf(second);
+		return a >= 0 && b >= 0 && a < b;
+	}
+
+	private static String countLabel(ClientGameTestContext context) {
+		return labels(context).stream().filter(t -> t.matches("\\d+ sounds?.*")).findFirst().orElse("");
 	}
 
 	private static long medianRefreshMicros(SoundsPanel panel, int runs) {

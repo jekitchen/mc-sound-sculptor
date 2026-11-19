@@ -43,6 +43,7 @@ import soundsculptor.mc.compat.Keys;
  * </ul>
  */
 public abstract class SculptScreen extends Screen {
+	private int keyPresses;
 	public static final int HEADER_HEIGHT = 24;
 	public static final int TAB_BAR_HEIGHT = Theme.WIDGET_HEIGHT;
 	public static final int FOOTER_HEIGHT = 28;
@@ -480,8 +481,14 @@ public abstract class SculptScreen extends Screen {
 
 	// ---- Keys, closing, pausing ----
 
+	/** How many key presses this screen has handled; a change tells a list the player switched to the keyboard. */
+	public int keyPresses() {
+		return keyPresses;
+	}
+
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+		keyPresses++;
 		if (hasOverlay() && event.key() == Keys.ESCAPE) {
 			closeOverlay();
 			return true;
