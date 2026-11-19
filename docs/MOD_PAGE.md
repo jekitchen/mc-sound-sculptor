@@ -69,8 +69,9 @@ Questions or concerns: open an issue with "fair play" in the title at
 
 ## Compatibility
 
-- Tested with Mod Menu installed and without it.
-- Not yet verified: Sodium, Iris with shader packs, and Sound Physics Remastered. Please report any problem.
+- Tested with Mod Menu installed and without it, and with Sodium, Iris with a shader pack, and Sound Physics
+  Remastered.
+- Tested on a vanilla server and in singleplayer.
 
 ## Status
 

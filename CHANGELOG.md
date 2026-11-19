@@ -12,18 +12,18 @@ First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-
   for either, `-` to exclude, `"phrases"` and `*` wildcards (`villager -ambient`, `block.*.step`). Turn on **Recently
   played** to see only what you heard in the last 3 minutes, with its subtitle (or a readable name), category, play
   count, how long ago ("<1m ago", "2m ago"; hover for the exact time), a Close/Near/Far distance band (can be hidden)
-  and its status. Pause and Sort. Every row has Mute, Level…, Edit entry, **Add to set…** and Why?. Press
-  <kbd>;</kbd> to open (rebindable).
+  and its status. The list holds still while you point at it; Pause and Sort. Every row has Mute, Level…, Edit entry,
+  **Add to set…** and Why?. Press <kbd>;</kbd> to open (rebindable).
 - **Sound Sets:** a Sound Set is a named list of entries, each for one sound or a group of sounds
   (`minecraft:entity.villager.*`), that mutes them or sets their level (0 to 100%). Sets live in a library on the
   **Sound Sets** tab (New, Duplicate, Rename, Delete) and work in every world. Attach sets to **Everywhere** or to any
   zone, as many as you like and in the order you choose: the higher set wins where two disagree, and inside a set the
   more specific entry wins. A set attached in several places is linked: edit it once and every place changes. The set
   editor's **Attached to** panel shows where a set is used, and Save says which places it will change.
-- **Building sets:** **Add sounds…** in the set editor opens the same Sounds list with a checkbox on each row.
-  **Like this** offers a sound's groups, closest first, each with how many sounds it matches. Type plain words in an
-  entry's pattern field (`villager hurt`) to find a sound, then pick **This sound** or **Like this**. The entry editor
-  previews the sounds a pattern matches.
+- **Building sets:** **Add sounds…** in the set editor opens the same Sounds list with a checkbox on each row. **Like
+  this** offers a sound's groups, closest first, each with how many sounds it matches and its own Add. Type plain words
+  in an entry's pattern field (`villager hurt`) to find a sound, then pick **This sound** or **Like this**. The entry
+  editor previews the sounds a pattern matches.
 - **Quick changes:** Mute, Level… and Edit entry on the Sounds tab go into the place's own **Quick changes**, a set that
   belongs to Everywhere or to one zone and always comes first there. **Apply to** chooses the place: Everywhere, or a
   zone you are standing in. Save Quick changes to the library to reuse them.
@@ -67,6 +67,10 @@ do. It sends nothing to servers. See "For server admins" in the README.
 - Minecraft 26.2 is no longer supported; earlier test builds ran on 26.2 too.
 - Zones follow where you stand instead of where a sound comes from. Outside mode and fade edges are gone (zones that
   used them load without them), and so are personal bubbles.
+
+### Tested with
+Mod Menu (present and absent), Sodium, Iris with a shader pack and Sound Physics Remastered; a vanilla server and
+singleplayer.
 
 ### Not yet included (planned for 1.0)
 Volume boost above 100%, on-screen cues for muted sounds, repeat limits and the point-at-a-mob inspector.
