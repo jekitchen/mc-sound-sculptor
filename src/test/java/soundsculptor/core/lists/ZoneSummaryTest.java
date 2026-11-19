@@ -42,7 +42,7 @@ class ZoneSummaryTest {
 
 	@Test
 	void theEdgeBlockIsHereAndTheNextIsNot() {
-		// Radius 10 from x = 0: block 9's center (9.5) is inside, block 10's (10.5) is not.
+		// Half-width 10 from x = 0: block 9's center (9.5) is inside, block 10's (10.5) is not.
 		assertEquals("Here", where(cube(10), WORLD, OVERWORLD, 9));
 		assertEquals("11 blocks away", where(cube(10), WORLD, OVERWORLD, 10));
 	}

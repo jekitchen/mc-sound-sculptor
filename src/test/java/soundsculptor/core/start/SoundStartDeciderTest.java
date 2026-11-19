@@ -54,8 +54,8 @@ class SoundStartDeciderTest {
 		return SoundStartDecider.limiterKey(null, SoundSet.QUICK_ID, entryId);
 	}
 
-	private static Zone cube(String id, double x, double radius, SetEntry... rules) {
-		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), quick(List.of(rules)));
+	private static Zone cube(String id, double x, double half, SetEntry... rules) {
+		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), quick(List.of(rules)));
 	}
 
 	private void profile(List<SetEntry> global, Zone... zones) {

@@ -1,6 +1,5 @@
 package soundsculptor.gametest;
 
-import soundsculptor.core.editor.ZoneDraft;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.core.sets.SetEntry;
@@ -59,7 +58,7 @@ public final class M7bClientGameTest implements FabricClientGameTest {
 			context.waitForScreen(ZoneEditorScreen.class);
 			Vec3 feet = context.computeOnClient(mc -> mc.player.position());
 			check(editor(context, e -> e.nameField.getValue()).equals("Zone 1"), "a new zone should be named Zone 1");
-			check(editor(context, e -> e.draft().shape() == ZoneDraft.ShapeKind.BOX && e.widthField.getValue().equals("10")
+			check(editor(context, e -> e.widthField.getValue().equals("10")
 					&& e.heightField.getValue().equals("10") && e.depthField.getValue().equals("10")), "a new zone should be a 10-block box");
 			check(editor(context, e -> Math.abs(Double.parseDouble(e.xField.getValue()) - feet.x) < 0.1
 					&& Math.abs(Double.parseDouble(e.zField.getValue()) - feet.z) < 0.1), "a new zone should be centered on the player");
@@ -117,7 +116,7 @@ public final class M7bClientGameTest implements FabricClientGameTest {
 			check(editor(context, e -> e.widthField.getValue()).equals("5"), "Keep editing should keep the width");
 			// A box shows width, height and depth with the drawing tools, and no shape choice.
 			check(editor(context, e -> e.bodyWidgets().contains(e.widthField) && e.bodyWidgets().contains(e.markCornersButton)
-					&& e.bodyWidgets().contains(e.sideDropdown) && e.shapeDropdown == null), "a box shows its size and the drawing tools");
+					&& e.bodyWidgets().contains(e.sideDropdown)), "a box shows its size and the drawing tools");
 			context.runOnClient(mc -> editorScreen(mc).save());
 			context.waitForScreen(SoundSculptorScreen.class);
 			check(context.computeOnClient(mc -> ProfileManager.profile().zone(zoneId).shape()) instanceof Shape.Box, "Save should store the box");

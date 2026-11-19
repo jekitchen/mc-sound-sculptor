@@ -541,10 +541,6 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		ENTRY_EDITOR(mc -> EntryEditorScreen.edit(null, SetDraft.of(SET), "e1"), null),
 		ZONE_EDITOR_NEW(mc -> ZoneEditorScreen.create(null), null),
 		ZONE_EDITOR(mc -> ZoneEditorScreen.edit(null, ProfileManager.profile().zone("z1")), null),
-		ZONE_EDITOR_BOX(mc -> ZoneEditorScreen.edit(null, ProfileManager.profile().zone("z1")), s -> {
-			((ZoneEditorScreen) s).setShape(soundsculptor.core.editor.ZoneDraft.ShapeKind.BOX);
-			return null;
-		}),
 		PLACE_SETS_EVERYWHERE(mc -> new PlaceSetsScreen(null, PlaceRef.EVERYWHERE), null),
 		PLACE_SETS_ZONE(mc -> new PlaceSetsScreen(null, PlaceRef.zone("z2")), null),
 		ATTACH_SET(mc -> new AttachSetScreen(null, PlaceRef.zone("z2")), null),
@@ -766,7 +762,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	}
 
 	private static Zone zone(String id, String name, String key) {
-		return new Zone(id, name, true, key, "minecraft:overworld", new Point(0, -60, 0), new Shape.Cylinder(8, 16),
+		return new Zone(id, name, true, key, "minecraft:overworld", new Point(0, -60, 0), new Shape.Box(16, 16, 16),
 				PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("r1", "*cow*").withVolume(40))));
 	}
 

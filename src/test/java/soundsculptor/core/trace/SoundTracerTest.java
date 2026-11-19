@@ -37,12 +37,12 @@ class SoundTracerTest {
 		return new LastPlay(true, WORLD, OVERWORLD, x, y, z, volume, false, false);
 	}
 
-	private static Zone cube(String id, double x, double radius, SetEntry... rules) {
-		return cube(id, x, radius, quick(List.of(rules)));
+	private static Zone cube(String id, double x, double half, SetEntry... rules) {
+		return cube(id, x, half, quick(List.of(rules)));
 	}
 
-	private static Zone cube(String id, double x, double radius, PlaceSets sets) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), sets);
+	private static Zone cube(String id, double x, double half, PlaceSets sets) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), sets);
 	}
 
 	private static PlaceSets attached(String... setIds) {

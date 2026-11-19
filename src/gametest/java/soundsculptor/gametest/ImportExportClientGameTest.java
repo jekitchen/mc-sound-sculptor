@@ -44,7 +44,7 @@ import net.minecraft.client.gui.screens.Screen;
  *       set, with only OK; nothing changes.</li>
  *   <li>Your own export imported into another world attaches the same sets; nothing is duplicated.</li>
  *   <li>Another server's export brings its sets and settings but skips its fixed zones and a set it does not
- *       have, and says so; a file with a JSON typo, a radius of 900 or nothing in it fails with a clear message and
+ *       have, and says so; a file with a JSON typo, a width of 900 or nothing in it fails with a clear message and
  *       changes nothing; a file dropped on the Profiles tab is imported the same way.</li>
  *   <li>An export larger than the 1 MB import limit is still written, with a warning.</li>
  * </ul>
@@ -56,7 +56,7 @@ public final class ImportExportClientGameTest implements FabricClientGameTest {
 			List.of(SetEntry.of("e1", "minecraft:entity.villager.*").withVolume(30)));
 	private static final String TAKEN = "That name is already in use. Choose a unique name to import this set.";
 	private static final List<String> IMPORT_FILES = List.of("backup.json", "other.json", "server-a.json", "typo.json",
-			"radius.json", "empty.json");
+			"width.json", "empty.json");
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -74,7 +74,7 @@ public final class ImportExportClientGameTest implements FabricClientGameTest {
 						.withZones(List.of(
 								new Zone("hall", "Trading hall", true, key, "minecraft:overworld", new Point(120.5, 64, -33.25),
 										new Shape.Box(20, 8, 12), PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("z1", "*cow*").withVolume(40)))),
-								new Zone("near", "Near", true, key, "minecraft:the_nether", new Point(-7, 30, 9), new Shape.Cylinder(16, 32), PlaceSets.EMPTY)));
+								new Zone("near", "Near", true, key, "minecraft:the_nether", new Point(-7, 30, 9), new Shape.Box(32, 32, 32), PlaceSets.EMPTY)));
 				Path exported = exportImportOnEmptyLibraryRestoresSets(context, key, original, imports, exports, written);
 				SoundSet changed = VILLAGERS.withEntries(List.of(SetEntry.of("e1", "minecraft:entity.villager.*").withVolume(80)));
 				context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(ws.profile(), ws.library().put(changed))));
@@ -298,14 +298,14 @@ public final class ImportExportClientGameTest implements FabricClientGameTest {
 				"this world's fixed zones stay and A's do not come in, was " + afterA.zones());
 	}
 
-	/** FR-11.6: a JSON typo, a radius of 900 and an empty file each fail with a clear message; nothing changes. */
+	/** FR-11.6: a JSON typo, a width of 900 and an empty file each fail with a clear message; nothing changes. */
 	private static void badFilesChangeNothing(ClientGameTestContext context, Profile original, String key, Path imports, List<Path> written) {
 		Profile before = context.computeOnClient(mc -> ProfileManager.profile());
 		String good = ProfileCodec.toJson(original, key);
 		write(imports.resolve("typo.json"), good.replaceFirst("\\{", "{,"));
-		write(imports.resolve("radius.json"), good.replaceFirst("\"radius\": 16(\\.0)?", "\"radius\": 900"));
+		write(imports.resolve("width.json"), good.replaceFirst("\"width\": 32(\\.0)?", "\"width\": 900"));
 		write(imports.resolve("empty.json"), "");
-		for (String[] bad : new String[][] {{"typo.json", ""}, {"radius.json", "900"}, {"empty.json", "empty"}}) {
+		for (String[] bad : new String[][] {{"typo.json", ""}, {"width.json", "900"}, {"empty.json", "empty"}}) {
 			importFromScreen(context, bad[0], SculptDialog.class);
 			String title = context.computeOnClient(mc -> mc.gui.screen().getTitle().getString());
 			String text = context.computeOnClient(mc -> mc.gui.screen().getNarrationMessage().getString());
@@ -410,7 +410,7 @@ public final class ImportExportClientGameTest implements FabricClientGameTest {
 	}
 
 	private static Zone zoneFor(String id, String key) {
-		return new Zone(id, "Zone " + id, true, key, "minecraft:overworld", new Point(5, 70, 5), new Shape.Cylinder(6, 12), PlaceSets.EMPTY);
+		return new Zone(id, "Zone " + id, true, key, "minecraft:overworld", new Point(5, 70, 5), new Shape.Box(12, 12, 12), PlaceSets.EMPTY);
 	}
 
 	private static ExportCodec.Read parse(String json) {

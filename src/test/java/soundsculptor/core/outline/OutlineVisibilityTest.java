@@ -16,8 +16,8 @@ class OutlineVisibilityTest {
 	private static final String WORLD = "play.example.net";
 	private static final String OVERWORLD = "minecraft:overworld";
 
-	private static Zone zoneAt(String id, double x, double radius) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), PlaceSets.EMPTY);
+	private static Zone zoneAt(String id, double x, double half) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), PlaceSets.EMPTY);
 	}
 
 	private static boolean draws(Zone zone, OutlineMode mode, String editingId) {

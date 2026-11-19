@@ -26,8 +26,8 @@ class ApplyToTest {
 	/** The player's feet block at {@link #HOME}. */
 	private static final FeetBlock FEET = new FeetBlock(100, 64, 100);
 
-	private static Zone cube(String id, String world, String dimension, Point anchor, double radius) {
-		return new Zone(id, "Zone " + id, true, world, dimension, anchor, new Shape.Box(2 * radius, 2 * radius, 2 * radius), PlaceSets.EMPTY);
+	private static Zone cube(String id, String world, String dimension, Point anchor, double half) {
+		return new Zone(id, "Zone " + id, true, world, dimension, anchor, new Shape.Box(2 * half, 2 * half, 2 * half), PlaceSets.EMPTY);
 	}
 
 	private static Profile profile(Zone... zones) {

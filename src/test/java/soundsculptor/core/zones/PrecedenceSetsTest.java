@@ -40,8 +40,8 @@ class PrecedenceSetsTest {
 		return place;
 	}
 
-	private static Zone cube(String id, double x, double radius, PlaceSets sets) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), sets);
+	private static Zone cube(String id, double x, double half, PlaceSets sets) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), sets);
 	}
 
 	private static SoundSet set(String id, SetEntry... entries) {

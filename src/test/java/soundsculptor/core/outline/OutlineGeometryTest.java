@@ -13,7 +13,7 @@ import soundsculptor.core.zones.Zone;
 
 import org.junit.jupiter.api.Test;
 
-/** PRD FR-10.2: box edges; a cylinder's top and bottom circles. Coordinates are world coordinates. */
+/** PRD FR-10.2: a box's 12 edges. Coordinates are world coordinates. */
 class OutlineGeometryTest {
 	private static Zone zone(Point anchor, Shape shape) {
 		return new Zone("z", "Z", true, "w", "minecraft:overworld", anchor, shape, PlaceSets.EMPTY);

@@ -49,8 +49,8 @@ class TraceEditorTest {
 		return place;
 	}
 
-	private static Zone cube(String id, double radius, PlaceSets sets) {
-		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(2 * radius, 2 * radius, 2 * radius), sets);
+	private static Zone cube(String id, double half, PlaceSets sets) {
+		return new Zone(id, id, true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), sets);
 	}
 
 	private static Workspace ws(List<SoundSet> sets, PlaceSets everywhere, Zone... zones) {
