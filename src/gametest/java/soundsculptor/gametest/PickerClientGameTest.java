@@ -7,6 +7,8 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.core.sets.SetEntry;
@@ -25,6 +27,7 @@ import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptCheckbox;
 import soundsculptor.mc.ui.SculptDialog;
 import soundsculptor.mc.ui.SculptList;
+import soundsculptor.mc.ui.SculptScreen;
 
 /**
  * The Sounds picker (PRD FR-1.7, FR-4.3, FR-4.8, M8d): the set editor's Add sounds… opens the Sounds browser with a
@@ -35,8 +38,10 @@ import soundsculptor.mc.ui.SculptList;
  *   draft changed, so closing the set editor asks to Save or Discard.</li>
  *   <li>{@code reopenMarksThemInThisSet}: the FR-1 AC: after Save, the picker marks them "In this set" with no
  *   checkbox.</li>
- *   <li>{@code likeThisAddsGroupEntry}: Like this… lists the sound's groups with counts; a ticked group becomes a group
- *   entry, and a group the set has is marked "In this set".</li>
+ *   <li>{@code likeThisAddsGroupEntry}: Like this… lists the sound's groups with counts; a group's Add adds it, with the
+ *   sounds already picked, and closes the picker; Back only closes the pop-up; a group the set has is marked "In this
+ *   set".</li>
+ *   <li>{@code likeThisAddOnFullSet}: a group's Add on a full set shows the limit and leaves nothing picked.</li>
  *   <li>{@code overLimitShowsMessage}: picks that would pass 512 entries show the limit and the picker stays.</li>
  *   <li>{@code pickerLeavesTheTabAlone}: the picker's filter and search are its own, so the Sounds tab keeps its own;
  *   its header names the set as the set editor does.</li>
@@ -57,6 +62,7 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 			tickThreeCowsAddsThreeEntries(context);
 			reopenMarksThemInThisSet(context);
 			likeThisAddsGroupEntry(context);
+			likeThisAddOnFullSet(context);
 			overLimitShowsMessage(context);
 			pickerLeavesTheTabAlone(context);
 		}
@@ -183,13 +189,17 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	/** FR-4.8: Like this… lists the sound's groups with their counts; a ticked group becomes one group entry. */
+	/**
+	 * FR-1.7, FR-4.8: Like this… lists the sound's groups with their counts, each with Add: it adds the group, and any
+	 * sounds already picked, and closes the picker. Back only closes the pop-up.
+	 */
 	private static void likeThisAddsGroupEntry(ClientGameTestContext context) {
 		Snapshot before = Snapshot.take(context);
 		try {
 			putSet(context, FARM);
 			openPicker(context, FARM.id());
 			showCows(context);
+			context.runOnClient(mc -> checkbox(mc, COW_HURT).onPress(null));
 			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
 			check(context.computeOnClient(mc -> picker(mc).hasOverlay() && sounds(mc).likeThisList != null), "Like this… opens the groups");
 			List<String> group = context.computeOnClient(mc -> sounds(mc).likeThisList.findRow(COW_GROUP).columnTexts());
@@ -198,26 +208,81 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 			check(context.computeOnClient(mc -> String.valueOf(sounds(mc).likeThisList.children().get(0).key())).equals(COW_GROUP),
 					"the closest group comes first");
 			check(context.computeOnClient(mc -> mc.gui.screen().getFocused() == sounds(mc).likeThisList), "the groups take focus");
+			check(context.computeOnClient(mc -> groupAdd(mc, COW_GROUP).getMessage().getString()).equals("Add"), "each group has Add");
+			String tip = context.computeOnClient(mc -> NarrationCompat.collect(groupAdd(mc, COW_GROUP)::updateNarration));
+			check(tip.contains("Add this group and 1 picked sound"), "Add says it takes the picked sound too, was " + tip);
 			context.takeScreenshot("picker-like-this");
-			context.runOnClient(mc -> groupCheckbox(mc, COW_GROUP).onPress(null));
-			check(context.computeOnClient(mc -> picker(mc).picker().groupPicked(COW_GROUP)), "ticking the group picks it");
-			check(context.computeOnClient(mc -> groupCheckbox(mc, COW_GROUP).checked()), "its checkbox shows ticked");
-			check(context.computeOnClient(mc -> picker(mc).footerText()).equals("1 picked"), "the footer counts the group");
-			context.runOnClient(mc -> picker(mc).closeOverlay());
-			check(context.computeOnClient(mc -> likeThisButton(mc, COW).isFocused()), "closing returns to Like this…");
-			context.runOnClient(mc -> picker(mc).addButton.onPress(null));
-			context.waitForScreen(SetEditorScreen.class);
-			List<SetEntry> drafted = context.computeOnClient(mc -> editor(mc).draft().entries());
-			check(drafted.size() == 1 && drafted.get(0).pattern().text().equals(COW_GROUP) && drafted.get(0).mute() == null,
-					"the group becomes one entry with no settings, was " + drafted);
 
-			// The group is in the set now (the draft): Like this… marks it and offers no checkbox.
+			// Back closes only the pop-up.
+			String back = context.computeOnClient(mc -> {
+				List<AbstractWidget> widgets = picker(mc).overlayWidgets();
+				return widgets.get(widgets.size() - 1).getMessage().getString();
+			});
+			check(back.equals("Back"), "the pop-up's own button is Back, was " + back);
+			context.runOnClient(mc -> {
+				List<AbstractWidget> widgets = picker(mc).overlayWidgets();
+				((SculptButton) widgets.get(widgets.size() - 1)).onPress(null);
+			});
+			check(context.computeOnClient(mc -> !picker(mc).hasOverlay() && likeThisButton(mc, COW).isFocused()),
+					"Back closes the pop-up and returns to Like this…");
+			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && picker(mc).footerText().equals("1 picked")),
+					"Back adds nothing and keeps the picks");
+
+			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			context.runOnClient(mc -> groupAdd(mc, COW_GROUP).onPress(null));
+			context.waitForScreen(SetEditorScreen.class);
+			List<String> drafted = context.computeOnClient(mc -> editor(mc).draft().entries().stream().map(e -> e.pattern().text()).toList());
+			check(drafted.size() == 2 && drafted.contains(COW_GROUP) && drafted.contains(COW_HURT),
+					"Add puts in the group and the picked sound and closes the picker, was " + drafted);
+			check(context.computeOnClient(mc -> editor(mc).draft().entries().stream().allMatch(e -> e.mute() == null && e.volume() == null)),
+					"the new entries have no settings yet");
+
+			// The group is in the set now (the draft): Like this… marks it and offers no Add.
 			context.runOnClient(mc -> editor(mc).addSounds());
 			context.waitForScreen(SoundPickerScreen.class);
 			showCows(context);
 			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
 			SculptList.Row marked = context.computeOnClient(mc -> sounds(mc).likeThisList.findRow(COW_GROUP));
 			check(marked.buttons().isEmpty() && marked.columnTexts().contains("✔ In this set"), "the group is marked In this set");
+		} finally {
+			before.restore(context);
+		}
+	}
+
+	/**
+	 * A group's Add that would pass the limit shows it; the pop-up stays open and the group is not left picked. The set
+	 * has room for one more, taken by a picked sound (the set editor does not open the picker on a full set).
+	 */
+	private static void likeThisAddOnFullSet(ClientGameTestContext context) {
+		List<SetEntry> many = new ArrayList<>();
+		for (int i = 1; i <= SoundSet.MAX_ENTRIES - 1; i++) {
+			many.add(SetEntry.of("e" + i, "minecraft:test.sound_" + i));
+		}
+		SoundSet full = new SoundSet("picker-full", "Nearly full", many);
+		Snapshot before = Snapshot.take(context);
+		try {
+			putSet(context, full);
+			openPicker(context, full.id());
+			showCows(context);
+			context.runOnClient(mc -> checkbox(mc, COW_HURT).onPress(null));
+			context.runOnClient(mc -> likeThisButton(mc, COW).onPress(null));
+			context.runOnClient(mc -> groupAdd(mc, COW_GROUP).onPress(null));
+			check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundPickerScreen && picker(mc).hasOverlay()),
+					"the picker and the pop-up stay open");
+			check(context.computeOnClient(mc -> picker(mc).toast() != null
+					&& picker(mc).toast().message().getString().equals("A Sound Set can have up to 512 entries.")), "the limit is shown");
+			context.waitTicks(5); // past the toast's slide-in
+			String covered = context.computeOnClient(mc -> {
+				SculptScreen.Toast toast = picker(mc).toast();
+				ScreenRectangle popup = picker(mc).overlayArea();
+				boolean overlaps = toast.x() < popup.right() && popup.left() < toast.x() + toast.width()
+						&& toast.y() < popup.bottom() && popup.top() < toast.y() + toast.height();
+				return overlaps ? "toast " + toast.x() + "," + toast.y() + " pop-up " + popup : null;
+			});
+			check(covered == null, "the limit toast must not be under the pop-up: " + covered);
+			context.takeScreenshot("picker-like-this-full");
+			check(context.computeOnClient(mc -> !picker(mc).picker().groupPicked(COW_GROUP) && picker(mc).footerText().equals("1 picked")),
+					"the group is not left picked");
 		} finally {
 			before.restore(context);
 		}
@@ -393,10 +458,10 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 		return row.buttons().get(0) instanceof SculptCheckbox box ? box : null;
 	}
 
-	private static SculptCheckbox groupCheckbox(Minecraft mc, String pattern) {
+	private static SculptButton groupAdd(Minecraft mc, String pattern) {
 		SculptList.Row row = sounds(mc).likeThisList.findRow(pattern);
-		check(row != null && row.buttons().get(0) instanceof SculptCheckbox, "no checkbox for " + pattern);
-		return (SculptCheckbox) row.buttons().get(0);
+		check(row != null && row.buttons().size() == 1, "no Add for " + pattern);
+		return row.buttons().get(0);
 	}
 
 	private static SculptButton likeThisButton(Minecraft mc, String id) {
