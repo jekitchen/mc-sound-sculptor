@@ -309,14 +309,14 @@ When a muted sound plays, the player still sees that it happened.
 - [ ] 10 muted villagers at once: no more than 5 cue lines, with counts.
 - [ ] Turn "Show muted-sound cues" off: a muted explosion with Cue on shows nothing. Turn it back on: the cue returns. Vanilla Subtitles on or off makes no difference either way.
 
-### FR-8 Spatial zones (MVP: fixed box; v1: cylinder, zone limits and cues)
+### FR-8 Spatial zones (MVP: fixed box; v1: zone limits and cues)
 
 A zone is a **place where you stand**. While your feet are inside a zone, the Sound Sets attached to it (FR-4) decide how you hear every sound in scope, wherever the sound comes from: a villager 30 blocks outside the zone, rain, your own footsteps. Step out and the zone no longer applies. **Everywhere** (FR-8.10) is the place that applies when no zone does. Edges are hard: you are either in a zone or not, with nothing in between (decided 2026-11-14).
 
 - **FR-8.1 Fixed zones (MVP).** Every zone is fixed. Its anchor is the geometric center of its shape: a point (x, y, z) plus the dimension (e.g. `minecraft:overworld`) and the world key of the server or singleplayer world (FR-11.1). Buttons: "Set to my position" and "Set to the block I'm looking at". A fixed zone is active only in its own world and dimension.
 - **FR-8.1a Drawing a box (MVP).** New zones are boxes. **Mark corners** closes the zone editor; the player left-clicks a block (or presses the Sound Sculptor key; with the crosshair on no block, the block the player stands in counts) for the first corner, then again for the second. While marking, left-click never attacks or breaks anything. The box covering both corner blocks is outlined live from the first corner to the current target, and the editor comes back with it filled in. A two-line hint at the top of the screen gives the corner and the box's size so far ("Second corner · 5 × 2 × 7 blocks"), then the keys; a rebindable "Cancel marking zone corners" key (Backspace) returns unchanged. Only blocks the player can see or reach can be marked. In the editor, **Grow** and **Shrink** move one chosen side (North, South, East, West, Up, Down) by 1 block, or 5 with Shift; the opposite side stays where it is.
 - **FR-8.2** (Removed 2026-11-13: personal bubble zones were dropped; see the decisions log.)
-- **FR-8.3 Shapes.** Axis-aligned box (width, height, depth 1 to 512 whole blocks, every edge on a block boundary: the center is snapped, however it was set) in MVP; vertical cylinder (radius 1 to 256, height 1 to 512) in v1. The anchor is the shape's geometric center, so a box or cylinder extends half its size in each direction from the anchor.
+- **FR-8.3 Shapes.** Axis-aligned box (width, height, depth 1 to 512 whole blocks, every edge on a block boundary: the center is snapped, however it was set). It is drawn by marking two corners in the world and adjusted one side at a time. Boxes are the only shape (spheres and cylinders were dropped before release; a file with another shape is refused). The anchor is the box's geometric center, so it extends half its size in each direction from the anchor.
 - **FR-8.4 Where you are.** You are in a zone when the block your feet are in is inside the zone's shape: the block position of the local player (not the camera, so third person and F5 do not change it). This is the same block the corner marking uses when the crosshair is on no block (FR-8.1a). A box marked only on the floor blocks of a room is 1 block tall and does not contain you while you stand on it; the marking hint says so ("1 block tall: you would stand above it") and Grow Up fixes it. Riding a boat, minecart or horse, your own block position still counts. (The earlier Outside mode was removed 2026-11-14: with zones following where you stand, "everywhere except this box" is Everywhere plus a zone that undoes it.)
 - **FR-8.5 Hard edges only.** A zone applies fully while you are in it and not at all once you leave. (The earlier fade edge was removed 2026-11-14. Fading sounds in or out as you cross a boundary is a Future idea, section 10.3.)
 - **FR-8.6 Attached Sound Sets.** Each place (Everywhere and every zone) has an ordered list of attached Sound Sets, shown in the zone editor and on the Zones tab's Everywhere row. Each line shows the set's name, its entry count and "Also used in N places" when the set is shared, with buttons: On/Off (stops the set applying in this place without detaching it), Edit (opens the set editor, FR-4.3), Move up, Move down, and Detach. The place's Quick changes set, if any, is pinned first and has no move buttons (FR-4.10). **Attach set…** lists the library sets not yet attached here, plus **New set**. The same set cannot be attached twice to one place. A place holds up to 32 attached sets. The earlier "Add existing rule" copy is replaced by attaching the set (linked) or attaching a Duplicate (independent).
@@ -404,7 +404,7 @@ Worked examples (also the basis of the test matrix in section 11.4). "Villagers 
 ### FR-10 Zone visualization and colors (MVP outlines; v1 full)
 
 - **FR-10.1** Setting "Show zone outlines": Always, Only while editing (default), or Never. Optional hotkey to toggle (unbound by default).
-- **FR-10.2** Outlines are thin lines: box edges; cylinder as top and bottom circles plus four vertical lines. Only zones in the current dimension within 128 blocks are drawn.
+- **FR-10.2** Outlines are thin lines: a box's 12 edges. Only zones in the current dimension within 128 blocks are drawn.
 - **FR-10.3** Not color alone: the zone's name is shown as a label at its anchor when the player is within 32 blocks. (Dashed lines for Outside zones and the inner fade line were removed 2026-11-14 with those features.)
 - **FR-10.4** Each zone has a color. New zones take the next color from a color-blind-safe palette (the 8 Okabe–Ito colors, chosen to stay distinct for the common forms of color blindness). The color picker offers the palette swatches, a hex field (e.g. `#E69F00`) with validation, and Reset to default.
 - **FR-10.5** Setting "Outlines visible through blocks" (default on). This is safe because zones are the player's own data.
@@ -811,7 +811,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M10 | Volume boost to 200% | FR-5.4–5.6 with warning and range-safe gain | OpenAL gain cap; range leak |
 | M11 | Repeat limiting | FR-6 shared and per-source | Counter correctness |
 | M12 | Entity inspector | FR-2 with Linked/Likely labels | Proximity accuracy |
-| M13 | Full zones | Cylinder, zone limits and cues, P8, color picker (Outside mode and fade were removed 2026-11-14) | Cylinder shape test at block precision |
+| M13 | Full zones | Zone limits and cues, P8, color picker (Outside mode and fade were removed 2026-11-14; cylinders were dropped 2026-11-18) | P8 passes |
 | M14 | Profile management | FR-11.2–11.3 copy settings from another server, rename, reset, delete. Built before the alpha; reworked for Sound Sets in M8c | Link bookkeeping |
 | M15 | Import/export | FR-11.4–11.7 with validation and migrations. Built before the alpha; sets travel with exports from M8c | Validation gaps |
 | M16 | 1.0 polish | Localization pass, full compatibility pass, accessibility audit. (Trace inline editing, Undo toasts and Apply to were built before the alpha and ship in it.) | Scope creep |
@@ -875,7 +875,7 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 ### 11.2 Noisy farm stress test
 
 1. Build a 9 × 9 pen with 40 villagers, 40 chickens and 20 cows, plus 8 hoppers on a fast redstone clock, and 4 iron golems. Aim for 300 or more sounds per second (diagnostics readout).
-2. Load the "stress" profile: Sound Sets on Everywhere with 50 entries (mix of single sounds and groups), 64 zones that all contain the spot where the player stands by the pen (boxes and cylinders of different sizes), each with sets attached, some sets shared by several zones. Walk in and out of the zones during the run, so where-you-are is recomputed too.
+2. Load the "stress" profile: Sound Sets on Everywhere with 50 entries (mix of single sounds and groups), 64 zones that all contain the spot where the player stands by the pen (boxes of different sizes and proportions), each with sets attached, some sets shared by several zones. Walk in and out of the zones during the run, so where-you-are is recomputed too.
 3. Record FPS (F3) with Sound Sculptor bypassed, then active, then active with Recently Played open.
 4. **Pass:** average cost under 10 µs per sound in this worst case (under 5 µs with the typical profile, 9.1); added frame time under 1 ms; FPS with list open within 5% of closed; no stutters visible in the F3 frame graph beyond those present when bypassed.
 5. **Soak:** leave it running 30 minutes. **Pass:** no crash, memory readout stable (under 8 MB for Sound Sculptor data), no "AL error" lines in the log.
@@ -1001,7 +1001,7 @@ The biggest risks are boost leaking range, Minecraft UI/render changes between v
 | Vanilla | Unmodified Minecraft. |
 | Vanilla hearing range | The farthest distance at which vanilla would play a sound or show its subtitle. |
 | World key | Sound Sculptor's ID for a server, Realm or singleplayer world, used to identify each profile and its fixed zones. |
-| Zone | An area (box or cylinder) with its own attached Sound Sets, which decide how every sound plays while the player's feet are inside it. A place. |
+| Zone | An area (a box) with its own attached Sound Sets, which decide how every sound plays while the player's feet are inside it. A place. |
 
 ## Open questions
 
@@ -1141,3 +1141,4 @@ In priority order. Answers will update the decisions log and the affected sectio
 | 2026-11-17 | Minecraft 26.2 is dropped: the first release supports 26.3 only. 26.3 has been out for a few weeks, most major mods support it, and 26.4 is due before the end of the year. The one-jar approach and its version helpers stay, ready for adding 26.4; CI builds and tests 26.3 only, with Mod Menu present and absent | Project owner |
 | 2026-11-18 | The Sounds list holds while the mouse is over it (FR-1.3): rows jumping to the top made them hard to click, and Pause had to be remembered. Rows keep their place and new sounds wait; values still update, and the count says Held | Project owner |
 | 2026-11-18 | In the picker, Like this… adds a group in one step: each group has Add (adding it with any sounds already picked and closing the picker), Done became Back, and the screen behind every pop-up is dimmed. The owner usually wants one group and is then done; the pop-up's Done and the live-looking Cancel and Add below it were confusing | Project owner |
+| 2026-11-18 | Cylinder zones are dropped before release, as spheres were: zones are boxes only, drawn by marking two corners and adjusted one side at a time. A file with a cylinder (or any other shape) is refused as "not a supported shape". The stress profile uses boxes of varied sizes and proportions instead | Project owner |

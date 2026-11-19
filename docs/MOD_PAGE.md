@@ -75,7 +75,7 @@ Questions or concerns: open an issue with "fair play" in the title at
 ## Status
 
 This is an **alpha**: the features above are complete and tested, but expect rough edges. Planned for 1.0: volume boost
-above 100%, cues for muted sounds, repeat limits, the mob inspector and cylinder zones.
+above 100%, cues for muted sounds, repeat limits and the mob inspector.
 
 Sound Sculptor is open source under the MIT license: <https://github.com/jekitchen/mc-sound-sculptor>.
 
