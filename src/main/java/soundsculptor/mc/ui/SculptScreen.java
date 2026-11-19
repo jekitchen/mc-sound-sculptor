@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.ComponentPath;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -197,6 +198,11 @@ public abstract class SculptScreen extends Screen {
 		return overlayOpen;
 	}
 
+	/** The open pop-up's panel, or {@code null} when none is open. */
+	public ScreenRectangle overlayArea() {
+		return overlayOpen ? new ScreenRectangle(overlayX, overlayY, overlayWidth, overlayHeight) : null;
+	}
+
 	public List<AbstractWidget> overlayWidgets() {
 		return overlayWidgets;
 	}
@@ -333,16 +339,30 @@ public abstract class SculptScreen extends Screen {
 			return (int) Math.round((1.0 - progress) * (TOAST_WIDTH + Theme.PADDING));
 		}
 
-		private int width() {
+		public int width() {
 			return Math.min(TOAST_WIDTH, SculptScreen.this.width - 2 * Theme.PADDING);
 		}
 
-		private int x() {
+		public int height() {
+			return Theme.WIDGET_HEIGHT + 4;
+		}
+
+		public int x() {
 			return SculptScreen.this.width - Theme.PADDING - width() + slideOffset();
 		}
 
-		private int y() {
-			return SculptScreen.this.height - FOOTER_HEIGHT - Theme.PADDING - Theme.WIDGET_HEIGHT - 4;
+		/**
+		 * Above the footer, or, when that place is under an open pop-up, just above the pop-up (or below it if there is
+		 * no room above), so a message about what the player did in the pop-up is seen.
+		 */
+		public int y() {
+			int y = SculptScreen.this.height - FOOTER_HEIGHT - Theme.PADDING - height();
+			if (!overlayOpen || y >= overlayY + overlayHeight || y + height() <= overlayY
+					|| x() >= overlayX + overlayWidth || x() + width() <= overlayX) {
+				return y;
+			}
+			int above = overlayY - Theme.GAP - height();
+			return above >= 0 ? above : overlayY + overlayHeight + Theme.GAP;
 		}
 
 		private void layout() {
@@ -362,14 +382,15 @@ public abstract class SculptScreen extends Screen {
 	}
 
 	private void drawLayers(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-		if (toast != null) {
-			toast.draw(g, mouseX, mouseY, partialTick);
-		}
 		if (overlayOpen) {
 			// Dim everything behind the pop-up: its buttons cannot be pressed (a click outside only closes the pop-up).
 			Draw.fill(g, 0, 0, width, height, Theme.SCRIM);
 			Draw.fill(g, overlayX - 1, overlayY - 1, overlayWidth + 2, overlayHeight + 2, Theme.SEPARATOR);
 			Draw.fill(g, overlayX, overlayY, overlayWidth, overlayHeight, Theme.TOAST);
+		}
+		// Last, so it is above the dimming and clear of the pop-up (Toast.y), and its Undo button (a widget) above it.
+		if (toast != null) {
+			toast.draw(g, mouseX, mouseY, partialTick);
 		}
 	}
 

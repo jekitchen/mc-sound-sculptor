@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.core.sets.SetEntry;
@@ -26,6 +27,7 @@ import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptCheckbox;
 import soundsculptor.mc.ui.SculptDialog;
 import soundsculptor.mc.ui.SculptList;
+import soundsculptor.mc.ui.SculptScreen;
 
 /**
  * The Sounds picker (PRD FR-1.7, FR-4.3, FR-4.8, M8d): the set editor's Add sounds… opens the Sounds browser with a
@@ -269,6 +271,16 @@ public final class PickerClientGameTest implements FabricClientGameTest {
 					"the picker and the pop-up stay open");
 			check(context.computeOnClient(mc -> picker(mc).toast() != null
 					&& picker(mc).toast().message().getString().equals("A Sound Set can have up to 512 entries.")), "the limit is shown");
+			context.waitTicks(5); // past the toast's slide-in
+			String covered = context.computeOnClient(mc -> {
+				SculptScreen.Toast toast = picker(mc).toast();
+				ScreenRectangle popup = picker(mc).overlayArea();
+				boolean overlaps = toast.x() < popup.right() && popup.left() < toast.x() + toast.width()
+						&& toast.y() < popup.bottom() && popup.top() < toast.y() + toast.height();
+				return overlaps ? "toast " + toast.x() + "," + toast.y() + " pop-up " + popup : null;
+			});
+			check(covered == null, "the limit toast must not be under the pop-up: " + covered);
+			context.takeScreenshot("picker-like-this-full");
 			check(context.computeOnClient(mc -> !picker(mc).picker().groupPicked(COW_GROUP) && picker(mc).footerText().equals("1 picked")),
 					"the group is not left picked");
 		} finally {
