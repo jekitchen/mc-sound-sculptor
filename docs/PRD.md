@@ -811,10 +811,10 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M10 | Volume boost to 200% | FR-5.4–5.6 with warning and range-safe gain | OpenAL gain cap; range leak |
 | M11 | Repeat limiting | FR-6 shared and per-source | Counter correctness |
 | M12 | Entity inspector | FR-2 with Linked/Likely labels | Proximity accuracy |
-| M13 | Full zones | Zone limits and cues, P8, color picker (Outside mode and fade were removed 2026-11-14; cylinders were dropped 2026-11-18) | P8 passes |
+| M13 | Full zones (folded 2026-11-19) | Nothing of its own left: zones get limits and cues through their attached Sound Sets once M9 and M11 add them to entries; the color picker was built before the alpha; Outside mode and fade were removed 2026-11-14 and cylinders 2026-11-18. Its tests move: P8 runs with M10, P4 and P4b with M11, the full precedence matrix (11.4) in M16 | — |
 | M14 | Profile management | FR-11.2–11.3 copy settings from another server, rename, reset, delete. Built before the alpha; reworked for Sound Sets in M8c | Link bookkeeping |
 | M15 | Import/export | FR-11.4–11.7 with validation and migrations. Built before the alpha; sets travel with exports from M8c | Validation gaps |
-| M16 | 1.0 polish | Localization pass, full compatibility pass, accessibility audit. (Trace inline editing, Undo toasts and Apply to were built before the alpha and ship in it.) | Scope creep |
+| M16 | 1.0 polish | Localization pass, full compatibility pass, accessibility audit, the full zone precedence matrix (11.4). (Trace inline editing, Undo toasts and Apply to were built before the alpha and ship in it.) | Scope creep |
 
 ### 10.3 Future (after 1.0, not committed)
 
@@ -869,8 +869,11 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 | M8d | FR-1 and FR-3 AC, including picker mode; 11.5 layout check passes at 854 × 480 |
 | M8e | 11.2 stress and soak, 11.5 checklist, and every MVP AC on 26.3 |
 | M9 | FR-7 AC |
-| M10 | 11.3 boost-range test; FR-5 v1 AC |
-| M11–M16 | AC of the FRs each milestone covers; full matrix at M13 |
+| M10 | 11.3 boost-range test; FR-5 v1 AC; matrix case P8 (needs M9's cues too) |
+| M11 | FR-6 AC; matrix cases P4 and P4b |
+| M12 | FR-2 AC |
+| M13 | (Folded 2026-11-19: see 10.2) |
+| M16 | AC of the FRs it covers; the full zone precedence matrix (11.4) |
 
 ### 11.2 Noisy farm stress test
 
@@ -1142,3 +1145,4 @@ In priority order. Answers will update the decisions log and the affected sectio
 | 2026-11-18 | The Sounds list holds while the mouse is over it (FR-1.3): rows jumping to the top made them hard to click, and Pause had to be remembered. Rows keep their place and new sounds wait; values still update, and the count says Held | Project owner |
 | 2026-11-18 | In the picker, Like this… adds a group in one step: each group has Add (adding it with any sounds already picked and closing the picker), Done became Back, and the screen behind every pop-up is dimmed. The owner usually wants one group and is then done; the pop-up's Done and the live-looking Cancel and Add below it were confusing | Project owner |
 | 2026-11-18 | Cylinder zones are dropped before release, as spheres were: zones are boxes only, drawn by marking two corners and adjusted one side at a time. A file with a cylinder (or any other shape) is refused as "not a supported shape". The stress profile uses boxes of varied sizes and proportions instead | Project owner |
+| 2026-11-19 | M13 (Full zones) is folded into other milestones: with Sound Sets, zones get limits and cues from their attached sets once M9 and M11 add them to entries; the color picker shipped in the alpha; Outside mode, fade and cylinders were removed. Its tests move: matrix case P8 with M10, P4 and P4b with M11, the full precedence matrix in M16 | Project owner |
