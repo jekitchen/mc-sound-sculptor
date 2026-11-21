@@ -366,6 +366,19 @@ class QuickChangesTest {
 	}
 
 	@Test
+	void aCueEditNeverTurnsAnEntryOrQuickChangesBackOn() {
+		// A switched-off mute must stay off: Cue alone does nothing, so it must not bring the mute back (M9 review).
+		SetEntry old = SetEntry.of("mine", COW).withMute(true).withEnabled(false);
+		Workspace start = ws(PlaceSets.EMPTY.withQuickEntries(List.of(old)).setEnabled(SoundSet.QUICK_ID, false));
+		Workspace after = apply(start, EVERYWHERE, COW, new EntryEdit.Cue(true));
+		assertEquals(List.of(old.withCue(true)), after.profile().everywhere().quickEntries(), "the entry stays off");
+		assertFalse(after.profile().everywhere().attached().get(0).enabled(), "Quick changes stays off");
+		assertFalse(QuickActions.isMuted(after, EVERYWHERE, COW));
+		assertFalse(QuickActions.switchesQuickOn(new EntryEdit.Cue(true)));
+		assertTrue(QuickActions.switchesQuickOn(new EntryEdit.Mute(true)), "a mute still does");
+	}
+
+	@Test
 	void volumeAndLimitAndCueEditTheSameEntry() {
 		Workspace ws = ws(PlaceSets.EMPTY, PlaceSets.EMPTY);
 		ws = apply(ws, PEN, COW, new EntryEdit.Volume(30));

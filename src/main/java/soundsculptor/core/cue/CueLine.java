@@ -1,34 +1,18 @@
 package soundsculptor.core.cue;
 
 /**
- * One visible line in the cue box (PRD FR-7.3 to FR-7.5). The HUD draws it as "(muted)", a muted-speaker icon, the
- * text in italics, then "×count" when {@code count > 1}, with the arrow on the side the sound came from.
+ * One line the cue box shows this frame (PRD FR-7.3 to FR-7.5). The HUD draws it as "(muted)", a muted-speaker icon,
+ * the text in italics, then "×count" when {@code count > 1}, with the arrow on the side the sound came from.
  *
- * @param positional false for a sound that plays relative to the listener: no arrow, never out of range
- * @param x          where the latest repeat played
- * @param range      the sound's vanilla hearing range in blocks, infinite when distance does not matter
- * @param ageMs      time since the latest repeat; the line fades out as this approaches {@link CueBox#DISPLAY_MS}
+ * @param positional false for a sound that plays relative to the listener: no arrow
+ * @param x          where the line's best play is (vanilla's best subtitle candidate for the listener now)
+ * @param fade       0 at full brightness, 1 at the end of the display time, from that play ({@link CueBox})
  * @param <T>        the line text
  */
-public record CueLine<T>(T text, int count, boolean positional, double x, double y, double z, float range, long ageMs) {
+public record CueLine<T>(T text, int count, boolean positional, double x, double y, double z, double fade) {
 	/** 0 when the line is new, 1 when it is about to disappear; for fading like vanilla subtitles. */
 	public double fadeFraction() {
-		return Math.min(1.0, ageMs / (double) CueBox.DISPLAY_MS);
-	}
-
-	/**
-	 * Whether a listener at {@code (lx, ly, lz)} is still in range, like vanilla's per-frame subtitle check (strictly
-	 * closer than the range). Always true for a sound without a position or with an infinite range.
-	 */
-	public boolean audibleFrom(double lx, double ly, double lz) {
-		if (!positional || Float.isInfinite(range)) {
-			return true;
-		}
-		double dx = x - lx;
-		double dy = y - ly;
-		double dz = z - lz;
-		double r = range;
-		return dx * dx + dy * dy + dz * dz < r * r;
+		return fade;
 	}
 
 	/**

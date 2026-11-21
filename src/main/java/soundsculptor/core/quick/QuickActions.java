@@ -22,7 +22,8 @@ import soundsculptor.core.trace.TraceEditError;
  *
  * <p>An edit that clears a value never adds an entry or turns one on, an entry left setting nothing is removed, and an
  * empty Quick changes set is removed. An edit that sets a value switches the place's Quick changes back on if the
- * player had switched it off (FR-8.6), so Mute never silently does nothing.
+ * player had switched it off (FR-8.6), so Mute never silently does nothing. A Cue-only edit is the exception: it never
+ * turns an entry or Quick changes back on.
  *
  * <p>Mute followed by Unmute leaves the place exactly as it was when the row's button goes through {@link MuteMemory}:
  * Unmute puts the sound's entry back as it was before the Mute (its own Cue included, or no entry), and switches Quick
@@ -199,6 +200,9 @@ public final class QuickActions {
 			return after.equals(place) ? null : after;
 		}
 		boolean setsSomething = setsAnything(edit.apply(SetEntry.of("probe", soundId)));
+		// A Cue-only edit never switches anything back on: Cue does nothing unless something else mutes the sound, so
+		// it must not bring back a mute or level the player switched off (review of M9).
+		boolean switchesOn = setsSomething && !(edit instanceof EntryEdit.Cue);
 		SoundSet changedSet;
 		if (old == null) {
 			if (!setsSomething) {
@@ -207,7 +211,7 @@ public final class QuickActions {
 			changedSet = quick.putEntry(edit.apply(SetEntry.of(quick.newEntryId(), soundId)));
 		} else {
 			// Clearing a value leaves an entry off if it was off; setting one turns the entry on.
-			SetEntry changed = setsSomething ? edit.apply(old.withEnabled(true)) : edit.apply(old);
+			SetEntry changed = switchesOn ? edit.apply(old.withEnabled(true)) : edit.apply(old);
 			if (!setsAnything(changed)) {
 				changedSet = quick.removeEntry(old.id());
 			} else if (changed.equals(old)) {
@@ -217,7 +221,7 @@ public final class QuickActions {
 			}
 		}
 		PlaceSets after = place.withQuickChanges(changedSet.entries().isEmpty() ? null : changedSet);
-		if (setsSomething) {
+		if (switchesOn) {
 			// Setting a value also switches the place's Quick changes back on, so the action takes effect (FR-8.6).
 			after = after.setEnabled(SoundSet.QUICK_ID, true);
 		}
@@ -232,6 +236,9 @@ public final class QuickActions {
 	public static boolean switchesQuickOn(EntryEdit edit) {
 		if (edit instanceof EntryEdit.Enabled enabled) {
 			return enabled.value();
+		}
+		if (edit instanceof EntryEdit.Cue) {
+			return false;
 		}
 		return setsAnything(edit.apply(SetEntry.of("probe", "*")));
 	}

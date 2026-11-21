@@ -43,6 +43,9 @@
 			"soundsculptor.gametest.ModPageScreenshotsClientGameTest"
 		]
 	},
+	"mixins": [
+		"soundsculptor-gametest.mixins.json"
+	],
 	"depends": {
 		"soundsculptor": "*"
 	}

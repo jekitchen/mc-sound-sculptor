@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "soundsculptor.gametest.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"SubtitleOverlayRecorder"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

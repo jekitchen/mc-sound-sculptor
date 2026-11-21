@@ -91,12 +91,12 @@ public final class M8ReviewClientGameTest implements FabricClientGameTest {
 
 			// Settings: page tabs, the current one selected; choosing one switches the page.
 			context.runOnClient(mc -> main(mc).selectTab(SoundSculptorScreen.TAB_SETTINGS));
-			check(context.computeOnClient(mc -> main(mc).pageTabs.size()) == 3, "three page tabs: General, Zones, Diagnostics");
+			check(context.computeOnClient(mc -> main(mc).pageTabs.size()) == 4, "four page tabs: General, Zones, Accessibility, Diagnostics");
 			check(context.computeOnClient(mc -> main(mc).pageTabs.get(0).isSelected()), "General is selected first");
-			context.runOnClient(mc -> main(mc).pageTabs.get(2).onPress(null));
+			context.runOnClient(mc -> main(mc).pageTabs.get(3).onPress(null));
 			check(context.computeOnClient(mc -> main(mc).settingsPage()) == SoundSculptorScreen.SettingsPage.DIAGNOSTICS,
 					"pressing the Diagnostics tab should open that page");
-			check(context.computeOnClient(mc -> main(mc).pageTabs.get(2).isSelected()), "the Diagnostics tab is now selected");
+			check(context.computeOnClient(mc -> main(mc).pageTabs.get(3).isSelected()), "the Diagnostics tab is now selected");
 			context.takeScreenshot("m8-review-settings-tabs");
 
 			context.runOnClient(mc -> {

@@ -33,7 +33,9 @@ import net.minecraft.world.phys.Vec3;
  * italics and in the cue text color; the "(muted)" prefix and the italics tell it from a subtitle without color. The
  * box is laid out like vanilla's: one background row per line, 10 GUI pixels apart, the same width for every line,
  * vanilla's {@code <} and {@code >} arrows at its edges, worked out every frame from where the listener is (FR-7.4), and
- * a line leaves when the listener walks out of the sound's range (FR-7.1). Lines fade over 3 seconds.
+ * a line is hidden while the listener is out of the sound's range (FR-7.1). Each line tracks its plays like a vanilla
+ * subtitle ({@link CueBox}) and fades over 3 seconds times vanilla's Notification Time option. The cue text scale (A-7)
+ * grows the box up and left from its place, and the cue box offset (section 8.1) moves it; it always stays on screen.
  *
  * <p>{@link #add} is called by the sound hook for each muted sound whose cue is due, on the hot path: it allocates
  * nothing once a sound ID's text is cached. Drawing may allocate. Render thread only.
@@ -56,9 +58,10 @@ public final class CueOverlay {
 	private static final Map<String, Component> ID_TEXTS = new HashMap<>();
 	private static List<Shown> shown = List.of();
 
+
 	/**
 	 * One line as last drawn, for tests: the text after "(muted)" without the count, the count, the arrow and the line's
-	 * box in GUI pixels (left, top, width, height), and the text color.
+	 * box in GUI pixels (left, top, width, height) after the cue text scale, and the text color.
 	 */
 	public record Shown(String text, int count, CueDirection arrow, int x, int y, int width, int height, int argb) {
 	}
@@ -76,7 +79,8 @@ public final class CueOverlay {
 	 * @param subtitle the sound's subtitle, or {@code null} to show the sound ID (FR-7.2)
 	 * @param range    the sound's vanilla hearing range, infinite for sounds without a position or attenuation
 	 */
-	static void add(Component subtitle, String soundId, boolean positional, double x, double y, double z, float range, long nowMs) {
+	static void add(Component subtitle, String soundId, boolean positional, boolean looping, double x, double y, double z,
+			float range, long nowMs) {
 		Component text = subtitle;
 		if (text == null) {
 			text = ID_TEXTS.get(soundId);
@@ -85,7 +89,12 @@ public final class CueOverlay {
 				ID_TEXTS.put(soundId, text);
 			}
 		}
-		BOX.add(text, positional, x, y, z, range, nowMs);
+		BOX.add(text, positional, looping, x, y, z, range, nowMs, timeScale(Minecraft.getInstance()));
+	}
+
+	/** Vanilla's Notification Time option, which scales how long subtitles, and so cues, stay up. */
+	private static double timeScale(Minecraft minecraft) {
+		return minecraft.options.notificationDisplayTime().get();
 	}
 
 	/** Removes every line, e.g. for a test. */
@@ -110,13 +119,14 @@ public final class CueOverlay {
 		Minecraft minecraft = Minecraft.getInstance();
 		AppSettings settings = AppSettingsManager.get();
 		long now = Util.getMillis();
+		double timeScale = timeScale(minecraft);
 		// FR-7.7: the master switch hides every cue, and lines do not wait to come back when it is turned on again.
 		if (!settings.showCues() || !ProfileManager.isLoaded() || minecraft.level == null) {
 			BOX.clear();
 			shown = List.of();
 			return;
 		}
-		if (BOX.isEmpty(now)) {
+		if (BOX.isEmpty(now, timeScale)) {
 			shown = List.of();
 			return;
 		}
@@ -124,14 +134,12 @@ public final class CueOverlay {
 		Vec3 at = listener.position();
 		Vec3 forward = listener.forward();
 		Vec3 right = listener.right();
-		List<CueLine<Component>> lines = new ArrayList<>(BOX.visibleLines(now));
-		lines.removeIf(line -> !line.audibleFrom(at.x(), at.y(), at.z()));
+		// Each line's best play for where the listener is now; lines out of range are left out (FR-7.1). Oldest first.
+		List<CueLine<Component>> lines = BOX.lines(now, timeScale, at.x(), at.y(), at.z());
 		if (lines.isEmpty()) {
 			shown = List.of();
 			return;
 		}
-		// Oldest at the bottom and newer lines above it, as vanilla stacks its subtitles.
-		java.util.Collections.reverse(lines);
 
 		Font font = minecraft.font;
 		Component prefix = Component.translatable("soundsculptor.cue.prefix").withStyle(ChatFormatting.ITALIC);
@@ -152,17 +160,33 @@ public final class CueOverlay {
 		// Each row's background, as vanilla fills it: from -half - 1 to half + 1 around the row's center.
 		int boxWidth = 2 * halfWidth + 2;
 		int boxHeight = 2 * halfHeight + 2;
-		int centerX = g.guiWidth() - halfWidth - RIGHT_MARGIN;
+
+		// The box is laid out around an anchor: its right edge and the bottom row's center. Unscaled and with no offset it
+		// is where vanilla's next subtitle row would go; the text scale (A-7) grows it up and left from there, and the
+		// offset (section 8.1) moves it, but never off the screen.
+		float scale = settings.cueTextScale() / 100F;
 		int subtitleRows = vanillaSubtitleRows(minecraft);
-		int bottomY = g.guiHeight() - BOTTOM_ROW_OFFSET - subtitleRows * ROW_HEIGHT - (subtitleRows > 0 ? GAP_ABOVE_SUBTITLES : 0);
+		float anchorX = g.guiWidth() - RIGHT_MARGIN + settings.cueOffsetX();
+		float anchorY = g.guiHeight() - BOTTOM_ROW_OFFSET - subtitleRows * ROW_HEIGHT - (subtitleRows > 0 ? GAP_ABOVE_SUBTITLES : 0)
+				+ settings.cueOffsetY();
+		// In the anchor's units: rows go up from 0; the box spans x from -(boxWidth - 1) to 1.
+		int relLeft = -boxWidth + 1;
+		int relTop = -(lines.size() - 1) * ROW_HEIGHT - halfHeight - 1;
+		int relBottom = halfHeight + 1;
+		anchorX = clamp(anchorX, -relLeft * scale, g.guiWidth() - scale);
+		anchorY = clamp(anchorY, -relTop * scale, g.guiHeight() - relBottom * scale);
 		int background = minecraft.options.getBackgroundColor(0.8F);
 
 		List<Shown> drawn = new ArrayList<>(lines.size());
 		g.nextStratum();
+		g.pose().pushMatrix();
+		g.pose().translate(anchorX, anchorY);
+		g.pose().scale(scale, scale);
+		int centerX = -halfWidth;
 		for (int row = 0; row < lines.size(); row++) {
 			CueLine<Component> line = lines.get(row);
 			Component body = bodies.get(row);
-			int centerY = bottomY - row * ROW_HEIGHT;
+			int centerY = -row * ROW_HEIGHT;
 			int color = CueColors.faded(settings.cueColor(), line.fadeFraction());
 			int left = centerX - halfWidth - 1;
 			int top = centerY - halfHeight - 1;
@@ -183,9 +207,16 @@ public final class CueOverlay {
 			Draw.sprite(g, ICON, x, textY, ICON_WIDTH, ICON_HEIGHT, color);
 			x += ICON_WIDTH + space;
 			Draw.text(g, font, body, x, textY, color);
-			drawn.add(new Shown(line.text().getString(), line.count(), arrow, left, top, boxWidth, boxHeight, color));
+			drawn.add(new Shown(line.text().getString(), line.count(), arrow, Math.round(anchorX + left * scale),
+					Math.round(anchorY + top * scale), Math.round(boxWidth * scale), Math.round(boxHeight * scale), color));
 		}
+		g.pose().popMatrix();
 		shown = List.copyOf(drawn);
+	}
+
+	/** {@code value} kept within {@code min} and {@code max}; {@code min} wins when the box is larger than the screen. */
+	private static float clamp(float value, float min, float max) {
+		return Math.max(min, Math.min(max, value));
 	}
 
 	/** "(muted)", a space, the icon, a space and the text. */

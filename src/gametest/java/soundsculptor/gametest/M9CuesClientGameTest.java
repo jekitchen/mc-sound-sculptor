@@ -18,7 +18,7 @@ import soundsculptor.mc.SoundsPanel;
 import soundsculptor.mc.TraceScreen;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptList;
-import com.mojang.blaze3d.audio.ListenerTransform;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -64,6 +64,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		boolean subtitlesBefore = context.computeOnClient(mc -> mc.options.showSubtitles().get());
+		double notificationTimeBefore = context.computeOnClient(mc -> mc.options.notificationDisplayTime().get());
 		AppSettings settingsBefore = context.computeOnClient(mc -> AppSettingsManager.get());
 		try (TestSingleplayerContext world = TestWorlds.create(context)) {
 			world.getConnection().waitForChunksRender();
@@ -80,11 +81,15 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 
 			checkHotkeyIsOptional(context);
 			checkExplosion(context);
+			checkArrowLikeVanilla(context);
 			checkCueOff(context);
 			checkRange(context);
 			checkTenVillagers(context);
 			checkMasterSwitch(context);
+			checkNoVanillaSubtitleWhenMuted(context);
 			checkVanillaSubtitles(context);
+			checkNotificationTime(context);
+			checkScaleAndOffset(context);
 			checkRepeatLimit(context);
 			checkSoundsWithoutSubtitles(context);
 			checkCueDefault(context);
@@ -92,6 +97,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		} finally {
 			context.runOnClient(mc -> {
 				mc.options.showSubtitles().set(subtitlesBefore);
+				mc.options.notificationDisplayTime().set(notificationTimeBefore);
 				AppSettingsManager.update(s -> settingsBefore);
 				AppSettingsManager.flushSaves();
 				ProfileManager.update(p -> Profile.empty(p.name()));
@@ -120,7 +126,6 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		CueOverlay.Shown line = lines.get(0);
 		check(line.text().equals("Explosion") && line.count() == 1, "the line reads (muted) Explosion, was " + line);
 		check(line.arrow() == CueDirection.RIGHT, "east of a player facing north is to the right, was " + line.arrow());
-		check(line.arrow() == vanillaArrow(context, 10, 0), "the same arrow as vanilla's subtitle");
 		check((line.argb() & 0xFFFFFF) != 0xFFFFFF, "the line is in the cue color, not white");
 		int guiWidth = context.computeOnClient(mc -> mc.getWindow().getGuiScaledWidth());
 		int guiHeight = context.computeOnClient(mc -> mc.getWindow().getGuiScaledHeight());
@@ -132,7 +137,6 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> mc.player.setYRot(0));
 		context.waitTicks(FRAMES);
 		check(shown(context).get(0).arrow() == CueDirection.LEFT, "facing south, east is to the left");
-		check(shown(context).get(0).arrow() == vanillaArrow(context, 10, 0), "still vanilla's arrow");
 		context.runOnClient(mc -> mc.player.setYRot(180));
 		// In front: no arrow.
 		clear(context);
@@ -142,6 +146,111 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		play(context, EXPLODE, 0, -10);
 		check(shown(context).get(0).count() == 2, "a repeat counts on the same line");
 		context.takeScreenshot("m9-cue-explosion-x2");
+	}
+
+	/**
+	 * FR-7 AC 1 and FR-7.4: the cue's arrow is the one vanilla draws. With Subtitles on, an unmuted cow and the muted
+	 * explosion play at the same place; vanilla's row for the cow (recorded by {@code SubtitleOverlayRecorder}) and the
+	 * cue line must show the same arrow, facing north and facing south.
+	 */
+	private static void checkArrowLikeVanilla(ClientGameTestContext context) {
+		context.runOnClient(mc -> mc.options.showSubtitles().set(true));
+		// Vanilla starts listening for sounds at its next frame with Subtitles on.
+		context.waitTicks(FRAMES);
+		String cow = subtitle(context, COW);
+		for (float yaw : new float[] {180, 0}) {
+			context.runOnClient(mc -> mc.player.setYRot(yaw));
+			clear(context);
+			check(play(context, COW, 10, 0), "the cow is not muted");
+			play(context, EXPLODE, 10, 0);
+			context.waitTicks(FRAMES);
+			List<VanillaSubtitles.Row> rows = context.computeOnClient(mc -> VanillaSubtitles.lastFrame());
+			VanillaSubtitles.Row cowRow = rows.stream().filter(r -> r.text().equals(cow)).findFirst().orElse(null);
+			check(cowRow != null, "vanilla shows the cow's subtitle, rows " + rows);
+			check(rows.stream().noneMatch(r -> r.text().equals("Explosion")), "vanilla shows no subtitle for the muted explosion, rows " + rows);
+			CueDirection arrow = shown(context).get(0).arrow();
+			check(cowRow.arrow().equals(arrowText(arrow)), "the cue's arrow " + arrow + " is vanilla's \"" + cowRow.arrow() + "\" (yaw " + yaw + ")");
+			check(!cowRow.arrow().isEmpty(), "a sound to the side has an arrow (yaw " + yaw + ")");
+		}
+		context.runOnClient(mc -> {
+			mc.player.setYRot(180);
+			mc.options.showSubtitles().set(false);
+		});
+	}
+
+	private static String arrowText(CueDirection arrow) {
+		return arrow == CueDirection.RIGHT ? ">" : arrow == CueDirection.LEFT ? "<" : "";
+	}
+
+	/**
+	 * Decided 2026-11-21: with Subtitles on, a sound Sound Sculptor mutes never shows in vanilla's subtitle box. Cue on
+	 * shows only the cue; Cue off or the master switch off shows nothing at all (FR-7 AC 2 and AC 6).
+	 */
+	private static void checkNoVanillaSubtitleWhenMuted(ClientGameTestContext context) {
+		context.runOnClient(mc -> mc.options.showSubtitles().set(true));
+		// Let earlier subtitles run out (3 s).
+		context.waitTicks(70);
+		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "no subtitles left over");
+		clear(context);
+		play(context, EXPLODE, 10, 0);
+		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "a muted explosion with Cue on: no vanilla subtitle");
+		check(shown(context).size() == 1, "only the cue");
+		setExplosionCue(context, false);
+		clear(context);
+		play(context, EXPLODE, 10, 0);
+		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "Cue off: no vanilla subtitle");
+		check(shown(context).isEmpty(), "Cue off: no cue");
+		setExplosionCue(context, true);
+		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withShowCues(false)));
+		play(context, EXPLODE, 10, 0);
+		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "master switch off: no vanilla subtitle");
+		check(shown(context).isEmpty(), "master switch off: no cue");
+		context.runOnClient(mc -> {
+			AppSettingsManager.update(s -> s.withShowCues(true));
+			mc.options.showSubtitles().set(false);
+		});
+	}
+
+	private static void setExplosionCue(ClientGameTestContext context, boolean on) {
+		context.runOnClient(mc -> ProfileManager.change(ws -> QuickActions.putQuickEntry(ws, EVERYWHERE,
+				QuickActions.quickEntry(ws, EVERYWHERE, EXPLODE).withCue(on))));
+	}
+
+	/** FR-7.4: lines last 3 seconds times vanilla's Notification Time option, as subtitles do. */
+	private static void checkNotificationTime(ClientGameTestContext context) {
+		context.runOnClient(mc -> mc.options.notificationDisplayTime().set(2.0));
+		clear(context);
+		play(context, EXPLODE, 10, 0);
+		context.waitTicks(70);
+		check(shown(context).size() == 1, "at Notification Time 2 a line is still up after 3.5 s");
+		context.runOnClient(mc -> mc.options.notificationDisplayTime().set(1.0));
+		context.waitTicks(FRAMES);
+		check(shown(context).isEmpty(), "at Notification Time 1 it is gone after 3.5 s");
+	}
+
+	/** A-7 and section 8.1: the cue text scale grows the box, the offset moves it, and it stays on screen. */
+	private static void checkScaleAndOffset(ClientGameTestContext context) {
+		int guiWidth = context.computeOnClient(mc -> mc.getWindow().getGuiScaledWidth());
+		int guiHeight = context.computeOnClient(mc -> mc.getWindow().getGuiScaledHeight());
+		clear(context);
+		play(context, EXPLODE, 10, 0);
+		CueOverlay.Shown normal = shown(context).get(0);
+		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueTextScale(200)));
+		context.waitTicks(FRAMES);
+		CueOverlay.Shown big = shown(context).get(0);
+		check(big.height() == 2 * normal.height() && Math.abs(big.width() - 2 * normal.width()) <= 1, "200% doubles the box: " + normal + " → " + big);
+		check(Math.abs(big.x() + big.width() - (normal.x() + normal.width())) <= 2, "it grows to the left from the same right edge");
+		context.takeScreenshot("m9-cue-scaled");
+		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueTextScale(100).withCueOffset(-100, -50)));
+		context.waitTicks(FRAMES);
+		CueOverlay.Shown moved = shown(context).get(0);
+		check(Math.abs(moved.x() - (normal.x() - 100)) <= 1 && Math.abs(moved.y() - (normal.y() - 50)) <= 1, "the offset moves it: " + normal + " → " + moved);
+		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueOffset(AppSettings.MAX_CUE_OFFSET, AppSettings.MAX_CUE_OFFSET)));
+		context.waitTicks(FRAMES);
+		CueOverlay.Shown edge = shown(context).get(0);
+		check(edge.x() + edge.width() <= guiWidth && edge.y() + edge.height() <= guiHeight && edge.x() >= 0 && edge.y() >= 0,
+				"a large offset keeps it on screen: " + edge);
+		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueOffset(0, 0)));
 	}
 
 	/** FR-7 AC 2: Cue off on the entry shows nothing; on again from the Sounds tab and from the trace. */
@@ -273,6 +382,8 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		context.waitTicks(FRAMES);
 		int rows = context.computeOnClient(mc -> vanillaRows(mc));
 		check(rows >= 1, "vanilla shows the cow's subtitle");
+		check(context.computeOnClient(mc -> VanillaSubtitles.lastFrame()).stream().noneMatch(r -> r.text().equals("Explosion")),
+				"vanilla shows no subtitle for the muted explosion");
 		List<CueOverlay.Shown> lines = shown(context);
 		check(lines.size() == 1, "the cue shows with Subtitles on too, was " + lines);
 		int guiHeight = context.computeOnClient(mc -> mc.getWindow().getGuiScaledHeight());
@@ -339,7 +450,10 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		closeScreen(context);
 	}
 
-	/** Settings › General shows the four cue settings; a screenshot for the layout. */
+	/**
+	 * Settings › General has the switches (PRD 6.1 "cue defaults"); Settings › Accessibility has the cue's color, text
+	 * size and position. Screenshots for the layout.
+	 */
 	private static void checkSettingsPage(ClientGameTestContext context) {
 		openMain(context);
 		context.runOnClient(mc -> {
@@ -348,13 +462,26 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(1);
 		check(context.computeOnClient(mc -> main(mc).showCuesToggle != null && main(mc).cuesWithoutSubtitlesToggle != null
-				&& main(mc).cueDefaultToggle != null && main(mc).cueColorDropdown != null), "the General page has the cue settings");
-		check(context.computeOnClient(mc -> main(mc).cueColorDropdown.getMessage().getString()).equals("Cue color: Light blue-gray"),
-				"the color has a name");
+				&& main(mc).cueDefaultToggle != null), "the General page has the cue switches");
 		context.takeScreenshot("m9-settings-general");
 		context.runOnClient(mc -> main(mc).cueDefaultToggle.onPress(null));
 		check(!context.computeOnClient(mc -> ProfileManager.profile().settings().cueDefault()), "the toggle sets the profile's Cue default");
 		context.runOnClient(mc -> main(mc).cueDefaultToggle.onPress(null));
+
+		context.runOnClient(mc -> main(mc).setSettingsPage(SoundSculptorScreen.SettingsPage.ACCESSIBILITY));
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> main(mc).cueColorDropdown.getMessage().getString()).equals("Cue color: Light blue-gray"),
+				"the color has a name");
+		check(context.computeOnClient(mc -> main(mc).cueScaleSlider.getMessage().getString()).equals("Cue text size: 100%"),
+				"the text size reads 100%, was " + context.computeOnClient(mc -> main(mc).cueScaleSlider.getMessage().getString()));
+		context.takeScreenshot("m9-settings-accessibility");
+		// The keyboard moves the box: Right on the left/right slider adds 5 px; the reset button puts it back.
+		context.runOnClient(mc -> main(mc).setFocused(main(mc).cueOffsetXSlider));
+		context.getInput().pressKey(InputConstants.KEY_RIGHT);
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> AppSettingsManager.get().cueOffsetX()) == 5, "Right moves the cue box 5 px");
+		context.runOnClient(mc -> main(mc).cueOffsetReset.onPress(null));
+		check(context.computeOnClient(mc -> AppSettingsManager.get().cueOffsetX()) == 0, "reset puts it back");
 		closeScreen(context);
 	}
 
@@ -390,20 +517,6 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 
 	private static void clear(ClientGameTestContext context) {
 		context.runOnClient(mc -> CueOverlay.clear());
-	}
-
-	/** The arrow vanilla's subtitle overlay draws for a sound at this offset now (SubtitleOverlay, 26.3). */
-	private static CueDirection vanillaArrow(ClientGameTestContext context, double dx, double dz) {
-		return context.computeOnClient(mc -> {
-			ListenerTransform listener = mc.getSoundManager().getListenerTransform();
-			Vec3 delta = new Vec3(dx, 0, dz).normalize();
-			double rightness = listener.right().dot(delta);
-			double forwardness = listener.forward().dot(delta);
-			if (forwardness > 0.5) {
-				return CueDirection.NONE;
-			}
-			return rightness > 0 ? CueDirection.RIGHT : rightness < 0 ? CueDirection.LEFT : CueDirection.NONE;
-		});
 	}
 
 	private static int vanillaRows(Minecraft mc) {
