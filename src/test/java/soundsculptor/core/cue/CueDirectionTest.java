@@ -37,4 +37,21 @@ class CueDirectionTest {
 	void nonPositionalSoundsHaveNoArrow() {
 		assertEquals(CueDirection.NONE, CueDirection.NON_POSITIONAL);
 	}
+
+	@Test
+	void fromNormalisesTheOffsetFirst() {
+		// Facing north (-z) with east (+x) to the right, a sound far to the east is on the right whatever the distance.
+		assertEquals(CueDirection.RIGHT, CueDirection.from(500, 0, 0, 0, 0, -1, 1, 0, 0));
+		assertEquals(CueDirection.RIGHT, CueDirection.from(0.01, 0, 0, 0, 0, -1, 1, 0, 0));
+		// Ahead and a little to the right is in front: no arrow.
+		assertEquals(CueDirection.NONE, CueDirection.from(1, 0, -10, 0, 0, -1, 1, 0, 0));
+		// Straight above: neither in front nor to a side.
+		assertEquals(CueDirection.NONE, CueDirection.from(0, 10, 0, 0, 0, -1, 1, 0, 0));
+	}
+
+	@Test
+	void aSoundAtTheListenerHasNoArrow() {
+		// Vec3.normalize gives the zero vector for a tiny offset.
+		assertEquals(CueDirection.NONE, CueDirection.from(1e-7, 0, 0, 0, 0, -1, 1, 0, 0));
+	}
 }

@@ -126,9 +126,34 @@ def render(rows):
     return png(px, 16, 16)
 
 
+# Small white glyphs with no shadow, drawn tinted next to text (any size; "#" is a white pixel).
+GLYPHS = {
+    # The cue box's muted speaker (FR-7.3): 9x7, the height of a capital letter, drawn in the cue text color.
+    "cue_muted": [
+        "..#......",
+        ".##.#...#",
+        "###..#.#.",
+        "###...#..",
+        "###..#.#.",
+        ".##.#...#",
+        "..#......",
+    ],
+}
+
+
+def render_glyph(rows):
+    h, w = len(rows), len(rows[0])
+    assert all(len(r) == w for r in rows), "glyph rows must be the same width"
+    return png([WHITE if c == "#" else CLEAR for row in rows for c in row], w, h)
+
+
 out = sys.argv[1]
 os.makedirs(out, exist_ok=True)
 for name, rows in ICONS.items():
     with open(os.path.join(out, name + ".png"), "wb") as f:
         f.write(render(rows))
+    print("wrote", name)
+for name, rows in GLYPHS.items():
+    with open(os.path.join(out, name + ".png"), "wb") as f:
+        f.write(render_glyph(rows))
     print("wrote", name)

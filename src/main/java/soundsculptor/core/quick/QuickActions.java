@@ -85,6 +85,45 @@ public final class QuickActions {
 		return cleared != null && !isMuted(cleared, ws.library(), soundId) ? clear : new EntryEdit.Mute(false);
 	}
 
+	/**
+	 * Whether muting the sound at the place would show a cue now, by any set attached there: the Cue setting that wins
+	 * for it (FR-4.5), off when nothing sets one (FR-9). {@code false} for a zone that no longer exists. For many
+	 * sounds at once, use {@link #cueOnAt}.
+	 */
+	public static boolean isCueOn(Workspace ws, PlaceRef where, String soundId) {
+		return cueOnAt(ws, where).test(soundId);
+	}
+
+	/** {@link #isCueOn} for many sounds at one place, with one resolver, like {@link #mutedAt}. */
+	public static Predicate<String> cueOnAt(Workspace ws, PlaceRef where) {
+		PlaceSets place = ws.profile().place(where);
+		if (place == null) {
+			return soundId -> false;
+		}
+		EntryResolver resolver = resolver(place, ws.library());
+		return soundId -> resolver.resolve(soundId).cueOn();
+	}
+
+	/**
+	 * The row's Cue button (FR-1.5, FR-7): turns the sound's cue at the place off when it is on, and on when it is off,
+	 * whichever set decides it now. Like Unmute, it first tries clearing the Cue of the sound's Quick changes entry: when
+	 * that alone gives the new state, the edit clears it, so a quick Mute, Cue off and Unmute leave no entry behind.
+	 * Otherwise it writes Cue on or off, which wins at the place because Quick changes is pinned first (FR-4.10).
+	 */
+	public static EntryEdit toggleCue(Workspace ws, PlaceRef where, String soundId) {
+		PlaceSets place = ws.profile().place(where);
+		if (place == null) {
+			return new EntryEdit.Cue(true);
+		}
+		boolean on = cueOn(place, ws.library(), soundId);
+		EntryEdit clear = new EntryEdit.Cue(null);
+		PlaceSets cleared = edited(place, soundId, clear);
+		if (cleared != null && cueOn(cleared, ws.library(), soundId) != on) {
+			return clear;
+		}
+		return new EntryEdit.Cue(!on);
+	}
+
 	/** Applies one quick action to the sound's single-sound entry in the place's Quick changes. */
 	public static QuickActionResult apply(Workspace ws, PlaceRef where, String soundId, EntryEdit edit) {
 		TraceEditError invalid = edit.validate();
@@ -204,6 +243,10 @@ public final class QuickActions {
 
 	private static boolean isMuted(PlaceSets place, SetLibrary library, String soundId) {
 		return resolver(place, library).resolve(soundId).muted();
+	}
+
+	private static boolean cueOn(PlaceSets place, SetLibrary library, String soundId) {
+		return resolver(place, library).resolve(soundId).cueOn();
 	}
 
 	private static EntryResolver resolver(PlaceSets place, SetLibrary library) {

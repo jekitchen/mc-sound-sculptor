@@ -52,7 +52,7 @@ import net.minecraft.resources.Identifier;
  * editor; a library set's line lists the places that use it in its tooltip ("Farm animals · used in 3 places"), so
  * the player knows an edit there changes every one (FR-4.9).
  *
- * <p>Inline editing (FR-14.4): entry lines have On/Off, Mute, Level… and "Open full editor" (the set editor or the
+ * <p>Inline editing (FR-14.4): entry lines have On/Off, Mute, Level…, Cue and "Open full editor" (the set editor or the
  * place's Quick changes, at that entry); zone lines have On/Off and open the zone editor. Every place whose Quick
  * changes has no entry matching the sound offers Add to Quick changes, which offers Mute or Level… for the sound's
  * single-sound entry in that place's Quick changes (FR-4.10): on its "No entry matches" line, or, when a library set
@@ -63,7 +63,8 @@ import net.minecraft.resources.Identifier;
  * at the place, as the Sounds tab's quick actions do (FR-1.5). Edits save at once through {@link ProfileManager#change},
  * recompute the trace from the sound's last play (labelled "Predicted for next play" until it plays again) and show a
  * 5-second Undo toast. Level changes made in one visit to the Level panel are undone together; returning from a full
- * editor recomputes the trace. Limit and Cue controls come with their milestones (M11, M9), like in the entry editor.
+ * editor recomputes the trace. Cue (FR-7) works like Mute: the actual state on the sound's own Quick changes entry, the
+ * line's own entry elsewhere. Limit controls come with M11, like in the entry editor.
  */
 public final class TraceScreen extends SculptScreen {
 	private static final Translator TRANSLATOR = (key, args) -> Component.translatable(key, args).getString();
@@ -264,6 +265,7 @@ public final class TraceScreen extends SculptScreen {
 			buttons.add(Tooltips.describe(SculptButton.text(LEVEL, SculptButton.widthFor(LEVEL),
 					() -> openVolume(where, entry)), setName == null ? Component.translatable("soundsculptor.trace.edit.volume.tip")
 							: Component.translatable("soundsculptor.trace.edit.volume.linked_tip", setName)));
+			buttons.add(cueButton(where, entry, setName));
 			buttons.add(SculptButton.icon(EDIT_ICON, Component.translatable(where.isQuick() ? "soundsculptor.trace.edit.open_quick_entry"
 					: "soundsculptor.trace.edit.open_entry"), () -> openSetEditor(where.place(), where.setId(), where.entryId())));
 		} else if (target instanceof TraceText.ZoneTarget zoneTarget) {
@@ -348,6 +350,39 @@ public final class TraceScreen extends SculptScreen {
 		SculptButton button = SculptButton.text(muteLabel(muted), muteWidth(),
 				() -> edit(where, muted ? new EntryEdit.UnmuteWithCue(cueDefault()) : new EntryEdit.MuteWithCue(cueDefault())));
 		return setName == null ? button : Tooltips.describe(button, Component.translatable("soundsculptor.trace.edit.mute.linked_tip", setName));
+	}
+
+	/**
+	 * A line's Cue (FR-7, FR-14.4). On the sound's single-sound entry in Quick changes it shows and toggles whether the
+	 * sound shows a cue at the place, from every set attached there, as the Sounds tab's Cue does (FR-1.5). On any other
+	 * line it shows the line's own Cue (On, Off, or "-" when the entry does not set it) and turns it on, or off when on.
+	 *
+	 * @param setName the library set's name, or {@code null} for Quick changes
+	 */
+	private SculptButton cueButton(EntryLocation where, SetEntry entry, String setName) {
+		PlaceRef place = where.place();
+		if (where.isQuick() && isSingleSoundEntry(place, entry)) {
+			boolean on = QuickActions.isCueOn(ProfileManager.workspace(), place, soundId);
+			return Tooltips.describe(SculptButton.text(cueLabel(on), cueWidth(),
+					() -> addToQuickChanges(place, QuickActions.toggleCue(ProfileManager.workspace(), place, soundId))),
+					Component.translatable(on ? "soundsculptor.sounds.cue.turn_off" : "soundsculptor.sounds.cue.turn_on"));
+		}
+		Boolean cue = entry.cue();
+		SculptButton button = SculptButton.text(cueLabel(cue), cueWidth(), () -> edit(where, new EntryEdit.Cue(!Boolean.TRUE.equals(cue))));
+		return Tooltips.describe(button, setName == null
+				? Component.translatable(Boolean.TRUE.equals(cue) ? "soundsculptor.trace.edit.cue.turn_off" : "soundsculptor.trace.edit.cue.turn_on")
+				: Component.translatable("soundsculptor.trace.edit.cue.linked_tip", setName));
+	}
+
+	/** "Cue: On", "Cue: Off", or "Cue: -" for an entry that does not set it. */
+	private static Component cueLabel(Boolean cue) {
+		Component state = cue == null ? Component.translatable("soundsculptor.trace.edit.cue.not_set") : SculptToggle.stateText(cue);
+		return Component.translatable("soundsculptor.ui.toggle", Component.translatable("soundsculptor.trace.edit.cue"), state);
+	}
+
+	/** The three Cue labels share a width, so the button keeps its size when pressed. */
+	private static int cueWidth() {
+		return SculptButton.widthFor(cueLabel(true), cueLabel(false), cueLabel(null));
 	}
 
 	/** Whether {@code entry} is the sound's single-sound entry in the place's Quick changes. */

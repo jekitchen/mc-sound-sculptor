@@ -3,7 +3,9 @@ package soundsculptor.mc;
 import soundsculptor.core.diag.DiagnosticsReport;
 import soundsculptor.core.diag.MemoryEstimate;
 import soundsculptor.core.diag.TimingWindow;
+import soundsculptor.core.cue.CueColors;
 import soundsculptor.core.outline.OutlineMode;
+import soundsculptor.core.ui.Palette;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptTabButton;
 import soundsculptor.mc.ui.SculptDropdown;
@@ -58,6 +60,12 @@ public final class SoundSculptorScreen extends SculptScreen {
 	/** Whether Copy report sits in the footer: the Diagnostics page's text left no room for it in the body. */
 	private boolean copyReportInFooter;
 	public SculptDropdown<OutlineMode> outlineModeDropdown;
+	// Settings › General, FR-7.
+	public SculptToggle showCuesToggle;
+	public SculptToggle cuesWithoutSubtitlesToggle;
+	/** {@code null} outside a world: the Cue default belongs to the world's profile. */
+	public SculptToggle cueDefaultToggle;
+	public SculptDropdown<Integer> cueColorDropdown;
 	public SculptToggle throughBlocksToggle;
 	private DiagnosticsReport.Data diagnostics;
 	private int ticks;
@@ -198,13 +206,50 @@ public final class SoundSculptorScreen extends SculptScreen {
 			return;
 		}
 		body.label(() -> Component.translatable("soundsculptor.settings.bypass_hint", bypassKeyName()));
+		// FR-7: the cue settings. The master switch, cues without subtitles and the color are app-wide; "New mutes get
+		// Cue" and Show distance belong to the world's profile. The controls flow onto as many lines as they need.
+		Component showCues = Component.translatable("soundsculptor.settings.show_cues");
+		showCuesToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(showCues), showCues, SoundSculptorSettings.showCues(),
+				SoundSculptorSettings::setShowCues), Component.translatable("soundsculptor.settings.show_cues.tip", keyName(soundsculptor.SoundSculptorClient.cuesKey)));
+		Component withoutSubtitles = Component.translatable("soundsculptor.settings.cues_without_subtitles");
+		cuesWithoutSubtitlesToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(withoutSubtitles), withoutSubtitles,
+				SoundSculptorSettings.cuesWithoutSubtitles(), SoundSculptorSettings::setCuesWithoutSubtitles),
+				Component.translatable("soundsculptor.settings.cues_without_subtitles.tip"));
+		Component color = Component.translatable("soundsculptor.settings.cue_color");
+		List<Integer> colors = CueColors.choices(SoundSculptorSettings.cueColor());
+		List<Component> colorNames = new ArrayList<>();
+		for (int rgb : colors) {
+			colorNames.add(cueColorName(rgb));
+		}
+		cueColorDropdown = Tooltips.describe(new SculptDropdown<>(SculptDropdown.widthFor(color, colorNames), color, colors,
+				SoundSculptorScreen::cueColorName, SoundSculptorSettings.cueColor(), SoundSculptorSettings::setCueColor),
+				Component.translatable("soundsculptor.settings.cue_color.tip"));
 		if (!ProfileManager.isLoaded()) {
+			cueDefaultToggle = null;
+			body.flow(showCuesToggle, cuesWithoutSubtitlesToggle, cueColorDropdown);
 			body.label(() -> Component.translatable("soundsculptor.settings.no_world"));
 			return;
 		}
-		body.row(Tooltips.describe(new SculptToggle(160, Component.translatable("soundsculptor.settings.show_distance"),
+		Component cueDefault = Component.translatable("soundsculptor.settings.cue_default");
+		cueDefaultToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(cueDefault), cueDefault, SoundSculptorSettings.cueDefault(),
+				SoundSculptorSettings::setCueDefault), Component.translatable("soundsculptor.settings.cue_default.tip"));
+		Component distance = Component.translatable("soundsculptor.settings.show_distance");
+		SculptToggle showDistance = Tooltips.describe(new SculptToggle(Math.max(160, SculptToggle.widthFor(distance)), distance,
 				SoundSculptorSettings.showDistance(), SoundSculptorSettings::setShowDistance),
-				Component.translatable("soundsculptor.settings.show_distance.tip")));
+				Component.translatable("soundsculptor.settings.show_distance.tip"));
+		body.flow(showCuesToggle, cuesWithoutSubtitlesToggle, cueDefaultToggle, cueColorDropdown, showDistance);
+	}
+
+	/** A cue color's name ("Light blue-gray"), or "Custom (#123456)" for a color set outside the game. */
+	private static Component cueColorName(int rgb) {
+		Palette.Swatch preset = CueColors.preset(rgb);
+		return preset != null ? Component.translatable("soundsculptor.color." + preset.id())
+				: Component.translatable("soundsculptor.settings.cue_color.custom", Palette.formatHex(rgb));
+	}
+
+	/** A hotkey's key, or "not set (Options → Controls)". */
+	private static Component keyName(net.minecraft.client.KeyMapping key) {
+		return key.isUnbound() ? Component.translatable("soundsculptor.settings.outlines.key_unbound") : key.getTranslatedKeyMessage();
 	}
 
 	public void setSettingsPage(SettingsPage page) {
@@ -250,9 +295,7 @@ public final class SoundSculptorScreen extends SculptScreen {
 	}
 
 	private static Component outlinesKeyName() {
-		return soundsculptor.SoundSculptorClient.outlinesKey.isUnbound()
-				? Component.translatable("soundsculptor.settings.outlines.key_unbound")
-				: soundsculptor.SoundSculptorClient.outlinesKey.getTranslatedKeyMessage();
+		return keyName(soundsculptor.SoundSculptorClient.outlinesKey);
 	}
 
 	/** FR-13.3: live numbers, refreshed every tick, and Copy report. */

@@ -60,8 +60,9 @@ import soundsculptor.mc.ui.Tooltips;
  * {@link SoundBrowser}; a row with recent data shows the FR-1.2 columns, one without shows "Seen as" (FR-3.2).
  *
  * <p>Quick actions on each row (FR-1.5, FR-3.7): Mute/Unmute (the sound's actual state at the place), Level… (a
- * slider pop-up), Edit entry, Add to set… ({@link AddToSetScreen}) and Why? ({@link TraceScreen}). Mute, Level and Edit
- * change the sound's single-sound entry in the Quick changes of the place "Apply to" chose (FR-4.10), at once with a
+ * slider pop-up, with Cue on/off for FR-7, which shows the actual state too), Edit entry, Add to set…
+ * ({@link AddToSetScreen}) and Why? ({@link TraceScreen}). Mute, Level, Cue and Edit change the sound's single-sound
+ * entry in the Quick changes of the place "Apply to" chose (FR-4.10), at once with a
  * 5-second Undo toast (FR-12.5).
  *
  * <p>In picker mode ({@link #picker}, FR-1.7) the same browser serves {@link SoundPickerScreen}: each row has a checkbox
@@ -137,6 +138,8 @@ public final class SoundsPanel {
 	/** The Level pop-up, while it is open. */
 	public SculptSlider levelSlider;
 	public SculptTextField levelField;
+	/** The Level and cue pop-up's Cue toggle, while it is open (FR-7). */
+	public SculptToggle levelCue;
 	/** How many times a refresh ran (it may find nothing to do), for tests of the refresh rate. */
 	public int refreshCount;
 	/** How many rows were built, for tests that a refresh rebuilds only what changed. */
@@ -880,8 +883,33 @@ public final class SoundsPanel {
 	}
 
 	/**
-	 * Level… (FR-1.5): a slider and a number field for the sound's level in the Quick changes of the place "Apply to"
-	 * chose. Changes apply as they are made; closing the pop-up offers one Undo for everything changed in it. An empty
+	 * Cue on/off (FR-1.5, FR-7), in the Level and cue pop-up: turns the sound's cue at the place "Apply to" chose on or
+	 * off, whichever set decides it now, through its single-sound entry in that place's Quick changes; saved at once and
+	 * undone with the pop-up's other changes. Clearing the entry's own Cue is preferred when that alone does it, so Mute,
+	 * Cue off and Unmute leave no entry behind. The pop-up's toggle then shows the actual state again.
+	 */
+	public void toggleCue() {
+		if (levelSound == null) {
+			return;
+		}
+		PlaceRef where = levelTarget.place();
+		String soundId = levelSound;
+		EntryEdit edit = QuickActions.toggleCue(ProfileManager.workspace(), where, soundId);
+		QuickActionResult result = QuickActions.apply(ProfileManager.workspace(), where, soundId, edit);
+		if (!result.ok()) {
+			host.showToast(ProfileManager.component(result.error()), null);
+		} else if (result.changed()) {
+			ProfileManager.change(current -> QuickActions.apply(current, where, soundId, edit).after());
+		}
+		if (levelCue != null) {
+			levelCue.setValue(QuickActions.isCueOn(ProfileManager.workspace(), where, soundId));
+		}
+	}
+
+	/**
+	 * Level and cue… (FR-1.5): a slider and a number field for the sound's level in the Quick changes of the place
+	 * "Apply to" chose, and its Cue on/off (FR-7, {@link #toggleCue}), showing whether the sound shows a cue there when
+	 * muted. Changes apply as they are made; closing the pop-up offers one Undo for everything changed in it. An empty
 	 * field clears the level. Values are checked like the entry editor's (FR-12.7).
 	 */
 	public void openLevel(String soundId) {
@@ -890,9 +918,11 @@ public final class SoundsPanel {
 		levelTarget = applyTarget();
 		levelBefore = ProfileManager.workspace();
 		SetEntry entry = QuickActions.quickEntry(levelBefore, levelTarget.place(), soundId);
-		LevelPopup popup = LevelPopup.open(host, entry == null ? SetEntry.of("new", soundId) : entry, this::applyLevel, this::finishLevel);
+		LevelPopup popup = LevelPopup.open(host, entry == null ? SetEntry.of("new", soundId) : entry, this::applyLevel, this::finishLevel,
+				QuickActions.isCueOn(levelBefore, levelTarget.place(), soundId), this::toggleCue);
 		levelSlider = popup.slider;
 		levelField = popup.field;
+		levelCue = popup.cue;
 	}
 
 	/** Sets the level from the pop-up, or clears it ({@code null}); saved at once, without its own toast. */
@@ -923,16 +953,33 @@ public final class SoundsPanel {
 		levelBefore = null;
 		levelSlider = null;
 		levelField = null;
+		levelCue = null;
 		if (soundId == null) {
 			return;
 		}
 		Workspace after = ProfileManager.workspace();
 		if (!after.equals(before)) {
-			QuickUndo.offer(host, this::refreshAfterUndo, before, after, placeKey("soundsculptor.sounds.toast.level", target),
+			QuickUndo.offer(host, this::refreshAfterUndo, before, after, placeKey(levelToastKey(before, after, target.place(), soundId), target),
 					List.of(placeArgs(soundId, target)));
 		}
 		refresh();
 		focusRowButton(soundId, BUTTON_LEVEL);
+	}
+
+	/** What the Level and cue pop-up's Undo toast says: the level, the cue, or both changed. */
+	private static String levelToastKey(Workspace before, Workspace after, PlaceRef where, String soundId) {
+		SetEntry was = QuickActions.quickEntry(before, where, soundId);
+		SetEntry now = QuickActions.quickEntry(after, where, soundId);
+		boolean levelChanged = !java.util.Objects.equals(was == null ? null : was.volume(), now == null ? null : now.volume());
+		boolean cueOn = QuickActions.isCueOn(after, where, soundId);
+		boolean cueChanged = QuickActions.isCueOn(before, where, soundId) != cueOn;
+		if (levelChanged && cueChanged) {
+			return "soundsculptor.sounds.toast.level_cue";
+		}
+		if (cueChanged) {
+			return cueOn ? "soundsculptor.sounds.toast.cue_on" : "soundsculptor.sounds.toast.cue_off";
+		}
+		return "soundsculptor.sounds.toast.level";
 	}
 
 	/** Add to set…: choose a library set or a new one, then this sound or one of its Like this groups (FR-1.5, FR-4.8). */

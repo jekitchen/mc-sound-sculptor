@@ -29,7 +29,9 @@ public final class Draw {
 	 * {@code com.mojang.renderpearl.api.pipeline.RenderPipeline}), and naming it in code would tie the jar to one
 	 * version (docs/PORTING.md, "One jar for every version").
 	 */
-	private static final MethodHandle BLIT_GUI_SPRITE = guiSpriteBlitter();
+	private static final MethodHandle BLIT_GUI_SPRITE = guiSpriteBlitter(false);
+	/** The same with a tint color last: {@code (GuiGraphicsExtractor, Identifier, int, int, int, int, int) -> void}. */
+	private static final MethodHandle BLIT_TINTED_GUI_SPRITE = guiSpriteBlitter(true);
 
 	private Draw() {
 	}
@@ -91,10 +93,25 @@ public final class Draw {
 		}
 	}
 
-	private static MethodHandle guiSpriteBlitter() {
+	/**
+	 * A sprite from the GUI atlas drawn in {@code argb}: a white sprite takes the color, e.g. the cue box's muted-speaker
+	 * icon in the cue text color.
+	 */
+	public static void sprite(GuiGraphicsExtractor g, Identifier sprite, int x, int y, int width, int height, int argb) {
+		try {
+			BLIT_TINTED_GUI_SPRITE.invokeExact(g, sprite, x, y, width, height, argb);
+		} catch (RuntimeException | Error e) {
+			throw e;
+		} catch (Throwable t) {
+			throw new IllegalStateException(t);
+		}
+	}
+
+	private static MethodHandle guiSpriteBlitter(boolean tinted) {
 		Field pipeline = RuntimeLookup.staticField(RenderPipelines.class, "GUI_TEXTURED");
-		MethodHandle blitSprite = RuntimeLookup.virtualMethod(GuiGraphicsExtractor.class, "blitSprite", MethodType.methodType(
-				void.class, pipeline.getType(), Identifier.class, int.class, int.class, int.class, int.class));
+		MethodType type = MethodType.methodType(void.class, pipeline.getType(), Identifier.class, int.class, int.class, int.class, int.class);
+		MethodHandle blitSprite = RuntimeLookup.virtualMethod(GuiGraphicsExtractor.class, "blitSprite",
+				tinted ? type.appendParameterTypes(int.class) : type);
 		return MethodHandles.insertArguments(blitSprite, 1, RuntimeLookup.staticValue(RenderPipelines.class, "GUI_TEXTURED"));
 	}
 

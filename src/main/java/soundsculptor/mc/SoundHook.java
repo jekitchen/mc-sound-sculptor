@@ -11,6 +11,7 @@ import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
+import soundsculptor.core.settings.AppSettings;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
  *   <li>Decide: with Bypass on, everything plays as vanilla; otherwise the Sound Sets of Everywhere and of the zones
  *   the player's feet are in decide it (FR-8.4, FR-9). Every sound is in scope, music, UI and Voice/Speech included
  *   (section 5); vanilla's sliders apply first. Outside a world nothing is decided.</li>
+ *   <li>Cue: a muted sound in range whose deciding entry has Cue on is shown in the cue box (FR-7.1).</li>
  *   <li>Report: observers (the recently played log, the dev log) see the sound with its status. The sound's last play
  *   is kept for its trace (FR-14.6), and the time all this took feeds Diagnostics (FR-13.3).</li>
  * </ol>
@@ -69,6 +71,7 @@ public final class SoundHook {
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
 	private static Precedence deciderProfile;
+	private static AppSettings deciderSettings;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
 	private static final TimingWindow SOUND_TIMING = new TimingWindow();
@@ -130,6 +133,7 @@ public final class SoundHook {
 
 		// Decide: where you are, the sets, zones and precedence (core SoundStartDecider). Outside a world nothing is decided.
 		SoundStartResult result = null;
+		Component subtitle = null;
 		boolean loaded = sync(minecraft);
 		if (loaded) {
 			SoundStart in = START;
@@ -150,11 +154,17 @@ public final class SoundHook {
 			in.y = instance.getY();
 			in.z = instance.getZ();
 			WeighedSoundEvents events = minecraft.getSoundManager().getSoundEvent(id);
-			in.hasSubtitle = events != null && events.getSubtitle() != null;
+			subtitle = events == null ? null : events.getSubtitle();
+			in.hasSubtitle = subtitle != null;
 			in.bypass = ProfileManager.isBypassed();
 			in.nowMs = Util.getMillis();
 			result = RESULT;
 			DECIDER.start(in, result);
+			if (result.cue()) {
+				// FR-7: a muted sound in range whose entry has Cue on; the cue box shows its subtitle, or its ID (FR-7.2).
+				CueOverlay.add(result.cueUsesSoundId() ? null : subtitle, idString, !relative, instance.getX(), instance.getY(),
+						instance.getZ(), range, in.nowMs);
+			}
 		}
 
 		PlayStatus status = result == null ? PlayStatus.PLAYING : result.status();
@@ -203,6 +213,12 @@ public final class SoundHook {
 		if (precedence != deciderProfile) {
 			DECIDER.setProfile(precedence);
 			deciderProfile = precedence;
+		}
+		// The cue settings (FR-7.2, FR-7.7) change only when the player changes a setting: a new settings record.
+		AppSettings app = AppSettingsManager.get();
+		if (app != deciderSettings) {
+			DECIDER.setCueSettings(app.cueSettings(ProfileManager.profile().settings().cueDefault()));
+			deciderSettings = app;
 		}
 		LocalPlayer player = minecraft.player;
 		if (player == null) {

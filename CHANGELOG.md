@@ -3,6 +3,22 @@
 All notable changes to Sound Sculptor. Versions follow `major.minor.patch`, with `-alpha` or `-beta` for test releases.
 Each release ships one jar that runs on every supported Minecraft version.
 
+## 1.0.0 (in progress)
+
+Work toward 1.0, after the alpha. Not released yet.
+
+### Features
+- **Cues for muted sounds:** when a muted sound plays close enough that vanilla would show its subtitle, a line such as
+  "(muted) Explosion" appears in its own box just above the subtitles, bottom right, with vanilla's `<` or `>` arrow.
+  Lines are in italics, start with "(muted)" and a muted-speaker icon, fade after 3 seconds, merge repeats ("×4") and
+  stop at 5. It works with vanilla Subtitles on or off. A play dropped by a repeat limit never shows a cue.
+- **Cue setting on entries:** the entry editor has Cue (Unchanged, On, Off) under Mute. On the Sounds tab, a row's
+  Level… button is now **Level and cue…**, and its pop-up has a Cue toggle. Every entry line in "Why does it sound like
+  this?" has a Cue button. A new mute gets Cue on, unless you change that in Settings.
+- **Settings › General:** Show muted-sound cues (also an optional hotkey in Controls, unbound by default), Cue sounds
+  without subtitles (shows the sound's ID instead), New mutes get Cue (per world or server) and Cue color (six named
+  colors; the default is light blue-gray).
+
 ## 0.1.0-alpha (unreleased)
 
 First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.

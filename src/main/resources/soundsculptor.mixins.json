@@ -3,10 +3,12 @@
 	"package": "soundsculptor.mc.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"HudAccessor",
 		"MinecraftMixin",
 		"SoundEngineAccessor",
 		"SoundEngineMixin",
-		"SoundManagerAccessor"
+		"SoundManagerAccessor",
+		"SubtitleOverlayAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

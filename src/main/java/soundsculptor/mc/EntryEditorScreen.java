@@ -42,7 +42,8 @@ import net.minecraft.resources.Identifier;
  * entry of the same set (FR-4.6), On/Off, Mute (Unchanged, Muted, Not muted) and Level 0–100% (FR-5.1–5.2). Save and
  * Cancel, with the unsaved-changes dialog (FR-12.4), a reset button per value (FR-12.6) and inline errors that disable
  * Save (FR-12.7). Save puts the entry into the set's draft only; nothing changes in game until the set editor saves.
- * Limit and Cue arrive with their milestones (M11, M9); an entry's existing limit and cue are kept.
+ * Cue (Unchanged, On, Off) sits under Mute (FR-7); setting Mute to Muted while Cue is Unchanged sets Cue to the
+ * profile's "New mutes get Cue" default (FR-7.6). Limit arrives with M11; an entry's existing limit is kept.
  */
 public final class EntryEditorScreen extends SculptScreen {
 	private static final Identifier RESET_ICON = Identifier.fromNamespaceAndPath("soundsculptor", "icon/reset");
@@ -69,6 +70,21 @@ public final class EntryEditorScreen extends SculptScreen {
 		}
 	}
 
+	/** Cue is "Unchanged" unless the entry sets it (FR-4.1). */
+	public enum CueChoice {
+		NOT_SET(null), ON(true), OFF(false);
+
+		final Boolean value;
+
+		CueChoice(Boolean value) {
+			this.value = value;
+		}
+
+		static CueChoice of(Boolean value) {
+			return value == null ? NOT_SET : value ? ON : OFF;
+		}
+	}
+
 	private final EntryDraft draft;
 	private final boolean isNew;
 	/** The set the entry belongs to; Save puts the entry into it. */
@@ -87,6 +103,7 @@ public final class EntryEditorScreen extends SculptScreen {
 	public SculptTextField patternField;
 	public SculptToggle enabledToggle;
 	public SculptDropdown<MuteChoice> muteDropdown;
+	public SculptDropdown<CueChoice> cueDropdown;
 	public SculptSlider volumeSlider;
 	public SculptTextField volumeField;
 	public SculptList matchList;
@@ -96,7 +113,8 @@ public final class EntryEditorScreen extends SculptScreen {
 		super(Component.translatable(isNew ? "soundsculptor.rule_editor.title.new" : "soundsculptor.rule_editor.title.edit"), parent);
 		this.isNew = isNew;
 		this.set = set;
-		this.draft = draft;
+		// FR-7.6: Mute set to Muted while Cue is Unchanged also sets Cue, to the profile's default.
+		this.draft = draft.useCueDefault(SoundSculptorSettings.cueDefault());
 		this.subtitle = subtitle;
 		this.quickPlace = quickPlace;
 		updatePreview();
@@ -230,6 +248,17 @@ public final class EntryEditorScreen extends SculptScreen {
 				this::muteChoiceName,
 				MuteChoice.of(draft.mute()), this::setMute), Component.translatable("soundsculptor.rule_editor.mute.tip"));
 		body.row(enabledToggle, muteDropdown, resetButton(Field.MUTE, () -> muteDropdown.setValue(MuteChoice.of(draft.mute()))));
+		// FR-7: under Mute, as a cue only shows for a muted sound.
+		List<Component> cueNames = new ArrayList<>();
+		for (CueChoice choice : CueChoice.values()) {
+			cueNames.add(cueChoiceName(choice));
+		}
+		Component cueLabel = Component.translatable("soundsculptor.rule_editor.cue");
+		cueDropdown = Tooltips.describe(new SculptDropdown<>(Math.max(MUTE_WIDTH, SculptDropdown.widthFor(cueLabel, cueNames)), cueLabel,
+				List.of(CueChoice.values()), this::cueChoiceName, CueChoice.of(draft.cue()), this::setCue),
+				Component.translatable("soundsculptor.rule_editor.cue.tip"));
+		SculptButton cueReset = resetButton(Field.CUE, () -> cueDropdown.setValue(CueChoice.of(draft.cue())));
+		body.row(cueDropdown, cueReset);
 
 		String volumeText = draft.text(Field.VOLUME);
 		double initialVolume = draft.error(Field.VOLUME) == null && !volumeText.isBlank() ? Double.parseDouble(volumeText.trim()) : UNCHANGED_VOLUME;
@@ -293,7 +322,23 @@ public final class EntryEditorScreen extends SculptScreen {
 		if (muteDropdown != null && muteDropdown.value() != choice) {
 			muteDropdown.setValue(choice);
 		}
+		// FR-7.6: muting may have set Cue to the default.
+		if (cueDropdown != null) {
+			cueDropdown.setValue(CueChoice.of(draft.cue()));
+		}
 		changed();
+	}
+
+	public void setCue(CueChoice choice) {
+		draft.setCue(choice.value);
+		if (cueDropdown != null && cueDropdown.value() != choice) {
+			cueDropdown.setValue(choice);
+		}
+		changed();
+	}
+
+	private Component cueChoiceName(CueChoice choice) {
+		return Component.translatable("soundsculptor.rule_editor.cue." + choice.name().toLowerCase(Locale.ROOT));
 	}
 
 	private SculptButton resetButton(Field field, Runnable syncWidget) {
