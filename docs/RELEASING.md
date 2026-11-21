@@ -16,6 +16,9 @@ both sites; the steps below prepare everything so that part is uploading files a
 3. `mod_version` in [`gradle.properties`](../gradle.properties) is the version to release (e.g. `0.1.0-alpha`).
 4. [CHANGELOG.md](../CHANGELOG.md) has an entry for it; replace "(unreleased)" with the date.
 5. [MOD_PAGE.md](MOD_PAGE.md) matches what ships.
+6. The mod page screenshots in [`screenshots/`](screenshots/) show the current screens. To make them again (1920 x 1080,
+   GUI scale 3, a staged trading hall and cow field): `./gradlew runClientGameTest -Pscreenshots=docs/screenshots`. This
+   runs the whole game test suite as well; only `ModPageScreenshotsClientGameTest` takes the pictures.
 
 ## 2. Tag and build
 
@@ -43,7 +46,8 @@ Sculptor screen.
 ## 3. Modrinth
 
 Project settings (once): client side **required**, server side **unsupported**; license MIT; source and issue links to
-the GitHub repository; icon `src/main/resources/assets/soundsculptor/icon.png`; description from MOD_PAGE.md.
+the GitHub repository; icon `src/main/resources/assets/soundsculptor/icon.png`; description from MOD_PAGE.md; gallery
+from `docs/screenshots/` (the world view first, as the featured image).
 
 Upload the jar once, **Versions → Create version**:
 
@@ -59,7 +63,8 @@ Upload the jar once, **Versions → Create version**:
 
 ## 4. CurseForge
 
-Project settings (once): Java Edition mod, Fabric; license MIT; source link; icon and description as above.
+Project settings (once): Java Edition mod, Fabric; license MIT; source link; icon, description and screenshots as
+above.
 
 Upload the jar once, **Upload file**:
 
