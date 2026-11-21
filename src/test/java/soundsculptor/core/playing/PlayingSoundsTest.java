@@ -185,6 +185,21 @@ class PlayingSoundsTest {
 	}
 
 	@Test
+	void boostedGainsStopAtTwo() {
+		// FR-5.6: at the start, when vanilla recalculates (a slider, a moving sound) and when a loop is decided again.
+		playing.start(1, MINECART, LOOP, 1.6F, 2F);
+		assertEquals(2F, playing.gain(1), 1e-6);
+		assertEquals(2F, playing.recalculated(1, 1.2F), 1e-6);
+		assertEquals(1.6F, playing.recalculated(1, 0.8F), 1e-6);
+		assertEquals(0F, playing.recalculated(1, 0F), 1e-9, "Master 0% silences it");
+		Precedence loud = precedence(List.of(SetEntry.of("m", MINECART).withVolume(200)), List.of());
+		where.updateNowhere(loud);
+		playing.recalculated(1, 1.5F);
+		playing.update(loud, where, false, true, listener);
+		assertEquals(2F, playing.gain(1), 1e-6);
+	}
+
+	@Test
 	void stoppedSoundsAreRemoved() {
 		playing.start(1, VILLAGER, ONE_SHOT, 1F, 1F);
 		playing.start(2, VILLAGER, ONE_SHOT, 1F, 1F);

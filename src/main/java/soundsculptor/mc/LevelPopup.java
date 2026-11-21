@@ -24,8 +24,9 @@ import soundsculptor.mc.ui.Tooltips;
  * The Level pop-up shared by the Sounds tab's "Level, cue and limit…" (PRD FR-1.5) and the sound trace's inline Level…
  * (FR-14.4): a slider (5% steps, Shift for 1%) and a number field over the screen, with Done. Each valid change is
  * handed to the caller at once; an empty field hands {@code null} (the entry sets no level). Values are checked like the
- * entry editor's Level field (FR-12.7), so an out-of-range number shows its error and changes nothing. The slider
- * starts focused; Esc, Done or a click outside closes it.
+ * entry editor's Level field (FR-12.7), so an out-of-range number shows its error and changes nothing. Levels go from
+ * 0 to 200%: above 100% the slider shows the boost warning, and the first level above 100% in a profile asks the boost
+ * question first (FR-5.4, {@link BoostUi}). The slider starts focused; Esc, Done or a click outside closes it.
  *
  * <p>The Sounds tab's pop-up also has the repeat limit ({@link LimitControls}, FR-6) and a Cue on/off toggle beside Done
  * (FR-7): more icon buttons do not fit a row at 854 × 480, so Limit and Cue live here rather than on the row. The
@@ -70,9 +71,11 @@ public final class LevelPopup {
 	 */
 	public static LevelPopup open(SculptScreen host, SetEntry entry, Consumer<Integer> apply, Runnable onClosed, boolean cueOn,
 			Runnable toggleCue, Limit shownLimit, Consumer<Limit> applyLimit) {
-		int max = BoostWarning.sliderMax(false);
+		// FR-5.4: 0 to 200% everywhere a level is set. A device that cannot boost plays levels above 100% at 100%, and
+		// the note under the slider says so.
+		int max = BoostWarning.sliderMax(true);
 		LimitControls limit = applyLimit == null ? null
-				: new LimitControls(EntryDraft.of(entry.withLimit(shownLimit), false), applyLimit);
+				: new LimitControls(EntryDraft.of(entry.withLimit(shownLimit), true), applyLimit);
 		int panelWidth = panelWidth(host, limit);
 		int sliderWidth = panelWidth - FIELD_WIDTH - 3 * Theme.GAP;
 		double initial = entry.volume() != null ? entry.volume() : 100;
@@ -81,7 +84,7 @@ public final class LevelPopup {
 		field.setMaxLength(3);
 		field.setValue(entry.volume() == null ? "" : entry.volume().toString());
 		field.placeholder(Component.translatable("soundsculptor.trace.edit.volume_not_set"));
-		EntryDraft check = EntryDraft.of(entry, false);
+		EntryDraft check = EntryDraft.of(entry, true);
 		field.validator(value -> {
 			check.set(EntryDraft.Field.VOLUME, value);
 			FieldError error = check.error(EntryDraft.Field.VOLUME);
@@ -89,20 +92,44 @@ public final class LevelPopup {
 		});
 		SculptSlider slider = Tooltips.describe(new SculptSlider(sliderWidth, Component.translatable("soundsculptor.rule_editor.volume"),
 				new SliderModel(SetEntry.MIN_VOLUME, max, 5, 1, 100, Math.min(max, initial)),
-				value -> Component.literal((int) value + "%"), null,
+				value -> Component.literal((int) value + "%"), Component.translatable(BoostWarning.WARNING_KEY),
 				value -> {
 					if (!field.isFocused()) {
 						field.setValue(Integer.toString((int) value));
 					}
 				}), Component.translatable("soundsculptor.rule_editor.volume.tip"));
+		// Above 100%: the warning icon and text under the slider, read by the narrator (FR-5.4).
+		BoostUi.warnOn(slider, field, () -> panelWidth - 2 * Theme.GAP);
+		// The level last handed to the caller, which the boost question goes back to if it is cancelled.
+		Integer[] applied = {entry.volume()};
+		boolean[] reverting = {false};
 		field.onChange(value -> {
-			if (!field.isValid()) {
+			if (reverting[0] || !field.isValid()) {
 				return;
 			}
 			Integer level = value.isBlank() ? null : Integer.valueOf(value.trim());
 			if (level != null && field.isFocused()) {
 				slider.setTypedValue(level);
 			}
+			if (BoostUi.needsConfirm(applied[0], level)) {
+				// FR-5.4: a level above 100% that is new or louder, in a profile that never confirmed boost, asks first.
+				// Until then nothing changes: the slider and field go back to the level in use, and Allow boost then sets
+				// the new one (saving the confirmation with it). Lowering a boost, or keeping it, never asks.
+				Integer back = applied[0];
+				reverting[0] = true;
+				try {
+					field.setValue(back == null ? "" : back.toString());
+					slider.setTypedValue(back == null ? 100 : back);
+				} finally {
+					reverting[0] = false;
+				}
+				BoostUi.ask(host, () -> {
+					field.setValue(level.toString());
+					slider.setTypedValue(level);
+				}, () -> { });
+				return;
+			}
+			applied[0] = level;
 			apply.accept(level);
 		});
 		SculptButton done = SculptButton.text(Component.translatable("soundsculptor.ui.done"), host::closeOverlay);

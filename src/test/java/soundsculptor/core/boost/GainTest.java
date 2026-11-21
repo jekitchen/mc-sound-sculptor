@@ -54,6 +54,33 @@ class GainTest {
 	}
 
 	@Test
+	void applyCapsABoostedGainAtTwo() {
+		// FR-5.6: what the sound hook gives the channel, at the start and on every recalculation.
+		assertEquals(1.5F, Gain.apply(1.0F, 1.5F), 1e-6);
+		assertEquals(Gain.MAX_GAIN, Gain.apply(1.0F, 2.0F), 1e-6);
+		assertEquals(Gain.MAX_GAIN, Gain.apply(1.6F, 2.0F), 1e-6, "vanilla's category gain above 1 still stops at 2");
+		assertEquals(0F, Gain.apply(0F, 2.0F), 1e-9, "Master 0% silences a 200% entry");
+	}
+
+	@Test
+	void applyLeavesVanillaArithmeticAloneAtOrBelowOne() {
+		// An unchanged or quieter sound gets vanilla's gain times the factor.
+		assertEquals(0.8F, Gain.apply(0.8F, 1.0F), 1e-6);
+		assertEquals(0.4F, Gain.apply(0.8F, 0.5F), 1e-6);
+		assertEquals(0F, Gain.apply(0.8F, 0F), 1e-9);
+	}
+
+	@Test
+	void withoutABoostTheGainStopsAt1() {
+		// Every source's OpenAL cap is 2.0, so a gain above 1 that is not Sound Sculptor's boost (vanilla's own multipliers,
+		// another mod) is capped at 1.0, as OpenAL's default cap would: at 100%, with Bypass on, or where boost is off.
+		assertEquals(1F, Gain.apply(1.6F, 1.0F), 1e-6);
+		assertEquals(1F, Gain.apply(3F, 0.5F), 1e-6);
+		assertEquals(0.9F, Gain.apply(1.8F, 0.5F), 1e-6);
+		assertEquals(2F, Gain.apply(1.6F, 1.5F), 1e-6, "a boost still goes up to 2.0");
+	}
+
+	@Test
 	void channelMaxGainIsRaisedOnlyWhenNeeded() {
 		assertEquals(1.0F, Gain.channelMaxGain(0.9F), 1e-6);
 		assertEquals(Gain.MAX_GAIN, Gain.channelMaxGain(1.4F), 1e-6);

@@ -173,7 +173,22 @@ public class SculptTextField extends EditBox {
 	@Override
 	protected MutableComponent createNarrationMessage() {
 		MutableComponent message = super.createNarrationMessage();
-		return !isErrorShown() ? message : Component.translatable("soundsculptor.ui.field.error_narration", message, error);
+		if (isErrorShown()) {
+			return Component.translatable("soundsculptor.ui.field.error_narration", message, error);
+		}
+		Component shown = notice.get();
+		return shown == null ? message : Component.translatable("soundsculptor.ui.slider.warning", message, shown);
+	}
+
+	private java.util.function.Supplier<Component> notice = () -> null;
+
+	/**
+	 * A warning the narrator reads after the value while there is no error, such as "May distort. Protect your
+	 * hearing." for a level above 100% (FR-5.4). It is drawn elsewhere (under the paired slider), not by the field.
+	 */
+	public SculptTextField narratedNotice(java.util.function.Supplier<Component> notice) {
+		this.notice = notice;
+		return this;
 	}
 
 	@Override

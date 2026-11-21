@@ -246,7 +246,15 @@ public final class PlaceSetsPanel {
 			showProblem(problem);
 			return false;
 		}
-		return apply(ws -> withPlace(ws, place -> place.attach(setId)), "soundsculptor.place_sets.toast.attached", nameOf(setId));
+		UnaryOperator<Workspace> attach = ws -> withPlace(ws, place -> place.attach(setId));
+		Workspace now = ProfileManager.workspace();
+		if (BoostUi.needsConfirm(now, attach.apply(now))) {
+			// FR-5.4: the set adds a level above 100% and this profile never confirmed boost: ask first. Cancel attaches
+			// nothing; Allow boost attaches it and saves the confirmation with it. Either way back to this place's screen.
+			BoostUi.ask(host, () -> apply(attach, "soundsculptor.place_sets.toast.attached", nameOf(setId)), () -> { });
+			return false;
+		}
+		return apply(attach, "soundsculptor.place_sets.toast.attached", nameOf(setId));
 	}
 
 	/**

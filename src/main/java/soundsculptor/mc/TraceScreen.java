@@ -143,11 +143,14 @@ public final class TraceScreen extends SculptScreen {
 	@Override
 	protected void buildTab(int index, Body body) {
 		// A relayout drops an open overlay without its close callback: finish the Level panel's change so Undo still
-		// covers it, and forget the Add to Quick changes choice.
-		finishVolume();
-		addQuickMute = null;
-		addQuickLevel = null;
-		limitControls = null;
+		// covers it, and forget the Add to Quick changes choice. Back from the boost question (FR-5.4) the Level panel
+		// is put back as it was, so it carries on.
+		if (!restoringPopup()) {
+			finishVolume();
+			addQuickMute = null;
+			addQuickLevel = null;
+			limitControls = null;
+		}
 		// Back from a full editor (or any other change): show the trace for the sets and zones as they are now.
 		if (!Objects.equals(ProfileManager.workspace(), shownWorkspace)) {
 			predicted = predicted || play != null;

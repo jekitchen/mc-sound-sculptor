@@ -22,6 +22,9 @@ public class SculptSlider extends AbstractSliderButton {
 	private final DoubleFunction<Component> format;
 	private final Component warningText;
 	private final DoubleConsumer onChange;
+	/** Text with a warning icon under the slider, or {@code null}; see {@link #noteBelow}. */
+	private java.util.function.DoubleFunction<Component> note;
+	private java.util.function.IntSupplier noteWidth;
 
 	/**
 	 * @param format      turns a value into display text, e.g. {@code v -> Component.literal((int) v + "%")}
@@ -45,6 +48,24 @@ public class SculptSlider extends AbstractSliderButton {
 
 	public boolean isWarning() {
 		return model.isWarning();
+	}
+
+	/**
+	 * Shows a warning icon and {@code note}'s text under the slider while it returns one for the value (FR-5.4: "May
+	 * distort. Protect your hearing." above 100%), in the warning color. It is drawn in the error slot that a paired
+	 * text field reserves on the row ({@link SculptTextField#ERROR_SLOT_HEIGHT}), and may run on under the field, up to
+	 * {@code width} pixels from the slider's left edge; the field shows no error while the note shows. The narrator reads
+	 * the note after the value instead of the fixed warning text.
+	 */
+	public SculptSlider noteBelow(java.util.function.DoubleFunction<Component> note, java.util.function.IntSupplier width) {
+		this.note = note;
+		this.noteWidth = width;
+		return this;
+	}
+
+	/** The note shown under the slider now, or {@code null}. */
+	public Component note() {
+		return note == null ? null : note.apply(model.value());
 	}
 
 	/** A value typed into a paired number field. */
@@ -86,6 +107,10 @@ public class SculptSlider extends AbstractSliderButton {
 	@Override
 	protected MutableComponent createNarrationMessage() {
 		MutableComponent message = super.createNarrationMessage();
+		Component shown = note();
+		if (shown != null) {
+			return Component.translatable("soundsculptor.ui.slider.warning", message, shown);
+		}
 		return model.isWarning() && warningText != null
 				? Component.translatable("soundsculptor.ui.slider.warning", message, warningText)
 				: message;
@@ -111,5 +136,19 @@ public class SculptSlider extends AbstractSliderButton {
 				Draw.focusRing(g, getX(), getY(), getWidth(), getHeight());
 			}
 		}
+		Component shown = note();
+		if (shown != null) {
+			net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
+			int y = getBottom() + 2;
+			Draw.sprite(g, WARNING_ICON, getX(), y, WARNING_ICON_WIDTH, WARNING_ICON_HEIGHT, Theme.WARNING);
+			int textX = getX() + WARNING_ICON_WIDTH + 2;
+			Draw.truncatedText(g, font, shown.getString(), textX, y, Math.max(0, noteWidth.getAsInt() - (textX - getX())), Theme.WARNING);
+		}
 	}
+
+	/** The warning triangle drawn before a note (a white glyph, tinted). */
+	private static final net.minecraft.resources.Identifier WARNING_ICON =
+			net.minecraft.resources.Identifier.fromNamespaceAndPath("soundsculptor", "icon/warning");
+	public static final int WARNING_ICON_WIDTH = 9;
+	public static final int WARNING_ICON_HEIGHT = 8;
 }

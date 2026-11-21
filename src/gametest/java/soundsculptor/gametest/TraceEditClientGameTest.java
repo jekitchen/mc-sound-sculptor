@@ -461,7 +461,7 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 				t.volumeField.setValue("250");
 				t.volumeField.revealError();
 				check(t.volumeField.isErrorShown(), "250 should show an error");
-				check(t.volumeField.error().getString().contains("100"), "the error should give the range, was " + t.volumeField.error().getString());
+				check(t.volumeField.error().getString().contains("0 to 200"), "the error should give the range (0 to 200 since boost, M10), was " + t.volumeField.error().getString());
 				check(farmEntry().volume() == 50, "250 must not change the entry");
 				t.closeOverlay();
 				check(t.toast() == null, "nothing changed, so there is nothing to undo");

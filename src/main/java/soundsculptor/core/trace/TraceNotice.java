@@ -11,6 +11,11 @@ public enum TraceNotice {
 	NOT_HEARD_YET("not_heard_yet"),
 	/** "Above 100%: boost applied." */
 	BOOSTED("boosted"),
+	/**
+	 * "Above 100%: boost is off here, so it plays at 100%." The audio device cannot boost, or this profile has not
+	 * confirmed boost yet (FR-5.4).
+	 */
+	BOOST_OFF("boost_off"),
 	/** Sets or zones changed since the last play, so the result shown differs from what was heard. */
 	CHANGED_SINCE_PLAY("changed_since_play");
 

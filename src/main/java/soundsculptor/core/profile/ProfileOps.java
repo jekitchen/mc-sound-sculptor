@@ -26,7 +26,7 @@ public final class ProfileOps {
 		 * and this profile has not confirmed boost yet. After the confirm, save {@code result().withBoostConfirmed(true)}.
 		 */
 		public boolean needsBoostConfirm(SetLibrary library) {
-			return !result.boostConfirmed() && result.hasBoost(library);
+			return soundsculptor.core.boost.BoostSupport.deviceAllows() && !result.boostConfirmed() && result.hasBoost(library);
 		}
 	}
 

@@ -146,7 +146,10 @@ public final class SoundSculptorScreen extends SculptScreen {
 			return;
 		}
 		if (index == TAB_SOUNDS) {
-			soundsPanel = new SoundsPanel(this);
+			// Back from the boost question (FR-5.4) the Level pop-up is put back: keep the panel it belongs to.
+			if (soundsPanel == null || !restoringPopup()) {
+				soundsPanel = new SoundsPanel(this);
+			}
 			soundsPanel.build(body);
 		} else if (index == TAB_SETS) {
 			setsPanel = new SetLibraryPanel(this);
@@ -472,6 +475,11 @@ public final class SoundSculptorScreen extends SculptScreen {
 	@Override
 	public void tick() {
 		super.tick();
+		if (ticks == 0) {
+			// FR-5.4: a profile with a level above 100% it never confirmed (a linked set made louder in another world)
+			// asks once, the first time this screen opens there this session.
+			BoostUi.askOnOpen(this);
+		}
 		// Bypass can also change through the hotkey or the error budget; keep the header toggle in step.
 		if (bypassToggle != null && bypassToggle.value() != ProfileManager.isBypassed()) {
 			bypassToggle.setValue(ProfileManager.isBypassed());

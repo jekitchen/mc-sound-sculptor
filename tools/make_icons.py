@@ -138,6 +138,18 @@ GLYPHS = {
         ".##.#...#",
         "..#......",
     ],
+    # The boost warning (FR-5.4): 9x8, a triangle with an exclamation mark cut out, drawn in the warning color under a
+    # level slider above 100%.
+    "warning": [
+        "....#....",
+        "...###...",
+        "..##.##..",
+        "..##.##..",
+        ".###.###.",
+        ".#######.",
+        "####.####",
+        "#########",
+    ],
 }
 
 

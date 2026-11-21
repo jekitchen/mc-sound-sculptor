@@ -11,6 +11,7 @@ import net.minecraft.client.sounds.WeighedSoundEvents;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -38,6 +39,8 @@ abstract class SoundEngineMixin {
 			"Lnet/minecraft/client/resources/sounds/Sound;getAttenuationDistance(F)F";
 	private static final String NOTIFY_LISTENERS = "Lnet/minecraft/client/sounds/SoundEngine;notifyListeners("
 			+ "Lnet/minecraft/client/resources/sounds/SoundInstance;Lnet/minecraft/client/sounds/WeighedSoundEvents;F)V";
+	private static final String LIBRARY_INIT =
+			"Lcom/mojang/blaze3d/audio/Library;init(Ljava/lang/String;Lcom/mojang/blaze3d/audio/DeviceList;Z)V";
 	private static final String CALCULATE_VOLUME =
 			"Lnet/minecraft/client/sounds/SoundEngine;calculateVolume(FLnet/minecraft/sounds/SoundSource;)F";
 
@@ -56,6 +59,15 @@ abstract class SoundEngineMixin {
 	@ModifyExpressionValue(method = PLAY, at = @At(value = "INVOKE", target = CALCULATE_VOLUME))
 	private float soundsculptor$startVolume(float vanillaVolume) {
 		return SoundHook.applyStartVolume(vanillaVolume);
+	}
+
+	/**
+	 * Boost (PRD 7.2): the sound engine opens an audio device again (a reload, or the device changed), so what the last
+	 * device said about the raised gain cap no longer holds. The next channel asks the new device.
+	 */
+	@Inject(method = "loadLibrary()V", at = @At(value = "INVOKE", target = LIBRARY_INIT))
+	private void soundsculptor$newDevice(CallbackInfo ci) {
+		soundsculptor.core.boost.BoostSupport.reset();
 	}
 
 	@ModifyReturnValue(method = "calculateVolume(Lnet/minecraft/client/resources/sounds/SoundInstance;)F", at = @At("RETURN"))
