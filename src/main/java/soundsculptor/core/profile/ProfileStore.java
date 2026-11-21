@@ -2,6 +2,7 @@ package soundsculptor.core.profile;
 
 import soundsculptor.core.AtomicFiles;
 import soundsculptor.core.Message;
+import soundsculptor.core.cue.PlaceCues;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -109,9 +110,20 @@ public final class ProfileStore {
 
 	/** Loads the profile for {@code key}; a missing file gives an empty profile named {@code defaultName}. */
 	public LoadResult load(String key, String defaultName) {
+		return load(key, defaultName, null);
+	}
+
+	/**
+	 * Loads the profile for {@code key}, migrated ({@link ProfileCodec#read(String, ProfileMigrations.Backup, PlaceCues)}).
+	 * A missing or broken file gives an empty profile named {@code defaultName}, whose Everywhere also starts from
+	 * {@code appWide}: a profile with no cue settings of its own starts from the old app-wide ones (decided 2026-11-21).
+	 *
+	 * @param appWide the old app-wide cue settings, or {@code null} for none
+	 */
+	public LoadResult load(String key, String defaultName, PlaceCues appWide) {
 		Path file = fileFor(key);
 		if (!Files.exists(file)) {
-			return new LoadResult(Profile.empty(defaultName), null, null, false);
+			return new LoadResult(Profile.empty(defaultName, appWide), null, null, false);
 		}
 		Message problem;
 		try {
@@ -120,7 +132,7 @@ public final class ProfileStore {
 			} else {
 				// An older file is saved as <name>.v<n>.bak before it is migrated (PRD 7.6).
 				String text = Files.readString(file, StandardCharsets.UTF_8);
-				ProfileCodec.Read read = ProfileCodec.read(text, version -> ProfileMigrations.backup(file, version));
+				ProfileCodec.Read read = ProfileCodec.read(text, version -> ProfileMigrations.backup(file, version), appWide);
 				return new LoadResult(read.profile(), null, null, read.everywhereCuesSaved());
 			}
 		} catch (ProfileFormatException e) {
@@ -134,7 +146,22 @@ public final class ProfileStore {
 		} catch (IOException e) {
 			broken = null;
 		}
-		return new LoadResult(Profile.empty(defaultName), problem, broken, false);
+		return new LoadResult(Profile.empty(defaultName, appWide), problem, broken, false);
+	}
+
+	/**
+	 * Reads a stored profile file without changing it, migrated like {@link #load(String, String, PlaceCues)}: for the
+	 * Profiles tab, whose Rename, Copy from and Export then work on the same profile a join would load. An older file is
+	 * shown migrated but not backed up or rewritten.
+	 *
+	 * @param appWide the old app-wide cue settings, or {@code null} for none
+	 * @throws ProfileFormatException if the file is larger than {@value #MAX_FILE_BYTES} bytes or not a valid profile
+	 */
+	public Profile readStored(Path file, PlaceCues appWide) throws IOException, ProfileFormatException {
+		if (Files.size(file) > MAX_FILE_BYTES) {
+			throw ProfileText.problem(ProfileText.TOO_LARGE);
+		}
+		return ProfileCodec.read(Files.readString(file, StandardCharsets.UTF_8), version -> { }, appWide).profile();
 	}
 
 	/**

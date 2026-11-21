@@ -46,7 +46,7 @@ public final class ExportCodec {
 	 * fields that were ignored. What the sets do to the library is worked out by {@link ImportPlan}.
 	 *
 	 * @param everywhereCuesSaved whether the file holds Everywhere's cue settings; one exported before they moved to the
-	 *                            places does not, so importing it keeps this profile's
+	 *                            places does not, so importing it keeps this profile's, except its old cueDefault
 	 */
 	public record Read(Profile profile, List<SoundSet> sets, List<Message> warnings, boolean everywhereCuesSaved) {
 		public Read {

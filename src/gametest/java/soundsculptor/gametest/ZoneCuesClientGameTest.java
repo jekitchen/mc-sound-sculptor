@@ -36,6 +36,8 @@ import soundsculptor.mc.ui.SculptScreen;
  * passing on to the next bigger zone and then Everywhere.
  *
  * <ul>
+ *   <li>A profile saved before the move gets the old app-wide cue settings whether it is joined or read by the Profiles
+ *   tab (Rename, Copy from).</li>
  *   <li>A zone that turns "Show cues" off: a muted sound with Cue on shows no cue while the player stands in it; stepping
  *   out to Everywhere, it does.</li>
  *   <li>Two nested zones: the smaller one's text size (50%) wins inside it and makes the cue box half as big; the bigger
@@ -62,6 +64,7 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 			world.getServer().runCommand(OUTSIDE);
 			context.waitTicks(3);
 			String key = context.computeOnClient(mc -> ProfileManager.key());
+			checkTheMigrationThroughRealLoads(context, key);
 			context.runOnClient(mc -> {
 				ProfileManager.setBypass(false);
 				mc.options.showSubtitles().set(false);
@@ -85,6 +88,78 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 					CueOverlay.clear();
 				});
 			}
+		}
+	}
+
+	/** What settings.json held before 2026-11-21: yellow, 150%, moved left, sound IDs on. */
+	private static final PlaceCues APP_WIDE = new PlaceCues(true, true, null, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
+	/** {@link #APP_WIDE} on Everywhere of a profile whose old file had "New mutes get Cue" off. */
+	private static final PlaceCues MIGRATED = new PlaceCues(true, true, false, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
+	private static final String OTHER = "zone-cues-old.example.net";
+
+	/** A profile file from before 2026-11-21: no Everywhere cues, and its old cueDefault off. */
+	private static String oldFile(String name, String worldKey) {
+		return "{\"schemaVersion\": 3, \"name\": \"" + name + "\", \"worldKey\": \"" + worldKey + "\", "
+				+ "\"settings\": {\"showDistance\": true, \"cueDefault\": false, \"outlines\": \"editing\"}, "
+				+ "\"everywhere\": {\"sets\": []}, \"zones\": []}";
+	}
+
+	/**
+	 * Decided 2026-11-21: a profile saved before cue settings moved to the places gets the old app-wide ones however it
+	 * is read: joining its world, and the Profiles tab (Rename, Copy from), so none of them loses the player's look.
+	 */
+	private static void checkTheMigrationThroughRealLoads(ClientGameTestContext context, String key) {
+		soundsculptor.core.settings.AppSettings before = context.computeOnClient(mc -> soundsculptor.mc.AppSettingsManager.get());
+		try {
+			context.runOnClient(mc -> {
+				soundsculptor.mc.AppSettingsManager.update(s -> s.withLegacyCues(APP_WIDE));
+				ProfileManager.flushSaves();
+				write(ProfileManager.store().fileFor(OTHER), oldFile("Old world", OTHER));
+			});
+			// The Profiles tab shows the other world migrated; Rename saves it with that look, not the defaults.
+			check(context.computeOnClient(mc -> ProfileManager.storedProfile(OTHER).everywhereCues()).equals(MIGRATED),
+					"the Profiles tab reads the old profile with the old app-wide look");
+			context.runOnClient(mc -> {
+				ProfileManager.saveOther(OTHER, soundsculptor.core.profile.ProfileOps.rename(ProfileManager.storedProfile(OTHER), "Renamed world"));
+				ProfileManager.flushSaves();
+			});
+			String saved = context.computeOnClient(mc -> read(ProfileManager.store().fileFor(OTHER)));
+			check(saved.contains("\"color\": \"#F0E442\"") && saved.contains("\"textScale\": 150") && saved.contains("\"newMutesGetCue\": false"),
+					"Rename saves the migrated look: " + saved);
+			// Copy from the other world brings its migrated look.
+			PlaceCues copied = context.computeOnClient(mc -> soundsculptor.core.profile.ProfileOps.copyFrom(ProfileManager.storedProfile(OTHER),
+					ProfileManager.profile(), ProfileManager.library()).result().everywhereCues());
+			check(copied.equals(MIGRATED), "Copy from carries the migrated look, was " + copied);
+			// Joining: this world's own old file is migrated as it loads.
+			context.runOnClient(mc -> {
+				write(ProfileManager.store().fileFor(key), oldFile("This world", key));
+				ProfileManager.reload();
+			});
+			PlaceCues joined = context.computeOnClient(mc -> ProfileManager.profile().everywhereCues());
+			check(joined.equals(MIGRATED), "joining migrates this world's old profile, was " + joined);
+		} finally {
+			context.runOnClient(mc -> {
+				soundsculptor.mc.AppSettingsManager.update(s -> before);
+				soundsculptor.mc.AppSettingsManager.flushSaves();
+				ProfileManager.delete(OTHER);
+				ProfileManager.flushSaves();
+			});
+		}
+	}
+
+	private static void write(java.nio.file.Path file, String text) {
+		try {
+			java.nio.file.Files.writeString(file, text, java.nio.charset.StandardCharsets.UTF_8);
+		} catch (java.io.IOException e) {
+			throw new AssertionError(e);
+		}
+	}
+
+	private static String read(java.nio.file.Path file) {
+		try {
+			return java.nio.file.Files.readString(file, java.nio.charset.StandardCharsets.UTF_8);
+		} catch (java.io.IOException e) {
+			throw new AssertionError(e);
 		}
 	}
 

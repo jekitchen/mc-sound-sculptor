@@ -158,10 +158,11 @@ class ProfileCuesCodecTest {
 	}
 
 	@Test
-	void anOldExportKeepsThisProfilesEverywhereCues() throws ProfileFormatException {
+	void anOldExportKeepsThisProfilesLookAndTakesItsNewMutesSetting() throws ProfileFormatException {
 		ExportCodec.Read old = ExportCodec.read("{\"schemaVersion\": 3, \"name\": \"Old\", \"everywhere\": {\"sets\": []}}");
 		assertFalse(old.everywhereCuesSaved());
 		Profile here = Profile.empty("Here").withEverywhereCues(EVERYWHERE);
-		assertEquals(EVERYWHERE, ImportPlan.of(here, old, SetLibrary.EMPTY, SERVER, Map.of()).result().everywhereCues());
+		// The file has no cueDefault, so its New mutes get Cue is the old default, on; the other five stay this profile's.
+		assertEquals(EVERYWHERE.withNewMutesGetCue(true), ImportPlan.of(here, old, SetLibrary.EMPTY, SERVER, Map.of()).result().everywhereCues());
 	}
 }

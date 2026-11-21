@@ -86,6 +86,17 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 		return new Profile(name, ProfileSettings.DEFAULTS, PlaceSets.EMPTY);
 	}
 
+	/**
+	 * A new profile whose Everywhere starts from the cue settings that were app-wide before 2026-11-21, as a profile file
+	 * saved before then does when it is read ({@link ProfileCodec#read(String, ProfileMigrations.Backup, PlaceCues)}).
+	 *
+	 * @param appWide those settings, or {@code null} for none (then the defaults, like {@link #empty(String)})
+	 */
+	public static Profile empty(String name, PlaceCues appWide) {
+		Profile empty = empty(name);
+		return appWide == null ? empty : empty.withEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.seededFrom(appWide));
+	}
+
 	public Profile withSettings(ProfileSettings value) {
 		return new Profile(name, value, everywhere, zones, zoneColors, lastJoined, boostConfirmed, everywhereCues);
 	}

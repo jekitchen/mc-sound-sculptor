@@ -252,7 +252,19 @@ public final class ProfileCodec {
 	 * @param backup called once with the file's version before an older file is migrated; if it throws, nothing is read
 	 */
 	public static Read read(String text, ProfileMigrations.Backup backup) throws ProfileFormatException {
-		return read(parse(text), backup);
+		return read(text, backup, null);
+	}
+
+	/**
+	 * Reads a profile file, migrating an older schema first, and gives Everywhere of a file saved before cue settings
+	 * moved to the places (2026-11-21) the cue settings that were app-wide then. Every read of a stored profile goes
+	 * through here ({@link ProfileStore}), so joining and the Profiles tab (rename, Copy from, export) see the same
+	 * migrated profile.
+	 *
+	 * @param appWide the old app-wide cue settings ({@code legacyCues} of the app settings), or {@code null} for none
+	 */
+	public static Read read(String text, ProfileMigrations.Backup backup, PlaceCues appWide) throws ProfileFormatException {
+		return read(parse(text), backup, appWide);
 	}
 
 	/** Parses the text into a JSON object, with plain-language errors. */
@@ -269,15 +281,20 @@ public final class ProfileCodec {
 	}
 
 	static Read read(JsonObject original, ProfileMigrations.Backup backup) throws ProfileFormatException {
+		return read(original, backup, null);
+	}
+
+	static Read read(JsonObject original, ProfileMigrations.Backup backup, PlaceCues appWide) throws ProfileFormatException {
 		try {
-			return readChecked(original, backup);
+			return readChecked(original, backup, appWide);
 		} catch (IllegalArgumentException | IllegalStateException e) {
 			// Every value is checked above; this is a last guard so a bad file can never crash the game.
 			throw new ProfileFormatException(Message.of(ProfileText.NOT_ALLOWED), e);
 		}
 	}
 
-	private static Read readChecked(JsonObject original, ProfileMigrations.Backup backup) throws ProfileFormatException {
+	private static Read readChecked(JsonObject original, ProfileMigrations.Backup backup, PlaceCues appWide)
+			throws ProfileFormatException {
 		JsonObject root = ProfileMigrations.CURRENT.migrate(original, backup);
 		List<Message> warnings = new ArrayList<>();
 		Fields top = new Fields(root, null, warnings, ROOT_FIELDS);
@@ -301,9 +318,12 @@ public final class ProfileCodec {
 		boolean cuesSaved = everywhereCues != null;
 		if (everywhereCues == null) {
 			// Saved before cue settings moved to the places (2026-11-21): the profile's "New mutes get Cue" moves here; the
-			// rest were app-wide, and the caller fills them in (Read.everywhereCuesSaved).
+			// other five were app-wide and come from appWide when there is one.
 			everywhereCues = oldCueDefault == null ? PlaceCues.EVERYWHERE_DEFAULTS
 					: PlaceCues.EVERYWHERE_DEFAULTS.withNewMutesGetCue(oldCueDefault);
+			if (appWide != null) {
+				everywhereCues = everywhereCues.seededFrom(appWide);
+			}
 		}
 		everywhereCues = everywhereCues.orElse(PlaceCues.EVERYWHERE_DEFAULTS);
 		JsonArray zoneArray = top.has("zones") ? top.array("zones") : new JsonArray();
