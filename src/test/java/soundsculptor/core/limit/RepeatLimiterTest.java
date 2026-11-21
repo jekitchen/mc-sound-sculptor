@@ -154,6 +154,50 @@ class RepeatLimiterTest {
 	}
 
 	@Test
+	void statsShowAllowedDroppedAndTheBusiestWindow() {
+		// The Diagnostics readout for "never more than 3 starting in any one second".
+		assertEquals(RepeatLimiter.Stats.NONE, limiter.stats());
+		for (long t = 0; t < 30_000; t += 50) {
+			start("villagers", THREE_PER_SECOND, 0, t);
+		}
+		start("other", new Limit(5, 1000, false), 0, 0);
+		start("other", new Limit(5, 1000, false), 0, 10);
+		RepeatLimiter.Stats stats = limiter.stats();
+		assertEquals(92, stats.allowed(), "90 villagers and 2 others");
+		assertEquals(600 - 90, stats.dropped());
+		assertEquals(3, stats.busiest(), "never more than 3 in one window");
+		assertEquals(THREE_PER_SECOND, stats.busiestLimit());
+	}
+
+	@Test
+	void theBusiestWindowCountsOnlyPlaysStillInTheWindow() {
+		start("r", THREE_PER_SECOND, 0, 0);
+		start("r", THREE_PER_SECOND, 0, 1000);
+		start("r", THREE_PER_SECOND, 0, 2000);
+		assertEquals(1, limiter.stats().busiest(), "one play per second never had two in one window");
+		start("r", THREE_PER_SECOND, 0, 2500);
+		assertEquals(2, limiter.stats().busiest());
+		start("r", new Limit(10, 1000, false), 0, 2600);
+		assertEquals(1, limiter.stats().busiest(), "an edited limit starts its busiest window afresh");
+	}
+
+	@Test
+	void clearForgetsEveryCounter() {
+		// A new world or server counts afresh (FR-6.4).
+		for (int i = 0; i < 3; i++) {
+			start("r", THREE_PER_SECOND, 0, i);
+		}
+		start("p", new Limit(1, 1000, true), 5, 0);
+		assertFalse(start("r", THREE_PER_SECOND, 0, 3));
+		limiter.clear();
+		assertEquals(0, limiter.counterCount());
+		assertEquals(Set.of(), limiter.ruleIds());
+		assertEquals(RepeatLimiter.Stats.NONE, limiter.stats());
+		assertTrue(start("r", THREE_PER_SECOND, 0, 4), "after clear the counter starts afresh");
+		assertTrue(start("p", new Limit(1, 1000, true), 5, 4));
+	}
+
+	@Test
 	void perSourceMemoryMatchesAReferenceLruUnderRandomChurn() {
 		// One play per huge window: a start is dropped exactly when its block is still remembered. Compare with
 		// LinkedHashMap's own LRU, to check the hand-written hash table (including its deletions) never loses a key.

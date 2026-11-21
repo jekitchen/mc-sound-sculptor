@@ -115,6 +115,26 @@ class QuickChangesTest {
 	}
 
 	@Test
+	void theLimitAtAPlaceIsWhateverSetDecidesIt() {
+		// FR-1.5: the Sounds tab's limit controls show the actual limit at the place, from any set.
+		Limit libraryLimit = new Limit(2, 1000, false);
+		SoundSet pens = new SoundSet("set-pens", "Pens", List.of(SetEntry.of("e1", "minecraft:entity.cow.*").withLimit(libraryLimit)));
+		Workspace start = ws(PlaceSets.EMPTY.attach(pens.id()), pens);
+		assertEquals(libraryLimit, QuickActions.limitAt(start, EVERYWHERE, COW));
+		assertNull(QuickActions.limitAt(start, EVERYWHERE, PIG));
+		assertNull(QuickActions.limitAt(start, PEN, COW), "the pen attaches nothing");
+		assertNull(QuickActions.limitAt(start, PlaceRef.zone("gone"), COW));
+
+		Limit quick = new Limit(5, 250, true);
+		Workspace limited = apply(start, EVERYWHERE, COW, new EntryEdit.SetLimit(quick.count(), quick.windowMs(), quick.perSource()));
+		assertEquals(quick, QuickActions.limitAt(limited, EVERYWHERE, COW), "Quick changes is pinned first, so its limit wins");
+		assertEquals(quick, quickEntry(limited, EVERYWHERE, COW).limit());
+		Workspace cleared = apply(limited, EVERYWHERE, COW, EntryEdit.ClearLimit.INSTANCE);
+		assertNull(quickEntry(cleared, EVERYWHERE, COW), "an entry left setting nothing is removed");
+		assertEquals(libraryLimit, QuickActions.limitAt(cleared, EVERYWHERE, COW), "the library set's limit applies again");
+	}
+
+	@Test
 	void cueOnAfterCueOffWritesCueOn() {
 		Workspace cueOff = toggleCue(toggle(ws(PlaceSets.EMPTY), EVERYWHERE, COW), EVERYWHERE, COW);
 		assertEquals(new EntryEdit.Cue(true), QuickActions.toggleCue(cueOff, EVERYWHERE, COW));

@@ -67,6 +67,27 @@ class ExportCodecTest {
 	}
 
 	@Test
+	void repeatLimitsTravelWithTheExport() throws ProfileFormatException {
+		// FR-6 limits on a library set and in Quick changes come back from an export exactly as they were.
+		SoundSet pens = new SoundSet("set-pens", "Pens", List.of(SetEntry.of("e1", "minecraft:entity.villager.*")
+				.withLimit(new soundsculptor.core.sets.Limit(2, 1000, false))));
+		Profile p = Profile.empty("Limits")
+				.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("q", "minecraft:entity.minecart.*")
+						.withLimit(new soundsculptor.core.sets.Limit(1, 10_000, false)))))
+				.withZones(List.of(fixed("z1", new Shape.Box(10, 10, 10)).withSets(PlaceSets.EMPTY.attach(pens.id())
+						.withQuickEntries(List.of(SetEntry.of("q", "*villager*").withLimit(new soundsculptor.core.sets.Limit(5, 50, true)))))));
+		ExportCodec.Read read = ExportCodec.read(ExportCodec.toJson(p, "play.example.net", new SetLibrary(List.of(pens))));
+		assertEquals(p, read.profile());
+		assertEquals(List.of(pens), read.sets());
+
+		JsonObject bad = SetCodec.toJsonObject(pens);
+		bad.getAsJsonArray("entries").get(0).getAsJsonObject().getAsJsonObject("limit").addProperty("windowMs", 20_000);
+		JsonArray sets = new JsonArray();
+		sets.add(bad);
+		assertTrue(problem(withLibrarySets(sets)).contains("limit window"), "a window above 10 s is refused on import");
+	}
+
+	@Test
 	void anAttachedSetTheLibraryLacksIsNotExported() throws ProfileFormatException {
 		Profile p = PROFILE.withEverywhere(PROFILE.everywhere().attach("set-gone"));
 		assertEquals(List.of(FARM, RAIN), ExportCodec.read(ExportCodec.toJson(p, null, LIB)).sets());

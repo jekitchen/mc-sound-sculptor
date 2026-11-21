@@ -53,17 +53,69 @@ public final class RepeatLimiter {
 		}
 		counters.lastUsed = ++tick;
 		if (!limit.equals(counters.limit)) {
+			// An edited limit starts afresh: its old counts and busiest window belong to the old limit.
 			counters.limit = limit;
+			counters.peak = 0;
 			pool.removeOwner(counters);
 		}
 		SlidingWindow window = limit.perSource()
 				? pool.get(counters, blockKey(x, y, z), limit.count(), limit.windowMs(), MAX_SOURCES_PER_RULE)
 				: pool.get(counters, 0, limit.count(), limit.windowMs(), 1);
 		boolean allowed = window.tryStart(nowMs);
-		if (!allowed) {
+		if (allowed) {
+			counters.allowed++;
+			if (counters.peak < limit.count()) {
+				// Once a counter has been full, the peak cannot rise any more, so the walk is skipped from then on.
+				counters.peak = Math.max(counters.peak, window.inWindow(nowMs));
+			}
+		} else {
 			counters.dropped++;
 		}
 		return allowed;
+	}
+
+	/**
+	 * Every counter and every rule's numbers forgotten, e.g. when the player joins another world or server: its places
+	 * have their own counters (FR-6.4), and a limit must not carry plays over from a world the player left.
+	 */
+	public void clear() {
+		for (RuleCounters c : rules.values()) {
+			c.removed = true;
+		}
+		pool.removeMarked();
+		rules.clear();
+	}
+
+	/**
+	 * What the limits did since they were last cleared, for Settings › Diagnostics (FR-6 AC: "never more than 3 starting
+	 * in any one second"). Walks every rule: call it on demand, not per sound.
+	 */
+	public Stats stats() {
+		long allowed = 0;
+		long dropped = 0;
+		RuleCounters busiest = null;
+		for (RuleCounters c : rules.values()) {
+			allowed += c.allowed;
+			dropped += c.dropped;
+			if (c.limit != null && c.peak > 0 && (busiest == null || c.peak > busiest.peak
+					|| c.peak == busiest.peak && c.lastUsed > busiest.lastUsed)) {
+				busiest = c;
+			}
+		}
+		return new Stats(allowed, dropped, busiest == null ? 0 : busiest.peak, busiest == null ? null : busiest.limit);
+	}
+
+	/**
+	 * What the repeat limits did (Diagnostics).
+	 *
+	 * @param allowed     plays a limit let through
+	 * @param dropped     plays a limit dropped
+	 * @param busiest     the most plays one counter let start within its window, over every limit; never more than
+	 *                    that limit's count
+	 * @param busiestLimit the limit {@code busiest} was counted against, or {@code null} when no play was allowed yet
+	 */
+	public record Stats(long allowed, long dropped, int busiest, Limit busiestLimit) {
+		public static final Stats NONE = new Stats(0, 0, 0, null);
 	}
 
 	/** A new rule's counters, forgetting the least recently used rule first if {@value #MAX_RULES} are remembered. */
@@ -146,12 +198,15 @@ public final class RepeatLimiter {
 	}
 
 	private static final class RuleCounters extends CounterPool.Owner {
-		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 3 * 8 + 4 + 1);
+		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 4 * 8 + 2 * 4 + 1);
 
 		final String ruleId;
 		Limit limit;
+		long allowed;
 		long dropped;
 		long lastUsed;
+		/** The most plays one of this rule's counters let start within the window, under its current limit. */
+		int peak;
 
 		RuleCounters(String ruleId, long serial) {
 			super(serial);

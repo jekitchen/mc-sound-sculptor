@@ -46,6 +46,9 @@ public final class TraceText {
 	public static final String RESULT = "soundsculptor.trace.text.result";
 	public static final String VOLUME = "soundsculptor.trace.text.volume";
 	public static final String NO_LIMIT = "soundsculptor.trace.text.no_limit";
+	/** "Repeat limit: at most 3 per 1 s, shared" (FR-14.2 step 4). */
+	public static final String LIMIT_SHARED = "soundsculptor.trace.text.limit_shared";
+	public static final String LIMIT_PER_SOURCE = "soundsculptor.trace.text.limit_per_source";
 	public static final String PLAY_ALLOWED = "soundsculptor.trace.text.play_allowed";
 	public static final String PLAY_DROPPED = "soundsculptor.trace.text.play_dropped";
 	public static final String CUE_SHOWN = "soundsculptor.trace.text.cue_shown";
@@ -145,7 +148,7 @@ public final class TraceText {
 
 		line(out, 0, tr.translate(RESULT));
 		line(out, 1, tr.translate(VOLUME, Numbers.plain(trace.volumePercent())));
-		line(out, 1, trace.limit() == null ? tr.translate(NO_LIMIT) : EntrySummary.limitPart(trace.limit()).text(tr));
+		line(out, 1, trace.limit() == null ? tr.translate(NO_LIMIT) : limitText(trace.limit(), tr));
 		if (trace.playAllowed() != null) {
 			line(out, 1, tr.translate(trace.playAllowed() ? PLAY_ALLOWED : PLAY_DROPPED));
 		}
@@ -182,6 +185,12 @@ public final class TraceText {
 				}
 			}
 		}
+	}
+
+	/** "Repeat limit: at most 3 per 1 s, shared", or "…, per source". */
+	public static String limitText(soundsculptor.core.sets.Limit limit, Translator tr) {
+		return tr.translate(limit.perSource() ? LIMIT_PER_SOURCE : LIMIT_SHARED, Integer.toString(limit.count()),
+				Numbers.plain(limit.windowMs() / 1000.0, 3));
 	}
 
 	/** The set's name, or "Quick changes". */

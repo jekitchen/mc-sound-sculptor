@@ -125,6 +125,19 @@ public final class QuickActions {
 		return new EntryEdit.Cue(!on);
 	}
 
+	/**
+	 * The repeat limit the sound gets at the place now, from whichever set attached there decides it (FR-1.5: quick
+	 * actions show the actual state), or {@code null} when nothing there limits it or the zone no longer exists.
+	 */
+	public static soundsculptor.core.sets.Limit limitAt(Workspace ws, PlaceRef where, String soundId) {
+		PlaceSets place = ws.profile().place(where);
+		if (place == null) {
+			return null;
+		}
+		SetEntry winner = resolver(place, ws.library()).resolve(soundId).limit();
+		return winner == null ? null : winner.limit();
+	}
+
 	/** Applies one quick action to the sound's single-sound entry in the place's Quick changes. */
 	public static QuickActionResult apply(Workspace ws, PlaceRef where, String soundId, EntryEdit edit) {
 		TraceEditError invalid = edit.validate();

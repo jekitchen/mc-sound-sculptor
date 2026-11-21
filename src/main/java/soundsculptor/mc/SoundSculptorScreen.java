@@ -406,6 +406,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 				? Component.translatable("soundsculptor.diag.cache.none")
 				: Component.translatable("soundsculptor.diag.cache", String.format(Locale.ROOT, "%.1f", diagnostics.cacheHitRate() * 100)));
 		body.label(() -> Component.translatable("soundsculptor.diag.errors", diagnostics.errors()));
+		// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
+		body.wrappedLabel(() -> limitsText(diagnostics.limits()));
 		body.label(() -> Component.translatable("soundsculptor.diag.memory", MemoryEstimate.megabytes(Diagnostics.memoryBytes()),
 				MemoryEstimate.megabytes(MemoryEstimate.BUDGET_BYTES)));
 		copyReportButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.diag.copy"), this::copyReport),
@@ -416,6 +418,19 @@ public final class SoundSculptorScreen extends SculptScreen {
 		if (!copyReportInFooter) {
 			body.row(copyReportButton);
 		}
+	}
+
+	/**
+	 * "Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)": the most plays one limit let
+	 * start within its window, against that limit (FR-6).
+	 */
+	private static Component limitsText(soundsculptor.core.limit.RepeatLimiter.Stats s) {
+		if (s.busiestLimit() == null) {
+			return s.dropped() == 0 ? Component.translatable("soundsculptor.diag.limits.none")
+					: Component.translatable("soundsculptor.diag.limits.counts", s.allowed(), s.dropped());
+		}
+		return Component.translatable("soundsculptor.diag.limits", s.allowed(), s.dropped(), s.busiest(), s.busiestLimit().count(),
+				soundsculptor.core.lists.Numbers.plain(s.busiestLimit().windowMs() / 1000.0, 3));
 	}
 
 	private static Component timing(String key, TimingWindow.Stats stats) {

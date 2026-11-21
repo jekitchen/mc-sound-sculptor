@@ -126,6 +126,26 @@ class SetCodecTest {
 	}
 
 	@Test
+	void limitsRoundTripAtTheEdgesOfTheirRanges() throws SetFormatException {
+		// FR-6.1: 1 to 100 plays per 50 ms to 10 s; per source defaults to shared when the field is left out.
+		SoundSet set = new SoundSet("set-limits", "Limits", List.of(
+				SetEntry.of("a", "*a*").withLimit(new Limit(1, 50, false)),
+				SetEntry.of("b", "*b*").withLimit(new Limit(100, 10_000, true)),
+				SetEntry.of("c", "*c*").withLimit(new Limit(3, 1000, false)).withMute(true)));
+		assertEquals(set, SetCodec.read(SetCodec.toJson(set)));
+		SoundSet shared = SetCodec.read("{\"schemaVersion\":3,\"id\":\"s\",\"name\":\"S\",\"entries\":[{\"id\":\"a\",\"target\":\"*c*\","
+				+ "\"limit\":{\"count\":3,\"windowMs\":1000}}]}");
+		assertEquals(new Limit(3, 1000, false), shared.entry("a").limit());
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":{\"count\":101,\"windowMs\":1000}}")).contains("limit count"));
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":{\"count\":3,\"windowMs\":10001}}")).contains("limit window"));
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":{\"count\":3,\"windowMs\":49}}")).contains("limit window"));
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":{\"count\":3}}")).contains("limit window"));
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":{\"count\":3,\"windowMs\":1000,\"perSource\":\"yes\"}}"))
+				.contains("limit per source"));
+		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"*c*\",\"limit\":3}")).contains("limit"));
+	}
+
+	@Test
 	void badValuesAreFormatProblems() {
 		assertTrue(problem(file("{\"id\":\"a\",\"target\":\"Bad Sound!\"}")).contains("entry 1, target"));
 		assertTrue(problem(file("{\"id\":\"a\"}")).contains("entry 1, target: missing"));

@@ -3,6 +3,7 @@
 	"package": "soundsculptor.gametest.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"LimiterClock",
 		"SubtitleOverlayRecorder"
 	],
 	"injectors": {

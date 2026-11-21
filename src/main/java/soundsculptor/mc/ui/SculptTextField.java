@@ -30,10 +30,28 @@ public class SculptTextField extends EditBox {
 	private Consumer<String> onChange = value -> { };
 	private Component error;
 	private boolean edited;
+	/** How wide the error message may be drawn; the field's own width unless the row leaves room beside it. */
+	private java.util.function.IntSupplier errorX = this::getX;
+	private java.util.function.IntSupplier errorWidth = this::getWidth;
+	/** Whether the message is drawn now (the outline always is), so two neighbours' messages never overlap. */
+	private java.util.function.BooleanSupplier messageShown = () -> true;
 
 	public SculptTextField(Font font, int width, Component label) {
 		super(font, 0, 0, width, Theme.WIDGET_HEIGHT, label);
 		super.setResponder(this::changed);
+	}
+
+	/**
+	 * Lets the error message of a narrow field start at {@code x} and run {@code width} pixels, while it is drawn
+	 * ({@code shown}): for a short number field on a row with room beside it, so "Type a number from 1 to 100" is not
+	 * cut to "Type…". Layouts must leave that room free under the row.
+	 */
+	public SculptTextField errorMessage(java.util.function.IntSupplier x, java.util.function.IntSupplier width,
+			java.util.function.BooleanSupplier shown) {
+		this.errorX = x;
+		this.errorWidth = width;
+		this.messageShown = shown;
+		return this;
 	}
 
 	public SculptTextField placeholder(Component placeholder) {
@@ -139,7 +157,9 @@ public class SculptTextField extends EditBox {
 				Draw.focusRing(g, getX(), getY(), getWidth(), getHeight());
 			}
 			Font font = Minecraft.getInstance().font;
-			Draw.truncatedText(g, font, error.getString(), getX(), getBottom() + 2, getWidth(), Theme.ERROR);
+			if (messageShown.getAsBoolean()) {
+				Draw.truncatedText(g, font, error.getString(), errorX.getAsInt(), getBottom() + 2, errorWidth.getAsInt(), Theme.ERROR);
+			}
 		}
 	}
 }

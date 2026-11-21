@@ -42,15 +42,16 @@ import net.minecraft.resources.Identifier;
  * entry of the same set (FR-4.6), On/Off, Mute (Unchanged, Muted, Not muted) and Level 0–100% (FR-5.1–5.2). Save and
  * Cancel, with the unsaved-changes dialog (FR-12.4), a reset button per value (FR-12.6) and inline errors that disable
  * Save (FR-12.7). Save puts the entry into the set's draft only; nothing changes in game until the set editor saves.
- * Cue (Unchanged, On, Off) sits under Mute (FR-7); setting Mute to Muted while Cue is Unchanged sets Cue to the
- * profile's "New mutes get Cue" default (FR-7.6). Limit arrives with M11; an entry's existing limit is kept.
+ * Cue (Unchanged, On, Off) sits beside Level (FR-7); setting Mute to Muted while Cue is Unchanged sets Cue to the
+ * profile's "New mutes get Cue" default (FR-7.6). The repeat limit (FR-6) has its own row ({@link LimitControls}):
+ * off by default, a count of 1 to 100 per a window of 0.05 to 10 seconds, shared or per source.
  */
 public final class EntryEditorScreen extends SculptScreen {
 	private static final Identifier RESET_ICON = Identifier.fromNamespaceAndPath("soundsculptor", "icon/reset");
 	private static final int ENABLED_WIDTH = 110;
 	private static final int MUTE_WIDTH = 170;
-	private static final int SLIDER_WIDTH = 200;
-	private static final int VOLUME_FIELD_WIDTH = 50;
+	private static final int SLIDER_WIDTH = 150;
+	private static final int VOLUME_FIELD_WIDTH = 40;
 	private static final int PICK_WIDTH = 70;
 	/** Where the slider rests while the entry leaves the level unchanged. */
 	private static final int UNCHANGED_VOLUME = 100;
@@ -106,6 +107,9 @@ public final class EntryEditorScreen extends SculptScreen {
 	public SculptDropdown<CueChoice> cueDropdown;
 	public SculptSlider volumeSlider;
 	public SculptTextField volumeField;
+	/** The limit row (FR-6.1): Limit, count, window, Per source. */
+	public LimitControls limitControls;
+	public SculptButton limitReset;
 	public SculptList matchList;
 	public SculptButton saveButton;
 
@@ -248,17 +252,16 @@ public final class EntryEditorScreen extends SculptScreen {
 				this::muteChoiceName,
 				MuteChoice.of(draft.mute()), this::setMute), Component.translatable("soundsculptor.rule_editor.mute.tip"));
 		body.row(enabledToggle, muteDropdown, resetButton(Field.MUTE, () -> muteDropdown.setValue(MuteChoice.of(draft.mute()))));
-		// FR-7: under Mute, as a cue only shows for a muted sound.
+		// FR-7: beside Level, under Mute, as a cue only shows for a muted sound.
 		List<Component> cueNames = new ArrayList<>();
 		for (CueChoice choice : CueChoice.values()) {
 			cueNames.add(cueChoiceName(choice));
 		}
 		Component cueLabel = Component.translatable("soundsculptor.rule_editor.cue");
-		cueDropdown = Tooltips.describe(new SculptDropdown<>(Math.max(MUTE_WIDTH, SculptDropdown.widthFor(cueLabel, cueNames)), cueLabel,
+		cueDropdown = Tooltips.describe(new SculptDropdown<>(SculptDropdown.widthFor(cueLabel, cueNames), cueLabel,
 				List.of(CueChoice.values()), this::cueChoiceName, CueChoice.of(draft.cue()), this::setCue),
 				Component.translatable("soundsculptor.rule_editor.cue.tip"));
 		SculptButton cueReset = resetButton(Field.CUE, () -> cueDropdown.setValue(CueChoice.of(draft.cue())));
-		body.row(cueDropdown, cueReset);
 
 		String volumeText = draft.text(Field.VOLUME);
 		double initialVolume = draft.error(Field.VOLUME) == null && !volumeText.isBlank() ? Double.parseDouble(volumeText.trim()) : UNCHANGED_VOLUME;
@@ -292,7 +295,19 @@ public final class EntryEditorScreen extends SculptScreen {
 			}
 			changed();
 		});
-		body.row(volumeSlider, volumeField, resetButton(Field.VOLUME, () -> volumeField.setValue(draft.text(Field.VOLUME))));
+		body.row(volumeSlider, volumeField, resetButton(Field.VOLUME, () -> volumeField.setValue(draft.text(Field.VOLUME))), cueDropdown, cueReset);
+
+		// FR-6: Limit, count "per" window "s", Per source; off by default. One reset button puts all of it back.
+		limitControls = new LimitControls(draft, limit -> { }).afterEdit(this::changed);
+		List<AbstractWidget> limitRow = new ArrayList<>(limitControls.widgets());
+		limitReset = SculptButton.icon(RESET_ICON, Component.translatable("soundsculptor.rule_editor.reset.limit_count"), () -> {
+			draft.resetLimit();
+			limitControls.refresh();
+			changed();
+		});
+		limitRow.add(limitReset);
+		body.row(limitRow.toArray(new AbstractWidget[0]));
+		limitControls.messagesUpTo(body.x() + body.width());
 		body.label(() -> overridden);
 
 		matchList = new SculptList(body.width(), SculptList.ROW_HEIGHT, Component.translatable("soundsculptor.rule_editor.matches"));
@@ -307,6 +322,9 @@ public final class EntryEditorScreen extends SculptScreen {
 		}
 		if (draft.shownError(Field.VOLUME) != null) {
 			volumeField.revealError();
+		}
+		if (draft.shownError(Field.LIMIT_COUNT) != null || draft.shownError(Field.LIMIT_WINDOW) != null) {
+			limitControls.revealErrors();
 		}
 	}
 
@@ -569,6 +587,7 @@ public final class EntryEditorScreen extends SculptScreen {
 		if (!draft.attemptSave()) {
 			patternField.revealError();
 			volumeField.revealError();
+			limitControls.revealErrors();
 			return false;
 		}
 		SetEntry entry = draft.build();

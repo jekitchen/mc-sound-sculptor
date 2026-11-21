@@ -50,7 +50,7 @@ public final class Diagnostics {
 				ProfileManager.library().size(), precedence.activeSetCount(), precedence.activeEntryCount(),
 				ProfileManager.profile().zones().size(), activeZonesHere(),
 				SoundHook.soundTiming().stats(now), SoundHook.soundTiming().peakMaxMicros(),
-				TICK.stats(now), OUTLINES.stats(now), hitRate, SoundHook.errorCount());
+				TICK.stats(now), OUTLINES.stats(now), hitRate, SoundHook.errorCount(), -1, SoundHook.limiter().stats());
 	}
 
 	/** Enabled zones that can affect sounds here: those in this world and dimension. */

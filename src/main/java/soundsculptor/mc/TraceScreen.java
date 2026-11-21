@@ -62,9 +62,10 @@ import net.minecraft.resources.Identifier;
  * single-sound entry in Quick changes and on Add to Quick changes, where it shows and toggles the sound's actual state
  * at the place, as the Sounds tab's quick actions do (FR-1.5). Edits save at once through {@link ProfileManager#change},
  * recompute the trace from the sound's last play (labelled "Predicted for next play" until it plays again) and show a
- * 5-second Undo toast. Level changes made in one visit to the Level panel are undone together; returning from a full
- * editor recomputes the trace. Cue (FR-7) works like Mute: the actual state on the sound's own Quick changes entry, the
- * line's own entry elsewhere. Limit controls come with M11, like in the entry editor.
+ * 5-second Undo toast. Level and limit changes made in one visit to the Level panel are undone together; returning from
+ * a full editor recomputes the trace. Cue (FR-7) works like Mute: the actual state on the sound's own Quick changes
+ * entry, the line's own entry elsewhere. The Level panel also holds the line's own entry's repeat limit (FR-6,
+ * {@link LimitControls}): a sixth button on each line does not fit at 854 × 480.
  */
 public final class TraceScreen extends SculptScreen {
 	private static final Translator TRANSLATOR = (key, args) -> Component.translatable(key, args).getString();
@@ -93,6 +94,8 @@ public final class TraceScreen extends SculptScreen {
 	// The Level panel: one visit is one change for Undo.
 	public SculptSlider volumeSlider;
 	public SculptTextField volumeField;
+	/** The Level panel's repeat limit row, while it is open (FR-14.4). */
+	public LimitControls limitControls;
 	/** Applies a level from the Level panel, or {@code null} for an empty field. */
 	private Function<Integer, TraceEditResult> volumeApply;
 	private Workspace volumeBefore;
@@ -144,6 +147,7 @@ public final class TraceScreen extends SculptScreen {
 		finishVolume();
 		addQuickMute = null;
 		addQuickLevel = null;
+		limitControls = null;
 		// Back from a full editor (or any other change): show the trace for the sets and zones as they are now.
 		if (!Objects.equals(ProfileManager.workspace(), shownWorkspace)) {
 			predicted = predicted || play != null;
@@ -511,11 +515,12 @@ public final class TraceScreen extends SculptScreen {
 
 	// ---- Add to Quick changes ----
 
+
 	/**
 	 * Add to Quick changes (on a "No entry matches" line or a place's own line): a small choice above the screen, Mute
 	 * (or Unmute, the sound's actual state at the place, FR-1.5) and Level…, each read with where it goes ("Add to Quick
-	 * changes in Pen"). Mute applies at once; Level… opens the Level panel. Esc closes the choice and returns focus to the
-	 * button.
+	 * changes in Pen"). Mute applies at once; Level… opens the Level panel, with the repeat limit. Esc closes the choice
+	 * and returns focus to the button.
 	 */
 	public void openAddToQuickChanges(PlaceRef where) {
 		Component context = Component.translatable("soundsculptor.trace.edit.add_quick.choice", SetDeleteDialog.placeName(ProfileManager.profile(), where));
@@ -566,9 +571,14 @@ public final class TraceScreen extends SculptScreen {
 
 	// ---- Level panel ----
 
-	/** Opens the Level panel for an entry line: a slider and a number field that apply as they change. */
+	/**
+	 * Opens the Level panel for an entry line: a slider and a number field for the level, and the repeat limit (FR-14.4:
+	 * "Limit (count, window, per source)", {@link LimitControls}), of the line's own entry. They apply as they change.
+	 * Another button on the line would not fit at 854 × 480, so the limit shares the level's panel.
+	 */
 	public void openVolume(EntryLocation where, SetEntry entry) {
-		openVolumePanel(entry, volume -> TraceEditor.edit(context(), ProfileManager.workspace(), where, new EntryEdit.Volume(volume)));
+		openVolumePanel(entry, volume -> TraceEditor.edit(context(), ProfileManager.workspace(), where, new EntryEdit.Volume(volume)),
+				limit -> TraceEditor.edit(context(), ProfileManager.workspace(), where, limitEdit(limit)));
 	}
 
 	/**
@@ -577,22 +587,36 @@ public final class TraceScreen extends SculptScreen {
 	 */
 	public void openQuickVolume(PlaceRef where) {
 		openVolumePanel(SetEntry.of("new", soundId),
-				volume -> TraceEditor.addToQuickChanges(context(), ProfileManager.workspace(), where, new EntryEdit.Volume(volume)));
+				volume -> TraceEditor.addToQuickChanges(context(), ProfileManager.workspace(), where, new EntryEdit.Volume(volume)),
+				limit -> TraceEditor.addToQuickChanges(context(), ProfileManager.workspace(), where, limitEdit(limit)));
 	}
 
-	private void openVolumePanel(SetEntry entry, Function<Integer, TraceEditResult> apply) {
+	private void openVolumePanel(SetEntry entry, Function<Integer, TraceEditResult> apply,
+			Function<soundsculptor.core.sets.Limit, TraceEditResult> applyLimit) {
 		finishVolume();
 		volumeApply = apply;
 		volumeBefore = ProfileManager.workspace();
 		volumeLast = null;
-		// LevelPopup checks typed values like the entry editor's Level field (FR-12.7) before calling applyVolume.
-		LevelPopup popup = LevelPopup.open(this, entry, this::applyVolume, this::finishVolume);
+		// LevelPopup checks typed values like the entry editor's fields (FR-12.7) before calling back.
+		LevelPopup popup = LevelPopup.open(this, entry, this::applyVolume, () -> {
+			limitControls = null;
+			finishVolume();
+		}, false, null, entry.limit(), limit -> applyChange(applyLimit.apply(limit)));
 		volumeSlider = popup.slider;
 		volumeField = popup.field;
+		limitControls = popup.limit;
+	}
+
+	private static EntryEdit limitEdit(soundsculptor.core.sets.Limit limit) {
+		return limit == null ? EntryEdit.ClearLimit.INSTANCE : new EntryEdit.SetLimit(limit.count(), limit.windowMs(), limit.perSource());
 	}
 
 	private void applyVolume(Integer volume) {
-		TraceEditResult result = volumeApply.apply(volume);
+		applyChange(volumeApply.apply(volume));
+	}
+
+	/** A change from the Level panel: saved at once; its Undo comes when the panel closes. */
+	private void applyChange(TraceEditResult result) {
 		if (!result.ok()) {
 			showToast(errorText(result.error()), null);
 			return;
@@ -600,6 +624,7 @@ public final class TraceScreen extends SculptScreen {
 		save(result);
 		volumeLast = result;
 	}
+
 
 	/** The Level panel closed: one Undo toast for everything changed in it. */
 	private void finishVolume() {

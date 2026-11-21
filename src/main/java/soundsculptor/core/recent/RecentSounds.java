@@ -21,7 +21,9 @@ import soundsculptor.core.diag.MemoryEstimate;
  *
  * <p>Rows are grouped by sound ID and kept for 3 minutes after their last play, at most {@link #MAX_IDS} of them.
  * Play counts use one-second buckets, so a play leaves the count within a second of turning 3 minutes old. The
- * bucket holding a row's most recent play always counts while the row is listed, so a listed row never shows 0 plays.
+ * bucket holding a row's most recent play always counts while the row is listed. Plays a repeat limit dropped are
+ * counted on their own (FR-6.8: "Limited" with a dropped count), not as plays, and keep the row on Limited for
+ * {@link #LIMITED_SHOWN_MS} ms.
  *
  * <p>Not thread-safe: record and snapshot on the same thread (the render thread, where sounds start). Recording a
  * sound already in the list allocates nothing.
@@ -29,6 +31,11 @@ import soundsculptor.core.diag.MemoryEstimate;
 public final class RecentSounds {
 	public static final long WINDOW_MS = 180_000;
 	public static final int MAX_IDS = 200;
+	/**
+	 * How long a row keeps showing Limited after a repeat limit dropped one of its plays (FR-6.8): the longest window a
+	 * limit can have, so a limited stream reads Limited instead of flickering with each allowed play.
+	 */
+	public static final long LIMITED_SHOWN_MS = soundsculptor.core.sets.Limit.MAX_WINDOW_MS;
 
 	/** Cap for the session-long sets, since servers can send arbitrary sound IDs. */
 	static final int MAX_SEEN_IDS = 4096;
@@ -175,20 +182,25 @@ public final class RecentSounds {
 		generation++;
 	}
 
-	/** Mutable per-ID state. Counts live in a ring of one-second buckets covering the window. */
+	/**
+	 * Mutable per-ID state. Counts live in a ring of one-second buckets covering the window: plays that started, and
+	 * plays a repeat limit dropped (FR-6.8).
+	 */
 	private static final class Row {
-		/** The row and its two bucket arrays, without the ID string. */
-		static final long BYTES = MemoryEstimate.object(7 * MemoryEstimate.REFERENCE + 8)
-				+ MemoryEstimate.array(4, BUCKETS) + MemoryEstimate.array(8, BUCKETS);
+		/** The row and its three bucket arrays, without the ID string. */
+		static final long BYTES = MemoryEstimate.object(8 * MemoryEstimate.REFERENCE + 2 * 8)
+				+ 2 * MemoryEstimate.array(4, BUCKETS) + MemoryEstimate.array(8, BUCKETS);
 
 		final String id;
 		final int[] counts = new int[BUCKETS];
+		final int[] drops = new int[BUCKETS];
 		final long[] seconds = new long[BUCKETS];
 		String category;
 		DistanceBand band;
 		PlayStatus status;
 		String zoneName;
 		long lastPlayedMs;
+		long lastDroppedMs = Long.MIN_VALUE;
 
 		Row(String id) {
 			this.id = id;
@@ -201,8 +213,14 @@ public final class RecentSounds {
 			if (seconds[i] != second) {
 				seconds[i] = second;
 				counts[i] = 0;
+				drops[i] = 0;
 			}
-			counts[i]++;
+			if (status == PlayStatus.LIMITED) {
+				drops[i]++;
+				lastDroppedMs = nowMs;
+			} else {
+				counts[i]++;
+			}
 			this.category = category;
 			this.band = band;
 			this.status = status;
@@ -215,25 +233,30 @@ public final class RecentSounds {
 		}
 
 		/**
-		 * Plays in the last 3 minutes, to the second. While the row is listed, the bucket of its most recent play
-		 * counts even at the window's edge, so a listed row never shows 0 plays. (That bucket cannot have been reused:
-		 * reusing it needs a newer play, which would be the most recent one.)
+		 * Plays (or, with {@code dropped}, dropped plays) in the last 3 minutes, to the second. While the row is listed,
+		 * the bucket of its most recent play counts even at the window's edge, so a listed row never shows 0 for what
+		 * its latest play was. (That bucket cannot have been reused: reusing it needs a newer play, which would be the
+		 * most recent one.)
 		 */
-		int count(long nowMs) {
+		int count(long nowMs, boolean dropped) {
 			long oldestKept = Math.floorDiv(nowMs, 1000) - BUCKETS;
 			long lastSecond = Math.floorDiv(lastPlayedMs, 1000);
 			boolean listed = !expired(nowMs);
+			int[] buckets = dropped ? drops : counts;
 			int total = 0;
 			for (int i = 0; i < BUCKETS; i++) {
 				if (seconds[i] > oldestKept || (listed && seconds[i] == lastSecond)) {
-					total += counts[i];
+					total += buckets[i];
 				}
 			}
 			return total;
 		}
 
 		RecentRow toRecord(long nowMs) {
-			return new RecentRow(id, category, count(nowMs), lastPlayedMs, band, status, zoneName);
+			// A drop in the last few seconds keeps the row on Limited, so a limited stream does not flicker (FR-6.8).
+			boolean limitedLately = lastDroppedMs != Long.MIN_VALUE && nowMs - lastDroppedMs < LIMITED_SHOWN_MS;
+			return new RecentRow(id, category, count(nowMs, false), lastPlayedMs, band, limitedLately ? PlayStatus.LIMITED : status,
+					zoneName, count(nowMs, true));
 		}
 	}
 }
