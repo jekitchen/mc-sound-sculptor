@@ -94,7 +94,7 @@ Each story maps to the FRs that satisfy it. Release tags show when the story fir
 | US-4 | player with hearing loss | boost quiet sounds like footsteps to 180% | I can hear them at all | FR-5 | v1 |
 | US-5 | player with sound sensitivity | mute explosions and still see a cue saying one happened | I stay safe without the shock | FR-5, FR-7 | v1 |
 | US-6 | builder | attach a "Calm building" set with ambient and mob sounds at 30% to Everywhere and turn it on while I build | my build sessions are calm wherever I fly | FR-4, FR-8.10 | MVP |
-| US-7 | player | look at a mob and see the sounds it just made | I can mute the parrot that keeps imitating, without searching | FR-2 | v1 |
+| US-7 | player | look at a mob and see the sounds it just made | I can mute the parrot that keeps imitating, without searching | FR-2 | Future |
 | US-8 | player | search "villager\|zombie" and see all matching sound IDs, narrowing as I type | I can find a family of sounds and add it to a Sound Set at once | FR-3, FR-4 | MVP (plain/AND/OR), Future (regex) |
 | US-9 | multiplayer regular | have my settings switch automatically when I join each server | I don't redo setup every session | FR-11 | MVP |
 | US-10 | streamer | export my profile and send it to a friend | they get the same mix, including the Sound Sets it uses (fixed zones included if they play on the same server) | FR-11 | MVP |
@@ -146,7 +146,7 @@ The main entry point. **One Sounds browser is used everywhere**: it is the top-l
 - [ ] With 300 sounds per second (noisy-farm test), FPS with the list open is within 5% of FPS with it closed.
 - [ ] From a Sound Set, open the picker, tick three cow sounds and Add: the set gains three single-sound entries; opening the picker again marks them "In this set".
 
-### FR-2 Point-at-entity sound inspector (v1)
+### FR-2 Point-at-entity sound inspector (Future; moved from v1 on 2026-11-21)
 
 Look at a mob or other entity and see the sounds it recently made, with the same quick actions as FR-1.
 
@@ -467,7 +467,7 @@ Each multiplayer server, Realm and singleplayer world has exactly one *profile*:
 
 ### FR-12 Config screen, hotkey and Mod Menu (MVP)
 
-- **FR-12.1** One main screen with tabs: Sounds, Inspect (v1), Sound Sets, Zones, Profiles, Settings. Sounds (FR-1, FR-3) replaces the earlier Recently Played and Search tabs; Sound Sets (FR-4.7) replaces the Rules tab; Zones starts with the Everywhere row (FR-8.10). The header always shows the active profile and a "Bypass Sound Sculptor" toggle (FR-13.1).
+- **FR-12.1** One main screen with tabs: Sounds, Inspect (Future, FR-2), Sound Sets, Zones, Profiles, Settings. Sounds (FR-1, FR-3) replaces the earlier Recently Played and Search tabs; Sound Sets (FR-4.7) replaces the Rules tab; Zones starts with the Everywhere row (FR-8.10). The header always shows the active profile and a "Bypass Sound Sculptor" toggle (FR-13.1).
 - **FR-12.2** Hotkey **;** (semicolon) **opens the screen on the last used tab. It is rebindable in vanilla Options → Controls under the category "Sound Sculptor". At M0, K was checked against the default keys of the 36 most-downloaded Fabric mods, clashed with Iris, and was replaced by ; (see the Decisions Log)**.
 - **FR-12.3** If Mod Menu is installed, its config button opens the same screen. Without Mod Menu, the mod works identically.
 - **FR-12.4** Editors (Sound Set, entry, zone, profile settings) use Save and Cancel. Pressing Esc or Cancel with unsaved changes opens a dialog: Save, Discard, Keep editing.
@@ -541,7 +541,7 @@ All screens are hand-built on Minecraft's own Screen and widget classes from a s
 | Screen / tab | Wireframe description | Primary flow |
 | --- | --- | --- |
 | Sounds | Toolbar: search field with "?" help (FR-3.5), Recently played filter toggle, result count, "Apply to" selector; with the filter on, also Pause and Sort. Scrolling list of rows (FR-1.2), each with icon buttons Mute, Volume, Limit, Cue, Edit, Add to set, Why? (FR-14). In picker mode (FR-1.7): checkboxes and Like this… instead, footer "N picked · Add · Cancel". | Hear sound → ; → find row → Mute (2 actions); or type → narrow → act |
-| Inspect (v1) | Left: selected entity name and type, link legend (Linked / Likely / Uncertain). Right: its sound rows with the same buttons. "No sounds linked yet" message when empty. | Look at mob → Inspect key → row → action |
+| Inspect (Future) | Left: selected entity name and type, link legend (Linked / Likely / Uncertain). Right: its sound rows with the same buttons. "No sounds linked yet" message when empty. | Look at mob → Inspect key → row → action |
 | Sound Sets | Library list: name, entry count, where used ("Main base, Mob farm · 1 other world"); buttons Edit, Duplicate, Rename, Delete; New set button. Set editor: name; entry list (sound or group, summary, On/Off, Edit, Delete); Add sounds… (opens the picker), Type a pattern…; Attached to panel (places here, other worlds) with Attach to… and Detach; Save/Cancel. Entry editor: Mute, Level, Limit + Per source, Cue, and for a group the pattern with live preview. | New set → Add sounds → pick → set levels → Attach to zone → Save |
 | Zones | First row Everywhere (sets only). Then zones: color swatch + name + shape + "You're here / 120 blocks away / Other world". Zone editor: name, color picker, display (Outline; Fill and Both after 1.0) and fill opacity (after 1.0), coordinates with "My position" button, shape and sizes, and the zone's attached Sound Sets (FR-8.6: order, on/off, edit, detach, Attach set…). Outlines show while editing. | Mark corners → Attach set → Save |
 | Profiles | List of servers and worlds with a profile (name, world key, Sound Set and zone counts, last joined) with Rename, Reset, Export, Delete; "Copy from…" button for the current server; Import area ("Drop a file here or choose from the imports folder"). | Copy from another server → confirm |
@@ -782,7 +782,7 @@ Sound Sculptor must coexist with common client mods and be defensible to server 
 
 ## 10. Release plan
 
-Three releases: **MVP (0.1)** after milestones M0–M8e, **v1 (1.0)** after M9–M16, then Future work. The alpha is held until Sound Sets and the Sounds browser (M8c, M8d) are done, so they are tested from day 1 (decided 2026-11-11). Each milestone is one Claude Code working session or a few, ends with a game that launches, and has its own test (section 11.1). Do not start a milestone until the previous one's tests pass.
+Three releases: **MVP (0.1)** after milestones M0–M8e, **v1 (1.0)** after M9–M16 (M12 moved to Future on 2026-11-21, M13 folded), then Future work. The alpha is held until Sound Sets and the Sounds browser (M8c, M8d) are done, so they are tested from day 1 (decided 2026-11-11). Each milestone is one Claude Code working session or a few, ends with a game that launches, and has its own test (section 11.1). Do not start a milestone until the previous one's tests pass.
 
 ### 10.1 MVP milestones (public alpha 0.1)
 
@@ -810,7 +810,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 | M9 | Cues | FR-7 HUD cue box and master switch; Cue toggles in quick actions, the entry editor and the trace | HUD API changes |
 | M10 | Volume boost to 200% | FR-5.4–5.6 with warning and range-safe gain | OpenAL gain cap; range leak |
 | M11 | Repeat limiting | FR-6 shared and per-source | Counter correctness |
-| M12 | Entity inspector | FR-2 with Linked/Likely labels | Proximity accuracy |
+| M12 | Entity inspector (moved to Future 2026-11-21) | Nothing in 1.0: the point-at-entity inspector (FR-2) moved to Future work (10.3). Its core logic stays in the code, unused | — |
 | M13 | Full zones (folded 2026-11-19) | Nothing of its own left: zones get limits and cues through their attached Sound Sets once M9 and M11 add them to entries; the color picker was built before the alpha; Outside mode and fade were removed 2026-11-14 and cylinders 2026-11-18. Its tests move: P8 runs with M10, P4 and P4b with M11, the full precedence matrix (11.4) in M16 | — |
 | M14 | Profile management | FR-11.2–11.3 copy settings from another server, rename, reset, delete. Built before the alpha; reworked for Sound Sets in M8c | Link bookkeeping |
 | M15 | Import/export | FR-11.4–11.7 with validation and migrations. Built before the alpha; sets travel with exports from M8c | Validation gaps |
@@ -826,6 +826,7 @@ M0–M8b were built with the earlier rule model (a global rule list and one rule
 - Per-dimension Everywhere (sets that apply everywhere in one dimension).
 - Translations contributed by the community.
 - **Server policy companion mod.** A separate server-side mod or plugin (Fabric server mod or Paper plugin) that tells Sound Sculptor how much it may do on that server: **Disabled**, **Strict vanilla** (also hides distance bands and the entity inspector), or **Vanilla+** (server opts in to extra options and information). Two delivery methods to evaluate: a custom network channel such as `soundsculptor:policy` (clean, but the server can then see the player has Sound Sculptor, which changes section 8.3), or a hidden code in the MOTD or join message (no plugin, works on vanilla servers, never reveals the mod). Notes: the policy is honor-based, because a modified client can ignore it. No policy means today's fair-play behavior. Vanilla+ would relax the core principle to "no advantage unless the server allows it", so it needs its own fair-play review before work starts.
+- Point-at-entity sound inspector (FR-2, US-7), moved from v1 (M12) on 2026-11-21.
 - Filled zone display (FR-10.7), moved from v1 in the feature review.
 - Regex search (FR-3), moved from v1 in the feature review.
 - Preview: play a search result once at 100% (FR-3.3), moved from v1 in the feature review.
@@ -871,7 +872,7 @@ Every test runs in game without reading code. Use a dedicated creative test worl
 | M9 | FR-7 AC |
 | M10 | 11.3 boost-range test; FR-5 v1 AC; matrix case P8 (needs M9's cues too) |
 | M11 | FR-6 AC; matrix cases P4 and P4b |
-| M12 | FR-2 AC |
+| M12 | (Moved to Future 2026-11-21: see 10.3) |
 | M13 | (Folded 2026-11-19: see 10.2) |
 | M16 | AC of the FRs it covers; the full zone precedence matrix (11.4) |
 
@@ -1146,3 +1147,4 @@ In priority order. Answers will update the decisions log and the affected sectio
 | 2026-11-18 | In the picker, Like this… adds a group in one step: each group has Add (adding it with any sounds already picked and closing the picker), Done became Back, and the screen behind every pop-up is dimmed. The owner usually wants one group and is then done; the pop-up's Done and the live-looking Cancel and Add below it were confusing | Project owner |
 | 2026-11-18 | Cylinder zones are dropped before release, as spheres were: zones are boxes only, drawn by marking two corners and adjusted one side at a time. A file with a cylinder (or any other shape) is refused as "not a supported shape". The stress profile uses boxes of varied sizes and proportions instead | Project owner |
 | 2026-11-19 | M13 (Full zones) is folded into other milestones: with Sound Sets, zones get limits and cues from their attached sets once M9 and M11 add them to entries; the color picker shipped in the alpha; Outside mode, fade and cylinders were removed. Its tests move: matrix case P8 with M10, P4 and P4b with M11, the full precedence matrix in M16 | Project owner |
+| 2026-11-21 | The point-at-entity sound inspector (FR-2, M12) moves from v1 to Future work. 1.0 is M9 (cues), M10 (boost), M11 (repeat limits) and M16 (polish). Quick actions and Why? still work from the Sounds tab and the trace | Project owner |
