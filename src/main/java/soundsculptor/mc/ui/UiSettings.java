@@ -1,13 +1,13 @@
 package soundsculptor.mc.ui;
 
 /**
- * UI settings the kit reads. Until the Settings tab exists (later milestone) these are set by code, e.g. the demo
- * screen's "Reduced motion" toggle.
+ * UI settings the kit reads. The app-wide settings ({@code AppSettingsManager}) set them when they load and change; the
+ * UI kit demo screen's toggle sets them for its own test.
  */
 public final class UiSettings {
 	private UiSettings() {
 	}
 
-	/** PRD A-6: no list animations and no toast slide-in. */
+	/** PRD A-6 (Settings › Accessibility › Reduced motion): toasts appear in place instead of sliding in. */
 	public static volatile boolean reducedMotion;
 }

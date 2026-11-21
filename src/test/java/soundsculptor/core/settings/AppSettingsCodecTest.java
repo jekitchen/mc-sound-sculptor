@@ -60,6 +60,18 @@ class AppSettingsCodecTest {
 	}
 
 	@Test
+	void reducedMotionIsSavedAndReadBack() throws AppSettingsFormatException {
+		// A-6, Settings › Accessibility: off by default; on is written to the file and read back on its own.
+		assertTrue(AppSettingsCodec.toJson(D).contains("\"reducedMotion\": false"));
+		String json = AppSettingsCodec.toJson(D.withReducedMotion(true));
+		assertTrue(json.contains("\"reducedMotion\": true"), json);
+		AppSettingsCodec.Read read = read(json);
+		assertEquals(D.withReducedMotion(true), read.settings());
+		assertEquals(List.of(), read.problems());
+		assertEquals(D, read.settings().reset(AppSetting.REDUCED_MOTION));
+	}
+
+	@Test
 	void everyCueColorPresetRoundTripsAsItself() throws AppSettingsFormatException {
 		for (soundsculptor.core.ui.Palette.Swatch swatch : soundsculptor.core.cue.CueColors.PRESETS) {
 			AppSettingsCodec.Read read = read(AppSettingsCodec.toJson(D.withCueColor(swatch.rgb())));

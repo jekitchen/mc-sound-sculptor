@@ -154,6 +154,8 @@
 	"soundsculptor.settings.cue_color.tip": "The text color of muted-sound cues. Every cue also starts with \"(muted)\", so you do not need the color to tell cues from subtitles.",
 	"soundsculptor.settings.cue_color.custom": "Custom (%s)",
 	"soundsculptor.settings.cue_scale": "Cue text size",
+	"soundsculptor.settings.reduced_motion": "Reduced motion",
+	"soundsculptor.settings.reduced_motion.tip": "Messages at the bottom of the screen appear at once instead of sliding in.",
 	"soundsculptor.settings.cue_scale.tip": "How big muted-sound cues are drawn, from 100%% to 200%%. The box grows up and to the left.",
 	"soundsculptor.settings.cue_offset_x": "Cue box left/right",
 	"soundsculptor.settings.cue_offset_x.tip": "Moves the cue box right (more) or left (less) in screen pixels, for example away from a mod that moves subtitles. It always stays on screen.",

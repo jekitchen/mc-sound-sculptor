@@ -8,8 +8,9 @@ import soundsculptor.core.ui.Palette;
 /**
  * The cue text colors offered in Settings (PRD FR-7.3, A-7): the default light blue-gray and the light Okabe–Ito
  * colors, each with a name ("soundsculptor.color.&lt;id&gt;"). There is no free hex entry; a color set some other way
- * (an edited settings file) is kept and shown as a custom color. Each one keeps at least 6:1 contrast on the black
- * cue background, and none is vanilla's white, so a cue never looks like a subtitle even in color. Pure Java.
+ * (an edited settings file) is kept and shown as a custom color. Each one keeps at least 4.5:1 contrast on the cue
+ * box (vanilla's 80% black subtitle background) even over a white sky (A-3; bluish green and reddish purple did not,
+ * so they are not offered), and none is vanilla's white, so a cue never looks like a subtitle even in color. Pure Java.
  */
 public final class CueColors {
 	/** The default first, then the Okabe–Ito colors that read well on a dark background. */
@@ -17,9 +18,7 @@ public final class CueColors {
 			new Palette.Swatch("light_blue_gray", AppSettings.DEFAULT_CUE_COLOR),
 			new Palette.Swatch("sky_blue", 0x56B4E9),
 			new Palette.Swatch("yellow", 0xF0E442),
-			new Palette.Swatch("orange", 0xE69F00),
-			new Palette.Swatch("reddish_purple", 0xCC79A7),
-			new Palette.Swatch("bluish_green", 0x009E73));
+			new Palette.Swatch("orange", 0xE69F00));
 
 	private CueColors() {
 	}

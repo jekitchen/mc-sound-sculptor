@@ -82,6 +82,7 @@ public final class SoundSculptorScreen extends SculptScreen {
 	public SculptSlider cueOffsetXSlider;
 	public SculptSlider cueOffsetYSlider;
 	public SculptButton cueOffsetReset;
+	public SculptToggle reducedMotionToggle;
 	public SculptToggle throughBlocksToggle;
 	private DiagnosticsReport.Data diagnostics;
 	private int ticks;
@@ -253,8 +254,9 @@ public final class SoundSculptorScreen extends SculptScreen {
 	}
 
 	/**
-	 * Settings → Accessibility (PRD 6.1, A-7, section 8.1): the cue text color, the cue text scale (100% to 200%) and
-	 * the cue box position (moves it away from subtitle and HUD mods). All app-wide; each change shows on the next frame.
+	 * Settings → Accessibility (PRD 6.1, A-6, A-7, section 8.1): the cue text color, the cue text scale (100% to 200%),
+	 * the cue box position (moves it away from subtitle and HUD mods) and Reduced motion. All app-wide; each change shows
+	 * on the next frame.
 	 */
 	private void buildAccessibilitySettings(Body body) {
 		AppSettings settings = AppSettingsManager.get();
@@ -283,8 +285,14 @@ public final class SoundSculptorScreen extends SculptScreen {
 					rebuildWidgets();
 					setInitialFocus(cueOffsetReset);
 				});
+		// A-6: the only motion Sound Sculptor has is a toast sliding in; its lists scroll and update without animation.
+		Component motion = Component.translatable("soundsculptor.settings.reduced_motion");
+		reducedMotionToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(motion), motion, settings.reducedMotion(),
+				value -> AppSettingsManager.update(s -> s.withReducedMotion(value))),
+				Component.translatable("soundsculptor.settings.reduced_motion.tip"));
 		body.flow(cueColorDropdown, cueScaleSlider);
 		body.flow(cueOffsetXSlider, cueOffsetYSlider, cueOffsetReset);
+		body.flow(reducedMotionToggle);
 	}
 
 	/** A slider wide enough for "Label: value" with its widest value, and at least {@value #ACCESSIBILITY_SLIDER_WIDTH} px. */
