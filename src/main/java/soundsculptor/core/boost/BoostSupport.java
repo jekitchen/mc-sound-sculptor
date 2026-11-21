@@ -1,6 +1,8 @@
 package soundsculptor.core.boost;
 
+import java.util.Map;
 import soundsculptor.core.profile.Profile;
+import soundsculptor.core.sets.SetLibrary;
 
 /**
  * Whether a level above 100% may play louder than vanilla (PRD FR-5.4, section 7.2). Two things must hold:
@@ -41,7 +43,7 @@ public final class BoostSupport {
 		return before != now;
 	}
 
-	/** For tests: back to "not known yet". */
+	/** Back to "not known yet": the sound engine opened an audio device again (a reload or a new device); also tests. */
 	public static void reset() {
 		device = Device.UNKNOWN;
 	}
@@ -57,12 +59,44 @@ public final class BoostSupport {
 	}
 
 	/**
-	 * Whether the boost dialog must be shown before a change that leaves {@code after} using a level above 100% anywhere
-	 * (setting one, attaching a set that has one, importing or copying one in, FR-5.4). Asked once per profile: never
-	 * again once it confirmed. A library set with a boosted entry asks again in each profile it is attached in, because
-	 * each profile keeps its own confirmation.
+	 * Whether {@code profile} has a level above 100% it never confirmed (a linked set made louder in another world, or
+	 * edited outside a world): it plays at 100%, and the Sound Sculptor screen asks once when it opens there. Never on a
+	 * device that cannot boost.
 	 */
-	public static boolean needsConfirm(Profile after, soundsculptor.core.sets.SetLibrary library) {
-		return !after.boostConfirmed() && after.hasBoost(library);
+	public static boolean hasUnconfirmedBoost(Profile profile, SetLibrary library) {
+		return deviceAllows() && !profile.boostConfirmed() && profile.hasBoost(library);
+	}
+
+	/**
+	 * Whether the boost dialog must be shown before a change from {@code before} to {@code after} (FR-5.4): the profile
+	 * has not confirmed boost, the device can boost, and the change adds boost ({@link #addsBoost}). A change that keeps,
+	 * lowers or removes a boost, or touches something else (renaming a set, attaching a quiet one), never asks, even in a
+	 * profile that already has an unconfirmed boost. Each profile keeps its own confirmation, so a library set with a
+	 * boosted entry asks again in each profile it is attached in.
+	 */
+	public static boolean needsConfirm(Profile before, SetLibrary libraryBefore, Profile after, SetLibrary libraryAfter) {
+		return deviceAllows() && !after.boostConfirmed() && addsBoost(before.boostedUses(libraryBefore), after.boostedUses(libraryAfter));
+	}
+
+	/**
+	 * Whether a change adds boost: some use of a level above 100% ({@link Profile#boostedUses}) is new, or plays louder
+	 * than before.
+	 */
+	public static boolean addsBoost(Map<String, Integer> before, Map<String, Integer> after) {
+		for (Map.Entry<String, Integer> use : after.entrySet()) {
+			if (raises(before.get(use.getKey()), use.getValue())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether setting one entry's level from {@code before} to {@code after} adds boost: the new level is above 100%, and
+	 * the old one was not set, 100% or less, or lower. For the Level pop-ups and the entry editor; the profile's state
+	 * (confirmed, device) is checked by the caller.
+	 */
+	public static boolean raises(Integer before, Integer after) {
+		return after != null && after > 100 && (before == null || before <= 100 || after > before);
 	}
 }

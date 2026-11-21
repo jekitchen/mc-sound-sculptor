@@ -19,9 +19,11 @@ import soundsculptor.mc.ui.SculptTextField;
  * dialog the first time a profile uses a level above 100%.
  *
  * <p>The dialog explains clipping and hearing safety and needs a confirm ("Allow boost"); Cancel changes nothing. Once
- * confirmed, the profile remembers it ({@code Profile.boostConfirmed}) and never asks again. It is asked before the
- * change that would make the profile use boost: setting a level above 100% (entry editor, Sounds pop-up, trace Level…),
- * attaching a set that has one, saving a set editor that leaves one in this profile, and importing or copying one in.
+ * confirmed, the profile remembers it ({@code Profile.boostConfirmed}) and never asks again. It is asked before a change
+ * that adds boost to the profile (a new or louder level above 100%, {@code BoostSupport.addsBoost}): a level in the
+ * Sounds pop-up or the trace's Level… panel, Save in an entry editor that writes to Quick changes, attaching a set,
+ * saving a set editor, and importing or copying one in. Keeping, lowering or removing a boost never asks. The device
+ * must be able to boost.
  * Outside a world there is no profile to ask for; a profile that then finds a boosted entry (a linked set edited in
  * another world) plays it at 100% and asks when the Sound Sculptor screen next opens there.
  */
@@ -55,31 +57,36 @@ public final class BoostUi {
 		field.narratedNotice(() -> field.isValid() && !field.getValue().isBlank() ? note(Integer.parseInt(field.getValue().trim())) : null);
 	}
 
-	/** Whether setting a level of {@code level} in the loaded profile must ask first. */
-	public static boolean needsConfirm(Integer level) {
-		return ProfileManager.isLoaded() && ProfileManager.profile().needsBoostConfirm(level);
+	/**
+	 * Whether setting one entry's level from {@code before} to {@code after} in the loaded profile must ask first: it
+	 * raises a level above 100% ({@link BoostSupport#raises}), the profile has not confirmed boost, and the device can
+	 * boost. For the Level pop-ups, which set one level at a time.
+	 */
+	public static boolean needsConfirm(Integer before, Integer after) {
+		return !granting && ProfileManager.isLoaded() && BoostSupport.deviceAllows() && !ProfileManager.profile().boostConfirmed()
+				&& BoostSupport.raises(before, after);
 	}
 
-	/** Whether a change that leaves {@code after} in the loaded profile must ask first. */
-	public static boolean needsConfirm(Workspace after) {
-		return ProfileManager.isLoaded() && BoostSupport.needsConfirm(after.profile(), after.library());
+	/** Whether a change from {@code before} to {@code after} in the loaded profile must ask first: it adds boost. */
+	public static boolean needsConfirm(Workspace before, Workspace after) {
+		return !granting && ProfileManager.isLoaded()
+				&& BoostSupport.needsConfirm(before.profile(), before.library(), after.profile(), after.library());
 	}
 
 	/**
-	 * Shows the boost dialog over {@code host}. "Allow boost" saves the profile as confirmed, then runs
-	 * {@code confirmed}; Cancel (and Esc) runs {@code cancelled}. Either then returns to {@code host}, unless the action
-	 * opened another screen. An open pop-up on a Sound Sculptor screen is kept for when the dialog closes.
+	 * Shows the boost dialog over {@code host}. "Allow boost" runs {@code retry} again, now allowed to boost: the change it
+	 * makes is saved together with the profile's confirmation, in one change ({@link #withGrant}). If it then saves
+	 * nothing (a full set, a cancelled confirmation), the profile stays unconfirmed. Cancel (and Esc) runs
+	 * {@code cancelled}. Either then returns to {@code host}, unless the action opened another screen. An open pop-up on
+	 * a Sound Sculptor screen is kept for when the dialog closes.
 	 */
-	public static void ask(Screen host, Runnable confirmed, Runnable cancelled) {
-		ask(host, Component.translatable(BoostWarning.CONFIRM_BODY_KEY), confirmed, cancelled);
+	public static void ask(Screen host, Runnable retry, Runnable cancelled) {
+		ask(host, Component.translatable(BoostWarning.CONFIRM_BODY_KEY), () -> runGranted(true, retry), cancelled);
 	}
 
 	private static void ask(Screen host, Component message, Runnable confirmed, Runnable cancelled) {
 		SculptDialog dialog = new SculptDialog(host, Component.translatable(BoostWarning.CONFIRM_TITLE_KEY), message,
-				List.of(new SculptDialog.Choice(Component.translatable("soundsculptor.profiles.boost.confirm"), () -> {
-							confirm();
-							confirmed.run();
-						}),
+				List.of(new SculptDialog.Choice(Component.translatable("soundsculptor.profiles.boost.confirm"), confirmed),
 						new SculptDialog.Choice(Component.translatable("soundsculptor.ui.cancel"), cancelled)),
 				1, 1);
 		if (host instanceof SculptScreen screen) {
@@ -87,6 +94,35 @@ public final class BoostUi {
 		} else {
 			Minecraft.getInstance().gui.setScreen(dialog);
 		}
+	}
+
+	/** True while a change the player allowed to boost runs: it asks nothing, and saves the confirmation with it. */
+	private static boolean granting;
+
+	/** Whether the change running now was allowed to boost; a later step of it (a confirmation) passes it on. */
+	public static boolean isGranting() {
+		return granting;
+	}
+
+	/** Runs {@code action} as a change the player allowed to boost ({@code grant}), or as it is. */
+	public static void runGranted(boolean grant, Runnable action) {
+		boolean was = granting;
+		granting = was || grant;
+		try {
+			action.run();
+		} finally {
+			granting = was;
+		}
+	}
+
+	/**
+	 * {@code after} with the profile confirmed when the change was allowed to boost ({@link #runGranted}); unchanged
+	 * otherwise. {@code ProfileManager.change} applies it to every change it saves, so the confirmation is saved only
+	 * with the change it was asked for.
+	 */
+	static Workspace withGrant(Workspace after) {
+		return granting && !after.profile().boostConfirmed()
+				? new Workspace(after.profile().withBoostConfirmed(true), after.library()) : after;
 	}
 
 	/** Saves the loaded profile as having confirmed boost (FR-5.4: asked once per profile). */
@@ -101,10 +137,12 @@ public final class BoostUi {
 	 * edited in another world, or outside a world), asks once this session. Until confirmed it plays at 100%.
 	 */
 	public static void askOnOpen(Screen host) {
-		if (!needsConfirm(ProfileManager.workspace()) || !BoostSupport.deviceAllows() || !ASKED_ON_OPEN.add(ProfileManager.key())) {
+		if (!ProfileManager.isLoaded() || !BoostSupport.hasUnconfirmedBoost(ProfileManager.profile(), ProfileManager.library())
+				|| !ASKED_ON_OPEN.add(ProfileManager.key())) {
 			return;
 		}
+		// Nothing else changes here, so Allow boost saves just the confirmation.
 		ask(host, Component.translatable("soundsculptor.boost.confirm.attached").append("\n\n")
-				.append(Component.translatable(BoostWarning.CONFIRM_BODY_KEY)), () -> { }, () -> { });
+				.append(Component.translatable(BoostWarning.CONFIRM_BODY_KEY)), BoostUi::confirm, () -> { });
 	}
 }

@@ -41,7 +41,7 @@ import net.minecraft.resources.Identifier;
  * The entry editor (PRD FR-4.3): one entry of a Sound Set being edited in the set editor. Target (a sound ID or a
  * group pattern) with a live "Matches N sounds" preview and the matching IDs, "Partly overridden by" a more specific
  * entry of the same set (FR-4.6), On/Off, Mute (Unchanged, Muted, Not muted) and Level 0–200% (FR-5.1–5.4: above 100%
- * the boost warning shows, and the first such level in a profile asks the boost question at Save). Save and
+ * the boost warning shows, and Save asks the boost question first when it adds boost to the profile). Save and
  * Cancel, with the unsaved-changes dialog (FR-12.4), a reset button per value (FR-12.6) and inline errors that disable
  * Save (FR-12.7). Save puts the entry into the set's draft only; nothing changes in game until the set editor saves.
  * Cue (Unchanged, On, Off) sits beside Level (FR-7); setting Mute to Muted while Cue is Unchanged sets Cue to the
@@ -595,15 +595,6 @@ public final class EntryEditorScreen extends SculptScreen {
 			return false;
 		}
 		SetEntry entry = draft.build();
-		if (BoostUi.needsConfirm(entry.volume())) {
-			// FR-5.4: the first level above 100% in this profile asks first; Cancel goes back to the editor, nothing saved.
-			BoostUi.ask(this, () -> {
-				if (saveChanges()) {
-					closeNow();
-				}
-			}, () -> { });
-			return false;
-		}
 		Message full = set.canPut(entry);
 		if (full == null && quickPlace != null) {
 			Workspace ws = ProfileManager.workspace();
@@ -613,6 +604,20 @@ public final class EntryEditorScreen extends SculptScreen {
 			// The set is full, or the zone is gone: say so and keep the editor open, so nothing typed is lost.
 			showToast(ProfileManager.component(full), null);
 			return false;
+		}
+		if (quickPlace != null) {
+			// FR-5.4: an entry written straight into Quick changes that adds boost (a new or louder level above 100%) asks
+			// first. Cancel goes back to the editor with nothing saved. An entry of a set being edited is asked about when
+			// the set editor saves, as only that changes the profile.
+			Workspace ws = ProfileManager.workspace();
+			if (BoostUi.needsConfirm(ws, QuickActions.putQuickEntry(ws, quickPlace, withFreeId(ws, entry)))) {
+				BoostUi.ask(this, () -> {
+					if (saveChanges()) {
+						closeNow();
+					}
+				}, () -> { });
+				return false;
+			}
 		}
 		set.putEntry(entry);
 		if (quickPlace != null) {

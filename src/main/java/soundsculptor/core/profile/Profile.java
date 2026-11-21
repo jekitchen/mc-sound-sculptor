@@ -138,35 +138,51 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 	}
 
 	/**
-	 * Whether any entry attached anywhere in this profile, in a library set or in a place's Quick changes, sets a level
-	 * above 100%: a profile that came in by import or copy with one must first show the boost dialog (FR-5.4) unless it
-	 * was already confirmed. Sets the library does not have are skipped.
+	 * Whether this profile uses a level above 100% anywhere ({@link #boostedUses}): a profile that came in by import or
+	 * copy with one must first show the boost dialog (FR-5.4) unless it was already confirmed.
 	 */
 	public boolean hasBoost(SetLibrary library) {
-		if (hasBoost(everywhere, library)) {
-			return true;
-		}
-		for (Zone zone : zones) {
-			if (hasBoost(zone.sets(), library)) {
-				return true;
-			}
-		}
-		return false;
+		return !boostedUses(library).isEmpty();
 	}
 
-	private static boolean hasBoost(PlaceSets place, SetLibrary library) {
+	/**
+	 * Every level above 100% this profile can play, by where it is used: an entry that is on, not muted and sets a level
+	 * above 100%, in a set that is attached and switched on at Everywhere or a zone (a library set or the place's Quick
+	 * changes). The key names the place, the set and the entry, so the same set attached in two places counts twice; the
+	 * value is the level. Sets the library does not have are skipped. For the boost dialog (FR-5.4): a change asks only
+	 * when it adds a use or raises one ({@code BoostSupport.addsBoost}).
+	 */
+	public Map<String, Integer> boostedUses(SetLibrary library) {
+		Map<String, Integer> uses = new LinkedHashMap<>();
+		addBoostedUses("everywhere", everywhere, library, uses);
+		for (Zone zone : zones) {
+			addBoostedUses("zone:" + zone.id(), zone.sets(), library, uses);
+		}
+		return uses;
+	}
+
+	private static void addBoostedUses(String placeKey, PlaceSets place, SetLibrary library, Map<String, Integer> uses) {
 		for (Attachment attachment : place.attached()) {
+			if (!attachment.enabled()) {
+				continue;
+			}
 			SoundSet set = attachment.setId().equals(SoundSet.QUICK_ID) ? place.quickChanges() : library.get(attachment.setId());
 			if (set == null) {
 				continue;
 			}
 			for (SetEntry entry : set.entries()) {
-				if (entry.volume() != null && entry.volume() > 100) {
-					return true;
+				Integer level = boostLevel(entry);
+				if (level != null) {
+					uses.put(placeKey + '\n' + attachment.setId() + '\n' + entry.id(), level);
 				}
 			}
 		}
-		return false;
+	}
+
+	/** The level above 100% this entry plays at when it decides loudness, or {@code null}: off, muted or 100% or less. */
+	public static Integer boostLevel(SetEntry entry) {
+		return entry != null && entry.enabled() && !Boolean.TRUE.equals(entry.mute()) && entry.volume() != null && entry.volume() > 100
+				? entry.volume() : null;
 	}
 
 	// ---- Zones (Zones tab, PRD 6.1) ----

@@ -40,15 +40,17 @@ public final class Gain {
 
 	/**
 	 * The gain for a channel: vanilla's gain times Sound Sculptor's factor, capped at {@link #MAX_GAIN} when the factor
-	 * boosts (FR-5.6), however vanilla's own multipliers combine. A factor of 1 or less leaves vanilla's arithmetic
-	 * exactly as it was. Used at the start and whenever vanilla recalculates a playing sound (moving sounds, sliders).
+	 * boosts (FR-5.6), however vanilla's own multipliers combine, and at {@link #OPENAL_DEFAULT_MAX_GAIN} otherwise. Every
+	 * source's OpenAL cap is raised to 2.0, so without the second cap a gain above 1 from vanilla's own multipliers or
+	 * another mod would play up to twice as loud at 100%, with Bypass on, or where boost is not allowed; with it, such a
+	 * sound plays exactly as OpenAL's default cap of 1.0 would play it. Used at the start and whenever vanilla recalculates
+	 * a playing sound (moving sounds, sliders). The factor is above 1 only where boost is allowed (the decider caps it).
 	 *
 	 * @param vanillaGain vanilla's gain for the channel ({@code calculateVolume}), including Master and category sliders
 	 * @param factor      Sound Sculptor's factor, 0 to 2 (the level in percent / 100)
 	 */
 	public static float apply(float vanillaGain, float factor) {
-		float gain = vanillaGain * factor;
-		return factor > 1F ? Math.min(gain, MAX_GAIN) : gain;
+		return Math.min(vanillaGain * factor, factor > 1F ? MAX_GAIN : OPENAL_DEFAULT_MAX_GAIN);
 	}
 
 	/**

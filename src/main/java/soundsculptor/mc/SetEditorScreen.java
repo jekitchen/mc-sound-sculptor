@@ -383,9 +383,11 @@ public final class SetEditorScreen extends SculptScreen {
 			nameField.revealError();
 			return false;
 		}
-		if (BoostUi.needsConfirm(committed(ProfileManager.workspace()))) {
-			// FR-5.4: this save makes the profile use a level above 100% (an entry, or a boosted set attached in the
-			// panel) for the first time: ask first. Cancel keeps editing; Allow boost goes on with the save.
+		Workspace now = ProfileManager.workspace();
+		if (BoostUi.needsConfirm(now, committed(now))) {
+			// FR-5.4: this save adds boost to the profile (a new or louder level above 100%, or a boosted set attached in
+			// the panel): ask first. Cancel keeps editing; Allow boost goes on with the save, and the confirmation is saved
+			// only with it (also after the linked-set confirmation below).
 			BoostUi.ask(this, () -> {
 				if (saveChanges()) {
 					closeNow();
@@ -395,10 +397,11 @@ public final class SetEditorScreen extends SculptScreen {
 		}
 		Component linked = attached != null && draft.changed() ? linkedConfirmation() : null;
 		if (linked != null) {
-			minecraft.gui.setScreen(linkedSaveDialog(this, draft.build().name(), linked, () -> {
+			boolean allowedBoost = BoostUi.isGranting();
+			minecraft.gui.setScreen(linkedSaveDialog(this, draft.build().name(), linked, () -> BoostUi.runGranted(allowedBoost, () -> {
 				commit();
 				closeNow();
-			}));
+			})));
 			return false;
 		}
 		commit();

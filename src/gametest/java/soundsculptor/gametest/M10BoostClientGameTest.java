@@ -41,6 +41,7 @@ import soundsculptor.mc.CueOverlay;
 import soundsculptor.mc.EntryEditorScreen;
 import soundsculptor.mc.PlaceSetsScreen;
 import soundsculptor.mc.PlayingChannels;
+import soundsculptor.mc.SetEditorScreen;
 import soundsculptor.mc.ProfileManager;
 import soundsculptor.mc.RecentLog;
 import soundsculptor.mc.SoundHook;
@@ -87,6 +88,7 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 	private static final String SECOND = "m10-second.example.net";
 	private static final SoundSet LOUD = new SoundSet("m10-loud", "Loud villagers", List.of(SetEntry.of("e1", VILLAGER).withVolume(200)));
 	private static final SoundSet LOUDER = new SoundSet("m10-louder", "Loud cows", List.of(SetEntry.of("e1", COW).withVolume(150)));
+	private static final SoundSet QUIET = new SoundSet("m10-quiet", "Quiet cows", List.of(SetEntry.of("e1", COW).withVolume(50)));
 	/** Frames for the HUD and the sound thread to catch up with the last step. */
 	private static final int FRAMES = 2;
 
@@ -144,7 +146,7 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 					ProfileManager.leave();
 					ProfileManager.join(rejoin, rejoinName);
 				}
-				ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()), ws.library().remove(LOUD.id()).remove(LOUDER.id())));
+				ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()), ws.library().remove(LOUD.id()).remove(LOUDER.id()).remove(QUIET.id())));
 				ProfileManager.flushSaves();
 				if (ProfileManager.storedProfile(SECOND) != null) {
 					ProfileManager.delete(SECOND);
@@ -525,7 +527,7 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 	 */
 	private static void checkSecondWorld(ClientGameTestContext context, String key, String name) {
 		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()).withBoostConfirmed(true),
-				ws.library().put(LOUD).put(LOUDER))));
+				ws.library().put(LOUD).put(LOUDER).put(QUIET))));
 		openPlace(context);
 		context.runOnClient(mc -> check(places(mc).panel.attach(LOUD.id()), "a confirmed profile attaches the loud set without asking"));
 		context.waitTicks(1);
@@ -577,6 +579,7 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 		check(factor == 1F, "unconfirmed, the 200% entry plays at 100%, was " + factor);
 		String trace = context.computeOnClient(mc -> new TraceScreen(null, VILLAGER).text());
 		check(trace.contains("Above 100%: boost is off here, so it plays at 100%."), "the trace says so:\n" + trace);
+		onlyMoreBoostAsks(context);
 		context.setScreen(SoundSculptorScreen::new);
 		context.waitForScreen(SculptDialog.class);
 		String message = context.computeOnClient(mc -> ((SculptDialog) mc.gui.screen()).message().getString());
@@ -591,6 +594,95 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 		check(context.computeOnClient(mc -> mc.gui.screen() instanceof SoundSculptorScreen), "asked once this session, not on every open");
 		closeScreen(context);
 		switchProfile(context, key, name);
+	}
+
+	/**
+	 * Review of #130: in a profile that already has an unconfirmed boost (the loud set), only a change that adds boost asks.
+	 * Attaching a quiet set, renaming a set and lowering a boosted level save without the question; raising one asks, and
+	 * Cancel keeps the lower level. Allow boost on a set editor's save is saved only with the save: Keep editing in the
+	 * linked-set confirmation that follows leaves the profile unconfirmed.
+	 */
+	private static void onlyMoreBoostAsks(ClientGameTestContext context) {
+		check(!context.computeOnClient(mc -> ProfileManager.profile().boostConfirmed()), "the profile has not confirmed boost");
+		// Attaching a quiet set.
+		openPlace(context);
+		context.runOnClient(mc -> check(places(mc).panel.attach(QUIET.id()), "a quiet set attaches without asking"));
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> mc.gui.screen() instanceof PlaceSetsScreen && ProfileManager.profile().everywhere().uses(QUIET.id())),
+				"no question for a quiet set");
+		closeScreen(context);
+		// Renaming the quiet set in its editor.
+		context.setScreen(() -> SetEditorScreen.edit(null, QUIET.id()));
+		context.waitForScreen(SetEditorScreen.class);
+		context.runOnClient(mc -> {
+			SetEditorScreen e = (SetEditorScreen) mc.gui.screen();
+			e.draft().setName("Quiet cows, renamed");
+			e.save();
+		});
+		context.waitTicks(1);
+		if (context.computeOnClient(mc -> mc.gui.screen() instanceof SculptDialog)) {
+			// The linked-set confirmation while other worlds are counted; never the boost question.
+			check(!context.computeOnClient(mc -> mc.gui.screen().getTitle().getString()).equals(TITLE), "renaming a set does not ask about boost");
+			context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(0));
+			context.waitTicks(1);
+		}
+		check(context.computeOnClient(mc -> ProfileManager.library().get(QUIET.id()).name()).equals("Quiet cows, renamed"), "the rename is saved");
+		closeScreen(context);
+		// Lowering and raising a boosted Quick changes level in the trace's Level… panel.
+		context.runOnClient(mc -> ProfileManager.change(ws -> QuickActions.apply(ws, EVERYWHERE, VILLAGER,
+				new soundsculptor.core.trace.EntryEdit.Volume(150)).after()));
+		context.setScreen(() -> new TraceScreen(null, VILLAGER));
+		context.waitForScreen(TraceScreen.class);
+		context.runOnClient(mc -> {
+			TraceScreen t = (TraceScreen) mc.gui.screen();
+			SetEntry entry = QuickActions.quickEntry(ProfileManager.workspace(), EVERYWHERE, VILLAGER);
+			SculptList.Row row = t.row(new TraceText.EntryTarget(new EntryLocation(EVERYWHERE, SoundSet.QUICK_ID, entry.id()), entry));
+			row.buttons().stream().filter(b -> b.getMessage().getString().equals("Level…")).findFirst().orElseThrow().onPress(null);
+			t.setFocused(t.volumeField);
+			t.volumeField.setValue("145");
+		});
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> mc.gui.screen() instanceof TraceScreen && volumeAt(VILLAGER) == 145), "lowering 150% to 145% asks nothing");
+		context.runOnClient(mc -> ((TraceScreen) mc.gui.screen()).volumeField.setValue("160"));
+		context.waitForScreen(SculptDialog.class);
+		check(context.computeOnClient(mc -> mc.gui.screen().getTitle().getString()).equals(TITLE), "raising it to 160% asks");
+		context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(1));
+		context.waitForScreen(TraceScreen.class);
+		check(context.computeOnClient(mc -> ((TraceScreen) mc.gui.screen()).hasOverlay() && volumeAt(VILLAGER) == 145
+				&& ((TraceScreen) mc.gui.screen()).volumeField.getValue().equals("145")), "Cancel keeps 145% in the open panel");
+		closeScreen(context);
+		// A new boosted entry in the loud set: Allow boost, then Keep editing in the linked-set confirmation. Nothing is saved.
+		context.setScreen(() -> SetEditorScreen.edit(null, LOUD.id()));
+		context.waitForScreen(SetEditorScreen.class);
+		context.runOnClient(mc -> {
+			SetEditorScreen e = (SetEditorScreen) mc.gui.screen();
+			e.draft().putEntry(SetEntry.of("e2", "minecraft:entity.villager.yes").withVolume(190));
+			e.save();
+		});
+		context.waitForScreen(SculptDialog.class);
+		check(context.computeOnClient(mc -> mc.gui.screen().getTitle().getString()).equals(TITLE), "a new 190% entry in the loud set asks");
+		context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(0));
+		context.waitTicks(1);
+		String linked = context.computeOnClient(mc -> mc.gui.screen().getTitle().getString());
+		check(context.computeOnClient(mc -> mc.gui.screen() instanceof SculptDialog) && !linked.equals(TITLE),
+				"Allow boost goes on to the linked-set confirmation, was " + linked);
+		context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(1));
+		context.waitForScreen(SetEditorScreen.class);
+		check(!context.computeOnClient(mc -> ProfileManager.profile().boostConfirmed()), "Keep editing leaves boost unconfirmed");
+		check(context.computeOnClient(mc -> ProfileManager.library().get(LOUD.id()).entries().size()) == 1, "and the set unchanged");
+		// Save again: it asks again, as nothing was confirmed; Allow boost, then Save, saves both together.
+		context.runOnClient(mc -> ((SetEditorScreen) mc.gui.screen()).save());
+		context.waitForScreen(SculptDialog.class);
+		check(context.computeOnClient(mc -> mc.gui.screen().getTitle().getString()).equals(TITLE), "it asks again");
+		context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(0));
+		context.waitTicks(1);
+		context.runOnClient(mc -> ((SculptDialog) mc.gui.screen()).choose(0));
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> ProfileManager.profile().boostConfirmed()
+				&& ProfileManager.library().get(LOUD.id()).entries().size() == 2), "Allow boost and Save: saved and confirmed together");
+		closeScreen(context);
+		// Back to the state the next check expects: the loud set at 200%, boost not confirmed.
+		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(ws.profile().withBoostConfirmed(false), ws.library().put(LOUD))));
 	}
 
 	// ---- Helpers ----

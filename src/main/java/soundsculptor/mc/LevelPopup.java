@@ -111,9 +111,10 @@ public final class LevelPopup {
 			if (level != null && field.isFocused()) {
 				slider.setTypedValue(level);
 			}
-			if (BoostUi.needsConfirm(level)) {
-				// FR-5.4: the first level above 100% in this profile asks first. Until then nothing changes: the slider
-				// and field go back to the level in use, and Allow boost then sets the new one.
+			if (BoostUi.needsConfirm(applied[0], level)) {
+				// FR-5.4: a level above 100% that is new or louder, in a profile that never confirmed boost, asks first.
+				// Until then nothing changes: the slider and field go back to the level in use, and Allow boost then sets
+				// the new one (saving the confirmation with it). Lowering a boost, or keeping it, never asks.
 				Integer back = applied[0];
 				reverting[0] = true;
 				try {

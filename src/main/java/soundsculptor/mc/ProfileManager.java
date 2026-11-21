@@ -243,6 +243,10 @@ public final class ProfileManager {
 	public static synchronized void change(UnaryOperator<Workspace> f) {
 		Snapshot before = current;
 		Workspace after = f.apply(new Workspace(before.profile(), before.library()));
+		if (!after.profile().equals(before.profile()) || after.library() != before.library()) {
+			// A change the player allowed in the boost dialog saves the profile's confirmation with it (FR-5.4).
+			after = BoostUi.withGrant(after);
+		}
 		boolean profileChanged = !after.profile().equals(before.profile());
 		if (!profileChanged && after.library() == before.library()) {
 			return;

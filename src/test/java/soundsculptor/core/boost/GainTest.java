@@ -64,10 +64,20 @@ class GainTest {
 
 	@Test
 	void applyLeavesVanillaArithmeticAloneAtOrBelowOne() {
-		// No cap without a boost: an unchanged or quieter sound gets exactly vanilla's gain times the factor.
-		assertEquals(1.6F, Gain.apply(1.6F, 1.0F), 1e-6);
+		// An unchanged or quieter sound gets vanilla's gain times the factor.
+		assertEquals(0.8F, Gain.apply(0.8F, 1.0F), 1e-6);
 		assertEquals(0.4F, Gain.apply(0.8F, 0.5F), 1e-6);
 		assertEquals(0F, Gain.apply(0.8F, 0F), 1e-9);
+	}
+
+	@Test
+	void withoutABoostTheGainStopsAt1() {
+		// Every source's OpenAL cap is 2.0, so a gain above 1 that is not Sound Sculptor's boost (vanilla's own multipliers,
+		// another mod) is capped at 1.0, as OpenAL's default cap would: at 100%, with Bypass on, or where boost is off.
+		assertEquals(1F, Gain.apply(1.6F, 1.0F), 1e-6);
+		assertEquals(1F, Gain.apply(3F, 0.5F), 1e-6);
+		assertEquals(0.9F, Gain.apply(1.8F, 0.5F), 1e-6);
+		assertEquals(2F, Gain.apply(1.6F, 1.5F), 1e-6, "a boost still goes up to 2.0");
 	}
 
 	@Test

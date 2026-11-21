@@ -328,10 +328,11 @@ public final class SoundHook {
 				return tracked;
 			}
 			lastAppliedFactor = 1.0F;
-			return vanillaVolume;
+			// Not decided: vanilla's gain, at most 1.0 as with OpenAL's default cap (every source's cap is raised to 2.0).
+			return Gain.apply(vanillaVolume, 1.0F);
 		} catch (RuntimeException | LinkageError e) {
 			failOpen(e);
-			return vanillaVolume;
+			return Gain.apply(vanillaVolume, 1.0F);
 		}
 	}
 

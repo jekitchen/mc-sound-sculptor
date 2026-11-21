@@ -61,7 +61,7 @@ public record ImportPlan(Profile result, SetLibrary library, SetImportPlan sets,
 	 * After the confirm, save {@code result().withBoostConfirmed(true)}.
 	 */
 	public boolean needsBoostConfirm() {
-		return problem == null && !result.boostConfirmed() && result.hasBoost(library);
+		return problem == null && soundsculptor.core.boost.BoostSupport.deviceAllows() && !result.boostConfirmed() && result.hasBoost(library);
 	}
 
 	/** "1 Sound Set not found, skipped" (FR-11.6), or null if none is missing. */

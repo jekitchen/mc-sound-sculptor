@@ -10,6 +10,8 @@ both sites; the steps below prepare everything so that part is uploading files a
    11.5 (layout at every GUI scale, narration, Mod Menu present and absent, keyboard tasks) is automated.
    - Grayscale screenshot check: statuses and zone outlines are still readable in grayscale.
    - Sodium; Iris with one popular shader pack; Sound Physics Remastered. Note any problem on the mod page.
+   - Boost with Sound Physics Remastered (FR-5.5): walk away from a villager set to 200%, then to 100%. At 200% it is
+     never heard farther away than at 100%, reverb and echoes included. Repeat in a cave.
    - A vanilla server and singleplayer, with nothing installed on the server; Realms if available.
    - Noisy-farm stress test in game (PRD 11.2) with FPS from F3, and the 30-minute soak:
      `./gradlew runClientGameTest -Psoak=1800`.
