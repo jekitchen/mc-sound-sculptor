@@ -54,6 +54,23 @@ class GainTest {
 	}
 
 	@Test
+	void applyCapsABoostedGainAtTwo() {
+		// FR-5.6: what the sound hook gives the channel, at the start and on every recalculation.
+		assertEquals(1.5F, Gain.apply(1.0F, 1.5F), 1e-6);
+		assertEquals(Gain.MAX_GAIN, Gain.apply(1.0F, 2.0F), 1e-6);
+		assertEquals(Gain.MAX_GAIN, Gain.apply(1.6F, 2.0F), 1e-6, "vanilla's category gain above 1 still stops at 2");
+		assertEquals(0F, Gain.apply(0F, 2.0F), 1e-9, "Master 0% silences a 200% entry");
+	}
+
+	@Test
+	void applyLeavesVanillaArithmeticAloneAtOrBelowOne() {
+		// No cap without a boost: an unchanged or quieter sound gets exactly vanilla's gain times the factor.
+		assertEquals(1.6F, Gain.apply(1.6F, 1.0F), 1e-6);
+		assertEquals(0.4F, Gain.apply(0.8F, 0.5F), 1e-6);
+		assertEquals(0F, Gain.apply(0.8F, 0F), 1e-9);
+	}
+
+	@Test
 	void channelMaxGainIsRaisedOnlyWhenNeeded() {
 		assertEquals(1.0F, Gain.channelMaxGain(0.9F), 1e-6);
 		assertEquals(Gain.MAX_GAIN, Gain.channelMaxGain(1.4F), 1e-6);

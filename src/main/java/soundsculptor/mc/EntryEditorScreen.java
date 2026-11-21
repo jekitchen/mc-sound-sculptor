@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.core.boost.BoostWarning;
 import soundsculptor.core.editor.FieldError;
 import soundsculptor.core.browser.LikeThis;
 import soundsculptor.core.editor.PatternPreview;
@@ -39,7 +40,8 @@ import net.minecraft.resources.Identifier;
 /**
  * The entry editor (PRD FR-4.3): one entry of a Sound Set being edited in the set editor. Target (a sound ID or a
  * group pattern) with a live "Matches N sounds" preview and the matching IDs, "Partly overridden by" a more specific
- * entry of the same set (FR-4.6), On/Off, Mute (Unchanged, Muted, Not muted) and Level 0–100% (FR-5.1–5.2). Save and
+ * entry of the same set (FR-4.6), On/Off, Mute (Unchanged, Muted, Not muted) and Level 0–200% (FR-5.1–5.4: above 100%
+ * the boost warning shows, and the first such level in a profile asks the boost question at Save). Save and
  * Cancel, with the unsaved-changes dialog (FR-12.4), a reset button per value (FR-12.6) and inline errors that disable
  * Save (FR-12.7). Save puts the entry into the set's draft only; nothing changes in game until the set editor saves.
  * Cue (Unchanged, On, Off) sits beside Level (FR-7); setting Mute to Muted while Cue is Unchanged sets Cue to the
@@ -130,12 +132,12 @@ public final class EntryEditorScreen extends SculptScreen {
 		if (entry == null) {
 			throw new IllegalArgumentException("the set has no entry " + entryId);
 		}
-		return new EntryEditorScreen(parent, set, EntryDraft.of(entry, false), false, setSubtitle(set), null);
+		return new EntryEditorScreen(parent, set, EntryDraft.of(entry, true), false, setSubtitle(set), null);
 	}
 
 	/** Opens the editor for a new entry of the set being edited (Add sounds…, until the Sounds picker replaces it). */
 	public static EntryEditorScreen add(Screen parent, SetDraft set) {
-		return new EntryEditorScreen(parent, set, EntryDraft.blank(set.newEntryId(), false), true, setSubtitle(set), null);
+		return new EntryEditorScreen(parent, set, EntryDraft.blank(set.newEntryId(), true), true, setSubtitle(set), null);
 	}
 
 	private static Component setSubtitle(SetDraft set) {
@@ -154,7 +156,7 @@ public final class EntryEditorScreen extends SculptScreen {
 			return forQuickEntry(parent, where, exact.id());
 		}
 		SetDraft quick = SetEditorScreen.quickDraft(where);
-		EntryEditorScreen screen = new EntryEditorScreen(parent, quick, EntryDraft.blank(quick.newEntryId(), false), true, placeSubtitle(where), where);
+		EntryEditorScreen screen = new EntryEditorScreen(parent, quick, EntryDraft.blank(quick.newEntryId(), true), true, placeSubtitle(where), where);
 		screen.draft.set(Field.TARGET, soundId);
 		screen.updatePreview();
 		return screen;
@@ -168,7 +170,7 @@ public final class EntryEditorScreen extends SculptScreen {
 	public static EntryEditorScreen forQuickEntry(Screen parent, PlaceRef where, String entryId) {
 		SetDraft quick = SetEditorScreen.quickDraft(where);
 		SetEntry entry = quick.entry(entryId);
-		return entry == null ? null : new EntryEditorScreen(parent, quick, EntryDraft.of(entry, false), false, placeSubtitle(where), where);
+		return entry == null ? null : new EntryEditorScreen(parent, quick, EntryDraft.of(entry, true), false, placeSubtitle(where), where);
 	}
 
 	private static Component placeSubtitle(PlaceRef where) {
@@ -266,11 +268,11 @@ public final class EntryEditorScreen extends SculptScreen {
 		String volumeText = draft.text(Field.VOLUME);
 		double initialVolume = draft.error(Field.VOLUME) == null && !volumeText.isBlank() ? Double.parseDouble(volumeText.trim()) : UNCHANGED_VOLUME;
 		volumeSlider = Tooltips.describe(new SculptSlider(SLIDER_WIDTH, Component.translatable("soundsculptor.rule_editor.volume"),
-				new SliderModel(SetEntry.MIN_VOLUME, 100, 5, 1, 100, initialVolume),
+				new SliderModel(SetEntry.MIN_VOLUME, BoostWarning.sliderMax(true), 5, 1, BoostWarning.WARNING_ABOVE, initialVolume),
 				value -> draft.text(Field.VOLUME).isBlank()
 						? Component.translatable("soundsculptor.rule_editor.volume.not_set")
 						: Component.literal((int) value + "%"),
-				null,
+				Component.translatable(BoostWarning.WARNING_KEY),
 				value -> {
 					// Only the player's slider moves set a level; resting the slider for "Unchanged" must not.
 					if (volumeField != null && !volumeField.isFocused() && !showingUnchanged) {
@@ -296,6 +298,8 @@ public final class EntryEditorScreen extends SculptScreen {
 			changed();
 		});
 		body.row(volumeSlider, volumeField, resetButton(Field.VOLUME, () -> volumeField.setValue(draft.text(Field.VOLUME))), cueDropdown, cueReset);
+		// FR-5.4: above 100% the warning icon and text show under the slider, in the row's error slot, and are narrated.
+		BoostUi.warnOn(volumeSlider, volumeField, () -> body.x() + body.width() - volumeSlider.getX());
 
 		// FR-6: Limit, count "per" window "s", Per source; off by default. One reset button puts all of it back.
 		limitControls = new LimitControls(draft, limit -> { }).afterEdit(this::changed);
@@ -591,6 +595,15 @@ public final class EntryEditorScreen extends SculptScreen {
 			return false;
 		}
 		SetEntry entry = draft.build();
+		if (BoostUi.needsConfirm(entry.volume())) {
+			// FR-5.4: the first level above 100% in this profile asks first; Cancel goes back to the editor, nothing saved.
+			BoostUi.ask(this, () -> {
+				if (saveChanges()) {
+					closeNow();
+				}
+			}, () -> { });
+			return false;
+		}
 		Message full = set.canPut(entry);
 		if (full == null && quickPlace != null) {
 			Workspace ws = ProfileManager.workspace();

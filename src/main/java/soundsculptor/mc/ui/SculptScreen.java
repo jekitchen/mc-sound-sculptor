@@ -198,6 +198,31 @@ public abstract class SculptScreen extends Screen {
 		return overlayOpen;
 	}
 
+	/**
+	 * Opens {@code screen} (a dialog) over this one and keeps the open pop-up, with its widgets, values and focus, for
+	 * when this screen comes back. Without this, coming back lays the screen out again and drops the pop-up. Used by the
+	 * boost question (FR-5.4) asked from inside a Level pop-up.
+	 */
+	public void showKeepingPopup(Screen screen) {
+		keptOverlay = overlayOpen;
+		keptFocus = getFocused() instanceof AbstractWidget widget && overlayWidgets.contains(widget) ? widget : null;
+		minecraft.gui.setScreen(screen);
+	}
+
+	/**
+	 * True while {@link #buildTab} runs for a layout that will put a kept pop-up back ({@link #showKeepingPopup}), so a
+	 * screen does not finish the pop-up's work as it would when a relayout drops it.
+	 */
+	protected boolean restoringPopup() {
+		return restoringPopup;
+	}
+
+	private boolean restoringPopup;
+
+	/** Set by {@link #showKeepingPopup}: the next layout puts the pop-up back. */
+	private boolean keptOverlay;
+	private AbstractWidget keptFocus;
+
 	/** The open pop-up's panel, or {@code null} when none is open. */
 	public ScreenRectangle overlayArea() {
 		return overlayOpen ? new ScreenRectangle(overlayX, overlayY, overlayWidth, overlayHeight) : null;
@@ -403,7 +428,12 @@ public abstract class SculptScreen extends Screen {
 		tabButtons.clear();
 		bodyWidgets.clear();
 		labels.clear();
-		// init() runs after the widget list was cleared (resize, tab switch): drop any overlay without callbacks.
+		// init() runs after the widget list was cleared (resize, tab switch): drop any overlay without callbacks, unless
+		// it was kept for a dialog (showKeepingPopup); it is added back last, as openOverlay adds it.
+		List<AbstractWidget> kept = keptOverlay ? new ArrayList<>(overlayWidgets) : List.of();
+		Runnable keptClosed = keptOverlay ? overlayClosed : null;
+		keptOverlay = false;
+		restoringPopup = !kept.isEmpty();
 		overlayWidgets.clear();
 		overlayOpen = false;
 		overlayClosed = null;
@@ -448,11 +478,26 @@ public abstract class SculptScreen extends Screen {
 		if (toast != null) {
 			addToastWidgets();
 		}
+		restoringPopup = false;
+		if (!kept.isEmpty()) {
+			overlayOpen = true;
+			overlayClosed = keptClosed;
+			for (AbstractWidget widget : kept) {
+				overlayWidgets.add(addRenderableWidget(widget));
+			}
+		}
 	}
 
 	/** Vanilla calls this after {@link #init()}: focus the first body widget, or the selected tab. */
 	@Override
 	protected void setInitialFocus() {
+		if (overlayOpen && !overlayWidgets.isEmpty()) {
+			// A pop-up kept through a dialog: focus goes back where it was in it.
+			AbstractWidget focus = keptFocus != null && overlayWidgets.contains(keptFocus) ? keptFocus : overlayWidgets.get(0);
+			keptFocus = null;
+			setInitialFocus(focus);
+			return;
+		}
 		if (!bodyWidgets.isEmpty() || !tabButtons.isEmpty()) {
 			setInitialFocus(bodyWidgets.isEmpty() ? tabButtons.get(currentTab) : bodyWidgets.get(0));
 		}

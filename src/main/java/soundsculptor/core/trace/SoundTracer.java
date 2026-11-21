@@ -47,6 +47,15 @@ public final class SoundTracer {
 	 */
 	public static SoundTrace trace(Precedence p, SetLibrary lib, ToIntFunction<String> placesUsing, String soundId,
 			LastPlay play, Standing now, boolean bypass) {
+		return trace(p, lib, placesUsing, soundId, play, now, bypass, true);
+	}
+
+	/**
+	 * As above; {@code boostAllowed} says whether a level above 100% plays louder (the audio device can boost and the
+	 * profile confirmed it, FR-5.4). Above 100% the panel then says "boost applied", or else that it plays at 100%.
+	 */
+	public static SoundTrace trace(Precedence p, SetLibrary lib, ToIntFunction<String> placesUsing, String soundId,
+			LastPlay play, Standing now, boolean bypass, boolean boostAllowed) {
 		Set<TraceNotice> notices = EnumSet.noneOf(TraceNotice.class);
 		Boolean playAllowed = play == null ? null : !play.dropped();
 		Boolean cueShown = play == null ? null : play.cueShown();
@@ -76,7 +85,7 @@ public final class SoundTracer {
 		p.decide(soundId, where, d);
 		float volume = bypass ? 100 : d.volumePercent();
 		if (!bypass && volume > 100) {
-			notices.add(TraceNotice.BOOSTED);
+			notices.add(boostAllowed ? TraceNotice.BOOSTED : TraceNotice.BOOST_OFF);
 		}
 		if (play != null && !bypass && Math.abs(volume - play.volumePercent()) > SAME_VOLUME) {
 			notices.add(TraceNotice.CHANGED_SINCE_PLAY);

@@ -383,6 +383,16 @@ public final class SetEditorScreen extends SculptScreen {
 			nameField.revealError();
 			return false;
 		}
+		if (BoostUi.needsConfirm(committed(ProfileManager.workspace()))) {
+			// FR-5.4: this save makes the profile use a level above 100% (an entry, or a boosted set attached in the
+			// panel) for the first time: ask first. Cancel keeps editing; Allow boost goes on with the save.
+			BoostUi.ask(this, () -> {
+				if (saveChanges()) {
+					closeNow();
+				}
+			}, () -> { });
+			return false;
+		}
 		Component linked = attached != null && draft.changed() ? linkedConfirmation() : null;
 		if (linked != null) {
 			minecraft.gui.setScreen(linkedSaveDialog(this, draft.build().name(), linked, () -> {
@@ -477,23 +487,23 @@ public final class SetEditorScreen extends SculptScreen {
 	 * the set since (for example by a quick action).
 	 */
 	private void commit() {
+		ProfileManager.change(this::committed);
+	}
+
+	/** {@code ws} with this editor's changes saved into it, as {@link #commit} saves them. */
+	private Workspace committed(Workspace ws) {
 		SoundSet built = draft.build();
 		boolean setChanged = draft.changed();
 		if (quickPlace != null) {
-			if (setChanged) {
-				ProfileManager.update(profile -> withQuickChanges(profile, quickPlace, built));
-			}
-			return;
+			return setChanged ? new Workspace(withQuickChanges(ws.profile(), quickPlace, built), ws.library()) : ws;
 		}
-		ProfileManager.change(ws -> {
-			SetLibrary library = ws.library();
-			SoundSet live = library.get(built.id());
-			if (live == null) {
-				// Deleted meanwhile: nothing to save the edits into.
-				return ws;
-			}
-			SoundSet saved = built.withName(library.uniqueName(built.name(), built.id()));
-			return new Workspace(attached.apply(ws.profile()), setChanged && !saved.equals(live) ? library.put(saved) : library);
-		});
+		SetLibrary library = ws.library();
+		SoundSet live = library.get(built.id());
+		if (live == null) {
+			// Deleted meanwhile: nothing to save the edits into.
+			return ws;
+		}
+		SoundSet saved = built.withName(library.uniqueName(built.name(), built.id()));
+		return new Workspace(attached.apply(ws.profile()), setChanged && !saved.equals(live) ? library.put(saved) : library);
 	}
 }

@@ -50,6 +50,17 @@ class SetCodecTest {
 	}
 
 	@Test
+	void levelsUpTo200AreKept() throws Exception {
+		// FR-5.4, FR-11.6: boost levels from 101% to 200% load and save like any other level.
+		for (int level : new int[] {101, 150, 200}) {
+			SoundSet set = new SoundSet("loud", "Loud", List.of(SetEntry.of("e", "*bell*").withVolume(level)));
+			assertEquals(set, SetCodec.read(SetCodec.toJson(set)));
+		}
+		String text = problem(file("{\"id\":\"a\",\"target\":\"*cow*\",\"volume\":201}"));
+		assertTrue(text.contains("201 is above the maximum 200"), text);
+	}
+
+	@Test
 	void levelAbove200NamesSetAndEntry() {
 		String text = problem(file("{\"id\":\"a\",\"target\":\"*cow*\"},{\"id\":\"b\",\"target\":\"*pig*\"},"
 				+ "{\"id\":\"c\",\"target\":\"*hen*\",\"volume\":250}"));

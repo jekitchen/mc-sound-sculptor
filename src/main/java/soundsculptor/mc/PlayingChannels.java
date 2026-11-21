@@ -127,7 +127,8 @@ public final class PlayingChannels {
 			if (ProfileManager.isBypassed() || !SoundHook.sync(minecraft)) {
 				playing.update(null, null, true, true, applyGain);
 			} else {
-				playing.update(SoundHook.precedence(), SoundHook.where(), false, true, applyGain);
+				playing.update(SoundHook.precedence(), SoundHook.where(), false,
+						soundsculptor.core.boost.BoostSupport.allows(ProfileManager.profile()), applyGain);
 			}
 		} catch (RuntimeException | LinkageError e) {
 			// Fail open: put every playing sound back to vanilla (silent loops too, FR-13.1), then stop tracking.

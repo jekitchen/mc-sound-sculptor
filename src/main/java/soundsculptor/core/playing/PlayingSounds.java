@@ -1,5 +1,6 @@
 package soundsculptor.core.playing;
 
+import soundsculptor.core.boost.Gain;
 import soundsculptor.core.diag.MemoryEstimate;
 import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.SoundDecision;
@@ -98,7 +99,7 @@ public final class PlayingSounds {
 		this.looping[i] = looping;
 		vanillaGains[i] = vanillaGain;
 		factors[i] = factor;
-		gains[i] = vanillaGain * factor;
+		gains[i] = Gain.apply(vanillaGain, factor);
 		putSlot(handle, i);
 		return true;
 	}
@@ -113,7 +114,7 @@ public final class PlayingSounds {
 			return Float.NaN;
 		}
 		vanillaGains[i] = vanillaGain;
-		gains[i] = vanillaGain * factors[i];
+		gains[i] = Gain.apply(vanillaGain, factors[i]);
 		return gains[i];
 	}
 
@@ -155,7 +156,8 @@ public final class PlayingSounds {
 	 *
 	 * @param where          where the player is, worked out for {@code precedence}
 	 * @param bypassed       whether Bypass Sound Sculptor is on
-	 * @param boostSupported whether factors above 1 can play (FR-5.5); otherwise loops stop at 100%
+	 * @param boostSupported whether factors above 1 can play (FR-5.4: the device allows it and the profile confirmed it);
+	 *                       otherwise loops stop at 100%. Gains are capped at 2.0 either way (FR-5.6)
 	 * @return how many sounds changed gain
 	 */
 	public int update(Precedence precedence, WhereYouAre where, boolean bypassed, boolean boostSupported,
@@ -198,7 +200,7 @@ public final class PlayingSounds {
 
 	private boolean setFactor(int i, float factor, GainListener listener) {
 		factors[i] = factor;
-		float gain = vanillaGains[i] * factor;
+		float gain = Gain.apply(vanillaGains[i], factor);
 		if (Math.abs(gain - gains[i]) < GAIN_EPSILON) {
 			return false;
 		}

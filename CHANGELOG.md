@@ -41,6 +41,19 @@ Work toward 1.0, after the alpha. Not released yet.
 - **Settings › Diagnostics:** "Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)", for the
   three limits that came closest to their count, also in Copy report. Limits count afresh when you join another world
   or server.
+- **Volume boost to 200%:** every level control (the entry editor, the Sounds row's pop-up and the Level… panel in "Why
+  does it sound like this?") now goes from 0 to 200%. Above 100% a warning icon and "May distort. Protect your
+  hearing." show under the slider, and the narrator reads it. The final loudness never goes above twice vanilla's full
+  volume, and Master at 0% still silences everything.
+- **Boost never adds range:** a boosted sound is louder only where vanilla already plays it. It fades to silence at
+  the same distance as in vanilla, and subtitles, cues and the Sounds list stop at the same distance too.
+- **Asked once per world:** the first time a world or server uses a level above 100% (setting one, attaching a set
+  that has one, importing or copying one in), a dialog explains distortion and hearing safety. Allow boost goes on;
+  Cancel changes nothing. A shared set made louder in another world plays at 100% here until you allow boost here: the
+  Sound Sculptor screen asks when it next opens.
+- **Audio devices that cannot boost:** if your audio device does not accept a gain above 1.0, levels above 100% play
+  at 100%, and the level controls say so.
+- "Why does it sound like this?" says "Above 100%: boost applied." or, when boost is off, that it plays at 100%.
 
 ## 0.1.0-alpha (unreleased)
 

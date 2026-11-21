@@ -107,7 +107,10 @@ public final class AttachSetScreen extends SculptScreen {
 			return;
 		}
 		actions.attach(setId);
-		closeNow();
+		// The boost question (FR-5.4) may have opened over the place's screen instead.
+		if (minecraft.gui.screen() == this) {
+			closeNow();
+		}
 	}
 
 	/** New set: asks for a name, then makes the set and attaches it here in one change. */

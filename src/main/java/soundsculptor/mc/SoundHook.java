@@ -1,6 +1,8 @@
 package soundsculptor.mc;
 
 import soundsculptor.SoundSculptorClient;
+import soundsculptor.core.boost.BoostSupport;
+import soundsculptor.core.boost.Gain;
 import soundsculptor.core.diag.ErrorBudget;
 import soundsculptor.core.diag.TimingWindow;
 import soundsculptor.core.recent.PlayStatus;
@@ -225,6 +227,8 @@ public final class SoundHook {
 			DECIDER.limiter().clear();
 			deciderKey = key;
 		}
+		// FR-5.4: above 100% plays louder only if the audio device allows it and this profile confirmed boost.
+		DECIDER.setBoostSupported(BoostSupport.allows(ProfileManager.profile()));
 		Precedence precedence = ProfileManager.precedence();
 		if (precedence != deciderProfile) {
 			DECIDER.setProfile(precedence);
@@ -297,7 +301,9 @@ public final class SoundHook {
 		pendingInstance = null;
 		lastAppliedFactor = factor;
 		lastStartFactor = factor;
-		float gain = vanillaVolume * factor;
+		// FR-5.6: a boosted gain never goes above 2.0. Only the channel's gain changes: the hearing range was already
+		// worked out from the instance's own volume (Sound.getAttenuationDistance, before this), FR-5.5.
+		float gain = Gain.apply(vanillaVolume, factor);
 		if (instance != null && pendingTracked) {
 			try {
 				PlayingChannels.get().start(instance, pendingId, vanillaVolume, pendingFactor);

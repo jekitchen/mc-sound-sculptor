@@ -34,6 +34,6 @@ public record TraceEditContext(String soundId, LastPlay play, Standing now, bool
 		Profile profile = ws.profile();
 		Precedence p = new Precedence(profile.everywhere(), profile.zones(), ws.library());
 		return SoundTracer.trace(p, ws.library(), setId -> profile.placesUsing(setId).size() + usedElsewhere.applyAsInt(setId),
-				soundId, play, now, bypass);
+				soundId, play, now, bypass, soundsculptor.core.boost.BoostSupport.allows(profile));
 	}
 }

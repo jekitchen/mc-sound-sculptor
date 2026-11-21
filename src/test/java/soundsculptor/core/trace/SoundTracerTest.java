@@ -351,6 +351,21 @@ class SoundTracerTest {
 	}
 
 	@Test
+	void boostOffSaysItPlaysAt100() {
+		// FR-5.4, FR-14.3: the device cannot boost or the profile never confirmed it, so 150% plays at 100%.
+		Precedence p = precedence(List.of(SetEntry.of("g", AMBIENT).withVolume(150)), List.of());
+		SoundTrace off = SoundTracer.trace(p, SetLibrary.EMPTY, id -> 0, AMBIENT, playAt(0, 0, 0, 150), Standing.NOWHERE, false, false);
+		assertTrue(off.notices().contains(TraceNotice.BOOST_OFF));
+		assertFalse(off.notices().contains(TraceNotice.BOOSTED));
+		SoundTrace on = SoundTracer.trace(p, SetLibrary.EMPTY, id -> 0, AMBIENT, playAt(0, 0, 0, 150), Standing.NOWHERE, false, true);
+		assertTrue(on.notices().contains(TraceNotice.BOOSTED));
+		assertFalse(on.notices().contains(TraceNotice.BOOST_OFF));
+		SoundTrace full = SoundTracer.trace(precedence(List.of(SetEntry.of("g", AMBIENT).withVolume(100)), List.of()),
+				SetLibrary.EMPTY, id -> 0, AMBIENT, playAt(0, 0, 0, 100), Standing.NOWHERE, false, false);
+		assertFalse(full.notices().contains(TraceNotice.BOOST_OFF), "100% is not a boost");
+	}
+
+	@Test
 	void changesSinceThePlayAreFlagged() {
 		// The play happened at 100%; the player has since added a 30% entry.
 		SoundTrace t = trace(precedence(List.of(SetEntry.of("g", AMBIENT).withVolume(30)), List.of()), AMBIENT, playAt(0, 0, 0, 100));
