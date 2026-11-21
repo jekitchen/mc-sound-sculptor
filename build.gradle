@@ -32,6 +32,12 @@ repositories {
 		url = 'https://maven.terraformersmc.com/releases/'
 		content { includeGroup 'com.terraformersmc' }
 	}
+	// Other mods for the compatibility smoke test (-Pcompat=true), never bundled or required.
+	maven {
+		name = 'Modrinth'
+		url = 'https://api.modrinth.com/maven'
+		content { includeGroup 'maven.modrinth' }
+	}
 }
 
 // Mod Menu (optional, FR-12.3): compiled against, never bundled or required. One version per Minecraft version.
@@ -63,6 +69,31 @@ sourceSets.matching { it.name == 'gametest' }.configureEach {
 	java.srcDir gametestVersionSources
 }
 
+// -Pcompat=true runs the compatibility smoke test (PRD 8.1, 11.5) with Sodium, Iris and Sound Physics Remastered
+// installed, and only that test: the rest of the suite measures vanilla rendering and sound. -Pgametests=<Name>,<Name>
+// runs only the named client game tests (class names in soundsculptor.gametest), e.g.
+// -Pgametests=PrecedenceMatrixClientGameTest. Both keep only those entries in the game test mod's fabric.mod.json.
+def compat = project.findProperty('compat') == 'true'
+def onlyGametests = compat ? ['CompatSmokeClientGameTest']
+		: (project.findProperty('gametests') ?: '').toString().split(',')*.trim().findAll { !it.isEmpty() }
+tasks.matching { it.name == 'processGametestResources' }.configureEach { task ->
+	def keep = onlyGametests.collect { "soundsculptor.gametest.${it}".toString() }
+	task.inputs.property 'onlyGametests', keep.join(',')
+	if (!keep.isEmpty()) {
+		task.doLast { t ->
+			File file = new File(t.destinationDir, 'fabric.mod.json')
+			def json = new groovy.json.JsonSlurper().parse(file)
+			List<String> listed = json.entrypoints['fabric-client-gametest']
+			def unknown = keep.findAll { !(it in listed) }
+			if (!unknown.isEmpty()) {
+				throw new GradleException("Not client game tests in src/gametest/resources/fabric.mod.json: ${unknown.join(', ')}")
+			}
+			json.entrypoints['fabric-client-gametest'] = listed.findAll { it in keep }
+			file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)), 'UTF-8')
+		}
+	}
+}
+
 // Game tests run like a release build: no per-sound log lines (M1's SoundLogger), so timings are not distorted.
 // -Psoak=<seconds> lengthens the stress test's soak phase (PRD 11.2 step 5: 1800 for the full 30 minutes).
 loom {
@@ -84,6 +115,13 @@ dependencies {
 	// -Pmodmenu=true runs the dev client and the game tests with Mod Menu installed.
 	if (project.findProperty('modmenu') == 'true') {
 		localRuntime "com.terraformersmc:modmenu:${modMenuVersion}"
+	}
+	// -Pcompat=true: pinned 26.3 builds from Modrinth. Iris 1.11.7 is the newest Iris for 26.3, and Sodium beta.4 and later
+	// declare that they break it (Iris <= 1.11.7, then <= 1.12.0), so Sodium stays at beta.3, the newest one Iris loads with.
+	if (compat) {
+		localRuntime 'maven.modrinth:sodium:mc26.3-0.9.3-beta.3-fabric'
+		localRuntime 'maven.modrinth:iris:1.11.7+26.3-fabric'
+		localRuntime 'maven.modrinth:sound-physics-remastered:fabric-1.5.4+26.3'
 	}
 
 	// Pure-logic unit tests that run without Minecraft (PRD 7.6).
@@ -159,4 +197,30 @@ jar {
 		}
 		java.nio.file.Files.move(rewritten.toPath(), jarFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
 	}
+}
+
+// PRD 9.4: the jar stays under 1 MB and bundles no libraries: nothing but the mod's own classes and assets, its metadata
+// and the license. Runs with ./gradlew build (check).
+def licenseEntry = "LICENSE_${project.name}".toString()
+def checkJarContents = tasks.register('checkJarContents') {
+	def jarFile = tasks.named('jar').flatMap { it.archiveFile }
+	inputs.file jarFile
+	doLast {
+		File file = jarFile.get().asFile
+		if (file.length() >= 1024 * 1024) {
+			throw new GradleException("${file.name} is ${file.length()} bytes; PRD 9.4 keeps the jar under 1 MB")
+		}
+		def allowed = ['META-INF/', 'META-INF/MANIFEST.MF', 'fabric.mod.json', 'soundsculptor.mixins.json', 'assets/', licenseEntry]
+		List<String> names = new java.util.zip.ZipFile(file).withCloseable { zip -> zip.entries().toList()*.name }
+		def unexpected = names.findAll { !(it in allowed || it.startsWith('soundsculptor/') || it.startsWith('assets/soundsculptor/')) }
+		if (!unexpected.isEmpty()) {
+			throw new GradleException("${file.name} has files that are not Sound Sculptor's own (PRD 9.4: no bundled libraries): ${unexpected.join(', ')}")
+		}
+		if (!(licenseEntry in names)) {
+			throw new GradleException("${file.name} has no ${licenseEntry}")
+		}
+	}
+}
+tasks.named('check') {
+	dependsOn checkJarContents
 }

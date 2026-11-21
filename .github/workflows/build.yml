@@ -127,3 +127,38 @@ jobs:
           path: |
             build/run/clientGameTest/screenshots/
             build/run/clientGameTest/logs/
+
+  # Compatibility smoke test (PRD 8.1, 11.5): the game with Sodium, Iris and Sound Physics Remastered installed (pinned in
+  # build.gradle), running only CompatSmokeClientGameTest: the screen opens, a mute, a cue and a zone outline work, and
+  # the log has no errors from Sound Sculptor. Iris runs without a shader pack; packs are checked by hand (RELEASING.md).
+  compat-gametest:
+    runs-on: ubuntu-24.04
+    name: compatibility smoke test (Sodium, Iris, Sound Physics Remastered)
+    timeout-minutes: 20
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: install virtual display and software graphics drivers
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      # Same cache as the other jobs: saved from main, read everywhere else.
+      - name: setup gradle with caching
+        uses: gradle/actions/setup-gradle@v6
+      - name: run the compatibility smoke test
+        env:
+          ALSOFT_DRIVERS: 'null'
+        run: ./gradlew runClientGameTest -Pcompat=true
+      - name: capture screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gametest-compat
+          path: |
+            build/run/clientGameTest/screenshots/
+            build/run/clientGameTest/logs/

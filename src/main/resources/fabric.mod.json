@@ -3,7 +3,7 @@
 	"id": "soundsculptor",
 	"version": "${version}",
 	"name": "Sound Sculptor",
-	"description": "Mute or turn down any sound, everywhere or only inside zones you draw, without ever hearing more than vanilla allows. Client-only: nothing is sent to servers.",
+	"description": "Mute, turn down, boost or rate-limit any sound, everywhere or only inside zones you draw, without ever hearing more than vanilla allows. Client-only: nothing is sent to servers.",
 	"authors": [
 		"maxismagical",
 		"Sciencode"
