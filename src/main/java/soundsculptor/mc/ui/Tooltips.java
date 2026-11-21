@@ -21,7 +21,11 @@ public final class Tooltips {
 
 	/** Gives any widget a tooltip (shown on hover after 500 ms, immediately on keyboard focus). */
 	public static <T extends AbstractWidget> T describe(T widget, Component text) {
-		widget.setTooltip(Tooltip.create(text));
+		if (widget instanceof SculptButton button) {
+			button.tooltipText(text);
+		} else {
+			widget.setTooltip(Tooltip.create(text));
+		}
 		return widget;
 	}
 

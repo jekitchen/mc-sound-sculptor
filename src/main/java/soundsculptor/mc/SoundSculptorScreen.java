@@ -12,6 +12,7 @@ import soundsculptor.core.ui.Palette;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptTabButton;
 import soundsculptor.mc.ui.SculptDropdown;
+import soundsculptor.mc.ui.SculptList;
 import soundsculptor.mc.ui.SculptScreen;
 import soundsculptor.mc.ui.SculptSlider;
 import soundsculptor.mc.ui.SculptTextField;
@@ -22,6 +23,7 @@ import soundsculptor.mc.ui.demo.UiKitDemoScreen;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
@@ -66,8 +68,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 	/** The Settings tab's page tabs, in {@link SettingsPage} order. */
 	public final List<SculptTabButton> pageTabs = new ArrayList<>();
 	public SculptButton copyReportButton;
-	/** Whether Copy report sits in the footer: the Diagnostics page's text left no room for it in the body. */
-	private boolean copyReportInFooter;
+	/** The Diagnostics page's readout, one read-only row per line; {@code null} on other pages. */
+	public SculptList diagnosticsList;
 	public SculptDropdown<OutlineMode> outlineModeDropdown;
 	// Settings › General, FR-7.
 	public SculptToggle showCuesToggle;
@@ -82,8 +84,6 @@ public final class SoundSculptorScreen extends SculptScreen {
 	public SculptButton cueOffsetReset;
 	public SculptToggle throughBlocksToggle;
 	private DiagnosticsReport.Data diagnostics;
-	/** Lines the repeat-limit readout had when the Diagnostics page was laid out; 0 on other pages. */
-	private int limitsLinesShown;
 	private int ticks;
 
 	public SoundSculptorScreen() {
@@ -126,9 +126,6 @@ public final class SoundSculptorScreen extends SculptScreen {
 
 	@Override
 	protected void addFooterWidgets(List<AbstractWidget> footer) {
-		if (copyReportInFooter) {
-			footer.add(copyReportButton);
-		}
 		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
 			footer.add(SculptButton.text(Component.translatable("screen.soundsculptor.ui_demo"),
 					() -> minecraft.gui.setScreen(new UiKitDemoScreen(this))));
@@ -138,7 +135,7 @@ public final class SoundSculptorScreen extends SculptScreen {
 
 	@Override
 	protected void buildTab(int index, Body body) {
-		copyReportInFooter = false;
+		diagnosticsList = null;
 		if (index != TAB_SETTINGS && index != TAB_PROFILES && !ProfileManager.isLoaded()) {
 			// Opened outside a world (e.g. from Mod Menu on the title screen): sounds, Sound Sets and zones belong to a
 			// world's profile (FR-11.1), so there is nothing to show or change yet.
@@ -396,34 +393,52 @@ public final class SoundSculptorScreen extends SculptScreen {
 		return keyName(soundsculptor.SoundSculptorClient.outlinesKey);
 	}
 
-	/** FR-13.3: live numbers, refreshed every tick, and Copy report. */
+	/**
+	 * FR-13.3: Copy report, then the live numbers, refreshed every tick. The numbers are a read-only list, one row per
+	 * line, so in a small window or a longer language the page scrolls instead of running past the footer (PRD 9.3); a
+	 * line too long for the row is cut with "…" and shown whole in its tooltip, read out by the narrator, and copied in
+	 * full by Copy report.
+	 */
 	private void buildDiagnostics(Body body) {
 		diagnostics = Diagnostics.data();
-		body.label(() -> Component.translatable("soundsculptor.diag.sounds", diagnostics.sounds().count()));
-		// The long lines wrap rather than being cut (PRD 9.3).
-		body.wrappedLabel(() -> Component.translatable("soundsculptor.diag.per_sound", micros(diagnostics.sounds().averageMicros()),
-				micros(diagnostics.sounds().maxMicros()), micros(diagnostics.peakSoundMicros())));
-		body.wrappedLabel(() -> timing("soundsculptor.diag.tick", diagnostics.tick()));
-		body.wrappedLabel(() -> timing("soundsculptor.diag.outlines", diagnostics.outlines()));
-		body.wrappedLabel(() -> Component.translatable("soundsculptor.diag.active", diagnostics.activeSets(),
-				diagnostics.librarySets(), diagnostics.activeEntries(), diagnostics.zones()));
-		body.label(() -> Double.isNaN(diagnostics.cacheHitRate())
-				? Component.translatable("soundsculptor.diag.cache.none")
-				: Component.translatable("soundsculptor.diag.cache", String.format(Locale.ROOT, "%.1f", diagnostics.cacheHitRate() * 100)));
-		body.label(() -> Component.translatable("soundsculptor.diag.errors", diagnostics.errors()));
-		// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
-		body.wrappedLabel(() -> limitsText(diagnostics.limits()));
-		limitsLinesShown = limitsLines();
-		body.label(() -> Component.translatable("soundsculptor.diag.memory", MemoryEstimate.megabytes(Diagnostics.memoryBytes()),
-				MemoryEstimate.megabytes(MemoryEstimate.BUDGET_BYTES)));
 		copyReportButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.diag.copy"), this::copyReport),
 				Component.translatable("soundsculptor.diag.copy.tip"));
-		// In a small window, wrapped lines can leave no room below them: Copy report then goes in the footer, still after
-		// the page in focus order, instead of under the footer's edge.
-		copyReportInFooter = body.remaining() < Theme.WIDGET_HEIGHT;
-		if (!copyReportInFooter) {
-			body.row(copyReportButton);
+		body.row(copyReportButton);
+		List<Supplier<Component>> lines = List.of(
+				() -> Component.translatable("soundsculptor.diag.sounds", diagnostics.sounds().count()),
+				() -> Component.translatable("soundsculptor.diag.per_sound", micros(diagnostics.sounds().averageMicros()),
+						micros(diagnostics.sounds().maxMicros()), micros(diagnostics.peakSoundMicros())),
+				() -> timing("soundsculptor.diag.tick", diagnostics.tick()),
+				() -> timing("soundsculptor.diag.outlines", diagnostics.outlines()),
+				() -> Component.translatable("soundsculptor.diag.active", diagnostics.activeSets(),
+						diagnostics.librarySets(), diagnostics.activeEntries(), diagnostics.zones()),
+				() -> Double.isNaN(diagnostics.cacheHitRate())
+						? Component.translatable("soundsculptor.diag.cache.none")
+						: Component.translatable("soundsculptor.diag.cache", oneDecimal(diagnostics.cacheHitRate() * 100)),
+				() -> Component.translatable("soundsculptor.diag.errors", diagnostics.errors()),
+				// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
+				() -> limitsText(diagnostics.limits()),
+				() -> Component.translatable("soundsculptor.diag.memory", MemoryEstimate.megabytes(Diagnostics.memoryBytes()),
+						MemoryEstimate.megabytes(MemoryEstimate.BUDGET_BYTES)));
+		diagnosticsList = new SculptList(body.width(), SculptList.ROW_HEIGHT, Component.translatable("soundsculptor.diag.list"));
+		List<SculptList.Row> rows = new ArrayList<>(lines.size());
+		for (int i = 0; i < lines.size(); i++) {
+			Supplier<Component> line = lines.get(i);
+			rows.add(new SculptList.Row(i, List.of(new SculptList.Row.Column(() -> line.get().getString(), 0)), List.of()));
 		}
+		diagnosticsList.setRows(rows);
+		body.fill(diagnosticsList);
+	}
+
+	/** The Diagnostics page's lines as shown now (tests). */
+	public List<String> diagnosticsLines() {
+		List<String> texts = new ArrayList<>();
+		if (diagnosticsList != null) {
+			for (SculptList.Row row : diagnosticsList.children()) {
+				texts.addAll(row.columnTexts());
+			}
+		}
+		return texts;
 	}
 
 	/**
@@ -446,17 +461,16 @@ public final class SoundSculptorScreen extends SculptScreen {
 		return Component.translatable("soundsculptor.diag.limits", s.allowed(), s.dropped(), windows);
 	}
 
-	/** Lines the repeat-limit readout needs at the body's width; the page is laid out again when it needs more. */
-	private int limitsLines() {
-		return font.getSplitter().splitLines(limitsText(diagnostics.limits()).getString(), body().width(),
-				net.minecraft.network.chat.Style.EMPTY).size();
-	}
-
 	private static Component timing(String key, TimingWindow.Stats stats) {
 		return Component.translatable(key, micros(stats.averageMicros()), micros(stats.maxMicros()));
 	}
 
 	private static String micros(double value) {
+		return oneDecimal(value);
+	}
+
+	/** A number with one decimal: "5.0". */
+	private static String oneDecimal(double value) {
 		return String.format(Locale.ROOT, "%.1f", value);
 	}
 
@@ -487,10 +501,6 @@ public final class SoundSculptorScreen extends SculptScreen {
 		ticks++;
 		if (currentTab() == TAB_SETTINGS && settingsPage == SettingsPage.DIAGNOSTICS) {
 			diagnostics = Diagnostics.data();
-			if (limitsLinesShown > 0 && limitsLines() > limitsLinesShown) {
-				// More limits now than when the page was laid out: lay it out again so none is cut.
-				rebuildWidgets();
-			}
 		}
 		if (currentTab() == TAB_SETS && setsPanel != null && ticks % SoundsPanel.REFRESH_TICKS == 0) {
 			// The usage index reads other worlds' profiles in the background; show its counts once it has them.

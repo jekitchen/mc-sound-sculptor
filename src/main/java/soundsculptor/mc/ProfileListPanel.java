@@ -139,13 +139,14 @@ public final class ProfileListPanel {
 		SculptButton delete = deleteButton(s, summary.displayName());
 		if (!summary.canDelete()) {
 			delete.active = false;
-			delete.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("soundsculptor.profiles.delete.current")));
+			delete.tooltipText(Component.translatable("soundsculptor.profiles.delete.current"));
 		}
 		buttons.add(delete);
 		return new SculptList.Row(s.key(), List.of(
 				new SculptList.Row.Column(() -> name, 0, 0),
 				new SculptList.Row.Column(() -> when, whenWidth(), 0),
-				new SculptList.Row.Column(() -> keyText, 0, 1),
+				// The world key gives way first in a narrow row; it stays in the tooltip and the narration.
+				new SculptList.Row.Column(() -> keyText, 0, 1).hiddenWhenNarrow(),
 				new SculptList.Row.Column(() -> counts, countsWidth, 1)), buttons);
 	}
 

@@ -364,6 +364,7 @@
 	"soundsculptor.settings.page.accessibility": "Accessibility",
 	"soundsculptor.settings.page.diagnostics": "Diagnostics",
 	"soundsculptor.sounds.why": "Why does it sound like this?",
+	"soundsculptor.diag.list": "Diagnostics",
 	"soundsculptor.diag.sounds": "Sounds per second: %s",
 	"soundsculptor.diag.per_sound": "Time per sound: average %s µs, max %s µs (peak %s µs)",
 	"soundsculptor.diag.tick": "Re-checking playing sounds: average %s µs, max %s µs per tick",

@@ -80,9 +80,8 @@ import net.minecraft.util.Util;
  *   label to read.</li>
  *   <li>Long place lists (FR-4.11): with a set used in {@value #MANY_ZONES} long-named zones, the delete warning and the
  *   linked-save confirmation keep their buttons on screen and scroll, and every place is still listed and read.</li>
- *   <li>Pseudo-language (PRD 9.3): the same layout check with every Sound Sculptor text about 40% longer, reported, and
- *   held at or under {@value #PSEUDO_CEILING} problems (the Diagnostics timing lines, and the labels their live
- *   numbers push down, aside) so new ones fail the test.</li>
+ *   <li>Pseudo-language (PRD 9.3, 11.5): the same layout check with every Sound Sculptor text about 40% longer; like
+ *   English, it must find no problem.</li>
  * </ul>
  * Grayscale, Sodium, Iris, Sound Physics Remastered and servers stay manual checks.
  */
@@ -108,14 +107,6 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	private static final int MANY_ZONES = 40;
 	/** Another server's profile, seeded so the Profiles tab has the same rows every run. */
 	private static final String OTHER_PROFILE = "a11y-other.example.net";
-	/**
-	 * The most pseudo-language layout problems allowed, not counting the Diagnostics timing lines (their live numbers change
-	 * length from run to run): a ratchet at the count this check finds today. Buttons and choices now fit their text and
-	 * long hints wrap; what is left are 38 list columns squeezed at the narrowest GUI widths (Sounds, picker, Zones,
-	 * Profiles and a place's Sound Sets), due in M16. Lower it when fixes bring the count down.
-	 */
-	private static final int PSEUDO_CEILING = 38;
-
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		// Outside a world (title screen): per-world tabs explain instead of showing settings.
@@ -434,14 +425,8 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		}
 		System.out.println("A11Y layout (pseudo-language, text 40% longer): " + pseudo.size() + " problems"
 				+ (pseudo.isEmpty() ? "" : "\n  " + String.join("\n  ", pseudo)));
-		// The Diagnostics timing lines ("… µs") show live numbers whose length changes from run to run, so whether they are
-		// cut does too, and so does how many lines they wrap onto, which decides whether the labels under them still fit
-		// the body: both are reported above but not counted against the ceiling. English is still checked in full.
-		long gated = pseudo.stream().filter(p -> !(p.contains("SETTINGS_DIAGNOSTICS: label cut off") && p.contains("µ"))
-				&& !p.contains("SETTINGS_DIAGNOSTICS: label below the body")).count();
-		System.out.println("A11Y layout (pseudo-language) counted against the ceiling: " + gated + " of at most " + PSEUDO_CEILING);
-		check(gated <= PSEUDO_CEILING, "pseudo-language layout problems rose to " + gated + " (ceiling " + PSEUDO_CEILING
-				+ "): fix the new ones, or lower the ceiling when the count falls");
+		// PRD 11.5 "Pseudo-language build: no clipped text": enforced since M16, like English.
+		check(pseudo.isEmpty(), pseudo.size() + " layout problems in the pseudo-language, first: " + (pseudo.isEmpty() ? "" : pseudo.get(0)));
 	}
 
 	/** Every screen, tab and settings page, at every window size and GUI scale. */
@@ -679,6 +664,11 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 				if (text && font.width(button.getMessage()) + BUTTON_PADDING > button.getWidth()) {
 					found.putIfAbsent("button " + i, in + ": text cut off in row button \"" + button.getMessage().getString() + "\"");
 				}
+			}
+			// Every text line ends inside the row: a row that wraps onto more lines must have grown to hold them.
+			int textBottom = layout.lines() <= 1 ? 0 : 3 + (layout.lines() - 1) * SculptList.Row.LINE_STEP + font.lineHeight;
+			if (textBottom > row.getHeight()) {
+				found.putIfAbsent("height", in + ": " + layout.lines() + " text lines do not fit a row " + row.getHeight() + " px tall (row " + rowName + ")");
 			}
 			for (int i = 0; i < layout.columns().size(); i++) {
 				SculptList.Row.Placed placed = layout.columns().get(i);
