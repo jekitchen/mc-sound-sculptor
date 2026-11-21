@@ -143,8 +143,9 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
+      # libegl1 and libegl-mesa0: the game's OpenGL context comes through EGL here (see below).
       - name: install virtual display and software graphics drivers
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers libegl1 libegl-mesa0
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       # Same cache as the other jobs: saved from main, read everywhere else.
