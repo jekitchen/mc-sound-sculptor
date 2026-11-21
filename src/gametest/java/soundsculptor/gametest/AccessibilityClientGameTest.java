@@ -93,8 +93,8 @@ import net.minecraft.world.phys.Vec3;
  *   label to read.</li>
  *   <li>Long place lists (FR-4.11): with a set used in {@value #MANY_ZONES} long-named zones, the delete warning and the
  *   linked-save confirmation keep their buttons on screen and scroll, and every place is still listed and read.</li>
- *   <li>Every screen and pop-up of the layout check (the cue box's settings, the Level, cue and limit pop-up, the boost
- *   question, the entry editor with a limit and a boost, and Settings › Accessibility among them): every control has a
+ *   <li>Every screen and pop-up of the layout check (the Cues pop-ups of Everywhere and a zone, the Level, cue and limit
+ *   pop-up, the boost question, the entry editor with a limit and a boost, and Settings › Accessibility among them): every control has a
  *   label (A-4), and Tab reaches every control in reading order with Shift+Tab going back (A-1).</li>
  *   <li>The cue box (FR-7) at 50%, 100% and 200% text size stays inside the window at every window size and GUI scale.</li>
  *   <li>Reduced motion (A-6): the Settings › Accessibility toggle works by keyboard, is saved, and stops toasts sliding
@@ -590,6 +590,25 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			return SetEditorScreen.linkedSaveDialog(null, SET.name(), SetEditorScreen.linkedMessage(names, 3, true), () -> { });
 		}, null),
 		ZONES(mc -> tab(SoundSculptorScreen.TAB_ZONES), null),
+		// The Cues pop-ups (FR-7, 2026-11-21): Everywhere's from the Zones tab and from Settings, and a zone's from its editor:
+		// Trading hall passes Unchanged settings on to the long-named zone of the same size after it, the long-named one to
+		// Everywhere.
+		CUES_EVERYWHERE(mc -> tab(SoundSculptorScreen.TAB_ZONES), s -> {
+			((SoundSculptorScreen) s).zonesPanel().openEverywhereCues(null);
+			return null;
+		}),
+		CUES_SETTINGS(mc -> settings(SoundSculptorScreen.SettingsPage.GENERAL), s -> {
+			((SoundSculptorScreen) s).cuesButton.onPress(null);
+			return null;
+		}),
+		CUES_ZONE(mc -> ZoneEditorScreen.edit(null, ProfileManager.profile().zone("z1")), s -> {
+			((ZoneEditorScreen) s).openCues();
+			return null;
+		}),
+		CUES_ZONE_LONG_NAME(mc -> ZoneEditorScreen.edit(null, ProfileManager.profile().zone("z2")), s -> {
+			((ZoneEditorScreen) s).openCues();
+			return null;
+		}),
 		PROFILES(mc -> tab(SoundSculptorScreen.TAB_PROFILES), null),
 		PROFILE_RENAME(mc -> new soundsculptor.mc.ProfileRenameScreen(null, ProfileManager.key(), ProfileManager.profile()), null),
 		PROFILE_IMPORT(mc -> new soundsculptor.mc.ProfileImportScreen(null), null),
