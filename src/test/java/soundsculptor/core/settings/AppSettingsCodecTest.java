@@ -48,6 +48,35 @@ class AppSettingsCodecTest {
 	}
 
 	@Test
+	void theCueSwitchesAreSavedAndReadBack() throws AppSettingsFormatException {
+		// FR-7.7 master switch off, FR-7.2 cue sounds without subtitles on.
+		String json = AppSettingsCodec.toJson(D.withShowCues(false).withCuesWithoutSubtitles(true));
+		assertTrue(json.contains("\"showCues\": false"), json);
+		assertTrue(json.contains("\"cuesWithoutSubtitles\": true"), json);
+		AppSettings back = read(json).settings();
+		assertEquals(false, back.showCues());
+		assertEquals(true, back.cuesWithoutSubtitles());
+		assertEquals(D.withShowCues(false), read("{\"schemaVersion\": 1, \"showCues\": false}").settings());
+	}
+
+	@Test
+	void everyCueColorPresetRoundTripsAsItself() throws AppSettingsFormatException {
+		for (soundsculptor.core.ui.Palette.Swatch swatch : soundsculptor.core.cue.CueColors.PRESETS) {
+			AppSettingsCodec.Read read = read(AppSettingsCodec.toJson(D.withCueColor(swatch.rgb())));
+			assertEquals(List.of(), read.problems());
+			assertEquals(swatch, soundsculptor.core.cue.CueColors.preset(read.settings().cueColor()), swatch.id());
+		}
+	}
+
+	@Test
+	void aCustomCueColorFromAnEditedFileIsKept() throws AppSettingsFormatException {
+		// Settings offers only the presets, but a color typed into the file is kept, not reset to the default.
+		AppSettings read = read("{\"schemaVersion\": 1, \"cueColor\": \"#123456\"}").settings();
+		assertEquals(0x123456, read.cueColor());
+		assertEquals(null, soundsculptor.core.cue.CueColors.preset(read.cueColor()));
+	}
+
+	@Test
 	void missingValuesUseDefaultsQuietly() throws AppSettingsFormatException {
 		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"reducedMotion\": true}");
 		assertEquals(D.withReducedMotion(true), read.settings());

@@ -4,6 +4,7 @@ import soundsculptor.mc.AppSettingsManager;
 import soundsculptor.mc.SoundSculptorScreen;
 import soundsculptor.mc.SoundSculptorSettings;
 import soundsculptor.mc.BypassLabel;
+import soundsculptor.mc.CueOverlay;
 import soundsculptor.mc.Notices;
 import soundsculptor.mc.PlayingChannels;
 import soundsculptor.mc.ProfileManager;
@@ -46,6 +47,8 @@ public final class SoundSculptorClient implements ClientModInitializer {
 	public static KeyMapping bypassKey;
 	/** FR-10.1: optional hotkey for "Show zone outlines", unbound by default. */
 	public static KeyMapping outlinesKey;
+	/** FR-7.7: optional hotkey for "Show muted-sound cues", unbound by default. */
+	public static KeyMapping cuesKey;
 	/** Cancels marking a zone's corners (Backspace by default; only acts while marking). */
 	public static KeyMapping cancelMarkingKey;
 
@@ -60,6 +63,8 @@ public final class SoundSculptorClient implements ClientModInitializer {
 				"key.soundsculptor.cancel_marking", Keys.BACKSPACE, KEY_CATEGORY));
 		outlinesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.soundsculptor.outlines", InputConstants.UNKNOWN.getValue(), KEY_CATEGORY));
+		cuesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+				"key.soundsculptor.cues", InputConstants.UNKNOWN.getValue(), KEY_CATEGORY));
 
 		Notices.register();
 		AppSettingsManager.init(FabricLoader.getInstance().getConfigDir());
@@ -81,6 +86,7 @@ public final class SoundSculptorClient implements ClientModInitializer {
 		SoundLogger.registerIfEnabled();
 		RecentLog.register();
 		BypassLabel.register();
+		CueOverlay.register();
 
 		LOGGER.info("Sound Sculptor initialized");
 	}
@@ -100,6 +106,9 @@ public final class SoundSculptorClient implements ClientModInitializer {
 		}
 		while (outlinesKey.consumeClick()) {
 			SoundSculptorSettings.cycleOutlineMode();
+		}
+		while (cuesKey.consumeClick()) {
+			CueOverlay.toggleShowCues(minecraft);
 		}
 		// FR-8.8, FR-13.1: work out where the player is; re-decide playing loops only when that, the profile or Bypass changed.
 		PlayingChannels.get().tick(minecraft);

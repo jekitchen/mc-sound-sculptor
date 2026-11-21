@@ -81,7 +81,8 @@ import net.minecraft.util.Util;
  *   <li>Long place lists (FR-4.11): with a set used in {@value #MANY_ZONES} long-named zones, the delete warning and the
  *   linked-save confirmation keep their buttons on screen and scroll, and every place is still listed and read.</li>
  *   <li>Pseudo-language (PRD 9.3): the same layout check with every Sound Sculptor text about 40% longer, reported, and
- *   held at or under {@value #PSEUDO_CEILING} problems (the Diagnostics timing lines aside) so new ones fail the test.</li>
+ *   held at or under {@value #PSEUDO_CEILING} problems (the Diagnostics timing lines, and the labels their live
+ *   numbers push down, aside) so new ones fail the test.</li>
  * </ul>
  * Grayscale, Sodium, Iris, Sound Physics Remastered and servers stay manual checks.
  */
@@ -233,6 +234,17 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 				return silentControls(screen);
 			});
 			check(silent.isEmpty(), "controls without a label on tab " + tab + ": " + silent);
+		}
+		// A-4 for every Settings page (the cue settings of M9 among them).
+		for (SoundSculptorScreen.SettingsPage page : SoundSculptorScreen.SettingsPage.values()) {
+			List<String> silent = context.computeOnClient(mc -> {
+				SoundSculptorScreen screen = new SoundSculptorScreen();
+				mc.gui.setScreen(screen);
+				screen.selectTab(SoundSculptorScreen.TAB_SETTINGS);
+				screen.setSettingsPage(page);
+				return silentControls(screen);
+			});
+			check(silent.isEmpty(), "controls without a label on Settings › " + page + ": " + silent);
 		}
 		// A-4 for the sound trace's inline controls (FR-14.4) and its Volume panel.
 		List<String> silentTrace = context.computeOnClient(mc -> {
@@ -423,8 +435,10 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		System.out.println("A11Y layout (pseudo-language, text 40% longer): " + pseudo.size() + " problems"
 				+ (pseudo.isEmpty() ? "" : "\n  " + String.join("\n  ", pseudo)));
 		// The Diagnostics timing lines ("… µs") show live numbers whose length changes from run to run, so whether they are
-		// cut does too: they are reported above but not counted against the ceiling.
-		long gated = pseudo.stream().filter(p -> !(p.contains("SETTINGS_DIAGNOSTICS: label cut off") && p.contains("µ"))).count();
+		// cut does too, and so does how many lines they wrap onto, which decides whether the labels under them still fit
+		// the body: both are reported above but not counted against the ceiling. English is still checked in full.
+		long gated = pseudo.stream().filter(p -> !(p.contains("SETTINGS_DIAGNOSTICS: label cut off") && p.contains("µ"))
+				&& !p.contains("SETTINGS_DIAGNOSTICS: label below the body")).count();
 		System.out.println("A11Y layout (pseudo-language) counted against the ceiling: " + gated + " of at most " + PSEUDO_CEILING);
 		check(gated <= PSEUDO_CEILING, "pseudo-language layout problems rose to " + gated + " (ceiling " + PSEUDO_CEILING
 				+ "): fix the new ones, or lower the ceiling when the count falls");
@@ -530,6 +544,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 				Message.of(SetImportPlan.EXACT_MATCH_PROBLEM, SET.name())), null),
 		SETTINGS_GENERAL(mc -> settings(SoundSculptorScreen.SettingsPage.GENERAL), null),
 		SETTINGS_ZONES(mc -> settings(SoundSculptorScreen.SettingsPage.ZONES), null),
+		SETTINGS_ACCESSIBILITY(mc -> settings(SoundSculptorScreen.SettingsPage.ACCESSIBILITY), null),
 		SETTINGS_DIAGNOSTICS(mc -> settings(SoundSculptorScreen.SettingsPage.DIAGNOSTICS), null),
 		QUICK_ENTRY_EDITOR(mc -> EntryEditorScreen.forQuickEntry(null, PlaceRef.EVERYWHERE, "r1"), null),
 		SET_EDITOR(mc -> SetEditorScreen.edit(null, SET.id()), null),

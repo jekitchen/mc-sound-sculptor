@@ -22,7 +22,8 @@ import soundsculptor.core.trace.TraceEditError;
  *
  * <p>An edit that clears a value never adds an entry or turns one on, an entry left setting nothing is removed, and an
  * empty Quick changes set is removed. An edit that sets a value switches the place's Quick changes back on if the
- * player had switched it off (FR-8.6), so Mute never silently does nothing.
+ * player had switched it off (FR-8.6), so Mute never silently does nothing. A Cue-only edit is the exception: it never
+ * turns an entry or Quick changes back on.
  *
  * <p>Mute followed by Unmute leaves the place exactly as it was when the row's button goes through {@link MuteMemory}:
  * Unmute puts the sound's entry back as it was before the Mute (its own Cue included, or no entry), and switches Quick
@@ -83,6 +84,45 @@ public final class QuickActions {
 		EntryEdit clear = new EntryEdit.UnmuteWithCue(cueDefault);
 		PlaceSets cleared = edited(place, soundId, clear);
 		return cleared != null && !isMuted(cleared, ws.library(), soundId) ? clear : new EntryEdit.Mute(false);
+	}
+
+	/**
+	 * Whether muting the sound at the place would show a cue now, by any set attached there: the Cue setting that wins
+	 * for it (FR-4.5), off when nothing sets one (FR-9). {@code false} for a zone that no longer exists. For many
+	 * sounds at once, use {@link #cueOnAt}.
+	 */
+	public static boolean isCueOn(Workspace ws, PlaceRef where, String soundId) {
+		return cueOnAt(ws, where).test(soundId);
+	}
+
+	/** {@link #isCueOn} for many sounds at one place, with one resolver, like {@link #mutedAt}. */
+	public static Predicate<String> cueOnAt(Workspace ws, PlaceRef where) {
+		PlaceSets place = ws.profile().place(where);
+		if (place == null) {
+			return soundId -> false;
+		}
+		EntryResolver resolver = resolver(place, ws.library());
+		return soundId -> resolver.resolve(soundId).cueOn();
+	}
+
+	/**
+	 * The row's Cue button (FR-1.5, FR-7): turns the sound's cue at the place off when it is on, and on when it is off,
+	 * whichever set decides it now. Like Unmute, it first tries clearing the Cue of the sound's Quick changes entry: when
+	 * that alone gives the new state, the edit clears it, so a quick Mute, Cue off and Unmute leave no entry behind.
+	 * Otherwise it writes Cue on or off, which wins at the place because Quick changes is pinned first (FR-4.10).
+	 */
+	public static EntryEdit toggleCue(Workspace ws, PlaceRef where, String soundId) {
+		PlaceSets place = ws.profile().place(where);
+		if (place == null) {
+			return new EntryEdit.Cue(true);
+		}
+		boolean on = cueOn(place, ws.library(), soundId);
+		EntryEdit clear = new EntryEdit.Cue(null);
+		PlaceSets cleared = edited(place, soundId, clear);
+		if (cleared != null && cueOn(cleared, ws.library(), soundId) != on) {
+			return clear;
+		}
+		return new EntryEdit.Cue(!on);
 	}
 
 	/** Applies one quick action to the sound's single-sound entry in the place's Quick changes. */
@@ -160,6 +200,9 @@ public final class QuickActions {
 			return after.equals(place) ? null : after;
 		}
 		boolean setsSomething = setsAnything(edit.apply(SetEntry.of("probe", soundId)));
+		// A Cue-only edit never switches anything back on: Cue does nothing unless something else mutes the sound, so
+		// it must not bring back a mute or level the player switched off (review of M9).
+		boolean switchesOn = setsSomething && !(edit instanceof EntryEdit.Cue);
 		SoundSet changedSet;
 		if (old == null) {
 			if (!setsSomething) {
@@ -168,7 +211,7 @@ public final class QuickActions {
 			changedSet = quick.putEntry(edit.apply(SetEntry.of(quick.newEntryId(), soundId)));
 		} else {
 			// Clearing a value leaves an entry off if it was off; setting one turns the entry on.
-			SetEntry changed = setsSomething ? edit.apply(old.withEnabled(true)) : edit.apply(old);
+			SetEntry changed = switchesOn ? edit.apply(old.withEnabled(true)) : edit.apply(old);
 			if (!setsAnything(changed)) {
 				changedSet = quick.removeEntry(old.id());
 			} else if (changed.equals(old)) {
@@ -178,7 +221,7 @@ public final class QuickActions {
 			}
 		}
 		PlaceSets after = place.withQuickChanges(changedSet.entries().isEmpty() ? null : changedSet);
-		if (setsSomething) {
+		if (switchesOn) {
 			// Setting a value also switches the place's Quick changes back on, so the action takes effect (FR-8.6).
 			after = after.setEnabled(SoundSet.QUICK_ID, true);
 		}
@@ -194,6 +237,9 @@ public final class QuickActions {
 		if (edit instanceof EntryEdit.Enabled enabled) {
 			return enabled.value();
 		}
+		if (edit instanceof EntryEdit.Cue) {
+			return false;
+		}
 		return setsAnything(edit.apply(SetEntry.of("probe", "*")));
 	}
 
@@ -204,6 +250,10 @@ public final class QuickActions {
 
 	private static boolean isMuted(PlaceSets place, SetLibrary library, String soundId) {
 		return resolver(place, library).resolve(soundId).muted();
+	}
+
+	private static boolean cueOn(PlaceSets place, SetLibrary library, String soundId) {
+		return resolver(place, library).resolve(soundId).cueOn();
 	}
 
 	private static EntryResolver resolver(PlaceSets place, SetLibrary library) {

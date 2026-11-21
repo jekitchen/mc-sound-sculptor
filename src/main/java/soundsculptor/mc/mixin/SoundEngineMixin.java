@@ -3,9 +3,11 @@ package soundsculptor.mc.mixin;
 import soundsculptor.mc.SoundHook;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEngine;
+import net.minecraft.client.sounds.WeighedSoundEvents;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,10 +17,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Sound hooks (PRD 7.2). The same methods and calls exist in 26.2 and 26.3 (see docs/PORTING.md).
  *
  * <ul>
- *   <li><b>Start:</b> just before {@code play} calls {@code calculateVolume(float, SoundSource)}. By then the sound
- *   is resolved and the unknown/empty-sound early returns are behind us. A muted sound returns {@code NOT_STARTED}
- *   here: no channel is created. This is the same point where vanilla skips a sound whose volume is zero, so
- *   subtitles behave exactly as with a zero volume slider.</li>
+ *   <li><b>Start:</b> just before {@code play} calls {@code Sound.getAttenuationDistance(float)}. By then the sound
+ *   is resolved and the unknown/empty-sound early returns are behind us, and the subtitle listeners are not notified
+ *   yet. A muted sound returns {@code NOT_STARTED} here: no channel is created and no subtitle shows.</li>
+ *   <li><b>Subtitles:</b> {@code play} notifies the subtitle listeners only for a sound Sound Sculptor does not
+ *   silence. A muted loop, which still starts silently, gets no vanilla subtitle either (decided 2026-11-21: a muted
+ *   sound shows at most its cue, FR-7). Vanilla's own zero sliders keep vanilla behaviour.</li>
  *   <li><b>Start volume:</b> the result of that same call is multiplied by the rule volume (FR-5.3). Vanilla then
  *   skips a sound whose volume became zero.</li>
  *   <li><b>Later volume:</b> {@code calculateVolume(SoundInstance)} is what vanilla calls to recalculate a playing
@@ -30,14 +34,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class SoundEngineMixin {
 	private static final String PLAY =
 			"play(Lnet/minecraft/client/resources/sounds/SoundInstance;)Lnet/minecraft/client/sounds/SoundEngine$PlayResult;";
+	private static final String ATTENUATION_DISTANCE =
+			"Lnet/minecraft/client/resources/sounds/Sound;getAttenuationDistance(F)F";
+	private static final String NOTIFY_LISTENERS = "Lnet/minecraft/client/sounds/SoundEngine;notifyListeners("
+			+ "Lnet/minecraft/client/resources/sounds/SoundInstance;Lnet/minecraft/client/sounds/WeighedSoundEvents;F)V";
 	private static final String CALCULATE_VOLUME =
 			"Lnet/minecraft/client/sounds/SoundEngine;calculateVolume(FLnet/minecraft/sounds/SoundSource;)F";
 
-	@Inject(method = PLAY, at = @At(value = "INVOKE", target = CALCULATE_VOLUME), cancellable = true)
+	@Inject(method = PLAY, at = @At(value = "INVOKE", target = ATTENUATION_DISTANCE), cancellable = true)
 	private void soundsculptor$onSoundStart(SoundInstance instance, CallbackInfoReturnable<SoundEngine.PlayResult> cir) {
 		if (SoundHook.onSoundStart(instance)) {
 			cir.setReturnValue(SoundEngine.PlayResult.NOT_STARTED);
 		}
+	}
+
+	@WrapWithCondition(method = PLAY, at = @At(value = "INVOKE", target = NOTIFY_LISTENERS))
+	private boolean soundsculptor$subtitles(SoundEngine engine, SoundInstance instance, WeighedSoundEvents events, float range) {
+		return SoundHook.notifiesSubtitles();
 	}
 
 	@ModifyExpressionValue(method = PLAY, at = @At(value = "INVOKE", target = CALCULATE_VOLUME))

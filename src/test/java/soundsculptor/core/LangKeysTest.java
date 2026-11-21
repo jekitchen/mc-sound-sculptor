@@ -53,7 +53,8 @@ class LangKeysTest {
 	private static Map<String, List<String>> builtKeys() {
 		Map<String, List<String>> keys = new HashMap<>(Map.of(
 				"soundsculptor.color.", Stream.concat(keys(ZoneColor.values(), ZoneColor::translationKey).stream(),
-						Palette.OKABE_ITO.stream().map(s -> "soundsculptor.color." + s.id())).distinct().toList(),
+						Stream.concat(Palette.OKABE_ITO.stream(), soundsculptor.core.cue.CueColors.PRESETS.stream())
+								.map(s -> "soundsculptor.color." + s.id())).distinct().toList(),
 				"soundsculptor.color.error.", keys(ColorError.values(), ColorError::translationKey),
 				"soundsculptor.inspect.link.", keys(LinkKind.values(), LinkKind::translationKey),
 				"soundsculptor.pattern.error.", keys(PatternError.values(), PatternError::translationKey),

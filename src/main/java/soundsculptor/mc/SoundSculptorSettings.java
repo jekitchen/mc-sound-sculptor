@@ -39,4 +39,40 @@ public final class SoundSculptorSettings {
 	public static void setShowDistance(boolean value) {
 		ProfileManager.update(profile -> profile.withSettings(profile.settings().withShowDistance(value)));
 	}
+
+	/** FR-7.7 "Show muted-sound cues" (app-wide; default on). */
+	public static boolean showCues() {
+		return AppSettingsManager.get().showCues();
+	}
+
+	public static void setShowCues(boolean value) {
+		AppSettingsManager.update(settings -> settings.withShowCues(value));
+	}
+
+	/** FR-7.2 "Cue sounds without subtitles" (app-wide; default off): such a cue shows the sound ID. */
+	public static boolean cuesWithoutSubtitles() {
+		return AppSettingsManager.get().cuesWithoutSubtitles();
+	}
+
+	public static void setCuesWithoutSubtitles(boolean value) {
+		AppSettingsManager.update(settings -> settings.withCuesWithoutSubtitles(value));
+	}
+
+	/** FR-7.3, A-7 the cue text color, {@code 0xRRGGBB} (app-wide). */
+	public static int cueColor() {
+		return AppSettingsManager.get().cueColor();
+	}
+
+	public static void setCueColor(int rgb) {
+		AppSettingsManager.update(settings -> settings.withCueColor(rgb));
+	}
+
+	/** FR-7.6 "New mutes get Cue" (a profile setting; default on). */
+	public static boolean cueDefault() {
+		return ProfileManager.profile().settings().cueDefault();
+	}
+
+	public static void setCueDefault(boolean value) {
+		ProfileManager.update(profile -> profile.withSettings(profile.settings().withCueDefault(value)));
+	}
 }

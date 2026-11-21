@@ -52,9 +52,9 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 	private static final SoundSet FARM = new SoundSet("trace-farm", "Trace farm", List.of(SetEntry.of("e1", "*villager*").withVolume(50)));
 	private static final PlaceRef PEN = PlaceRef.zone("pen");
 	private static final EntryLocation FARM_IN_PEN = new EntryLocation(PEN, FARM.id(), "e1");
-	/** Entry line buttons: On/Off, Mute, Level…, Open full editor. */
+	/** Entry line buttons: On/Off, Mute, Level…, Cue, Open full editor. */
 	private static final int MUTE = 1;
-	private static final int OPEN_EDITOR = 3;
+	private static final int OPEN_EDITOR = 4;
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -134,7 +134,7 @@ public final class TraceEditClientGameTest implements FabricClientGameTest {
 			// used in two places, so Save confirms): back in the trace, the result is recomputed.
 			context.runOnClient(mc -> {
 				SculptList.Row row = trace(mc).row(new TraceText.EntryTarget(FARM_IN_PEN, farmEntry()));
-				check(row != null && row.buttons().size() == 4, "a library entry line has On/Off, Mute, Level… and Open full editor");
+				check(row != null && row.buttons().size() == 5, "a library entry line has On/Off, Mute, Level…, Cue and Open full editor");
 				row.buttons().get(OPEN_EDITOR).onPress(null);
 			});
 			context.waitForScreen(SetEditorScreen.class);

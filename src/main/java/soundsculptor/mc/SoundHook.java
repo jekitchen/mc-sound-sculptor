@@ -11,6 +11,7 @@ import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
+import soundsculptor.core.settings.AppSettings;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
  *   <li>Decide: with Bypass on, everything plays as vanilla; otherwise the Sound Sets of Everywhere and of the zones
  *   the player's feet are in decide it (FR-8.4, FR-9). Every sound is in scope, music, UI and Voice/Speech included
  *   (section 5); vanilla's sliders apply first. Outside a world nothing is decided.</li>
+ *   <li>Cue: a muted sound in range whose deciding entry has Cue on is shown in the cue box (FR-7.1).</li>
  *   <li>Report: observers (the recently played log, the dev log) see the sound with its status. The sound's last play
  *   is kept for its trace (FR-14.6), and the time all this took feeds Diagnostics (FR-13.3).</li>
  * </ol>
@@ -64,11 +66,14 @@ public final class SoundHook {
 	 * so its subtitle is not refreshed either.
 	 */
 	private static float pendingFactor = 1.0F;
+	/** Whether vanilla may notify its subtitle listeners for the sound {@link #onSoundStart} just decided. */
+	private static boolean notifySubtitles = true;
 	/** Start volume factor of a muted looping sound, which may come back while it plays: inaudible, but not zero. */
 	static final float SILENT = 1.0E-6F;
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
 	private static Precedence deciderProfile;
+	private static AppSettings deciderSettings;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
 	private static final TimingWindow SOUND_TIMING = new TimingWindow();
@@ -87,7 +92,8 @@ public final class SoundHook {
 	}
 
 	/**
-	 * Called from {@code SoundEngine.play} after the sound is resolved, just before vanilla calculates its volume.
+	 * Called from {@code SoundEngine.play} after the sound is resolved, before vanilla notifies the subtitle listeners
+	 * and calculates its volume.
 	 * Runs on the thread that started the sound (normally the render thread).
 	 *
 	 * @return true if the sound must not start (muted)
@@ -96,11 +102,13 @@ public final class SoundHook {
 		long started = System.nanoTime();
 		startFactor = 1.0F;
 		pendingInstance = null;
+		notifySubtitles = true;
 		try {
 			return handle(instance);
 		} catch (RuntimeException | LinkageError e) {
 			startFactor = 1.0F;
 			pendingInstance = null;
+			notifySubtitles = true;
 			failOpen(e);
 			return false;
 		} finally {
@@ -130,6 +138,7 @@ public final class SoundHook {
 
 		// Decide: where you are, the sets, zones and precedence (core SoundStartDecider). Outside a world nothing is decided.
 		SoundStartResult result = null;
+		Component subtitle = null;
 		boolean loaded = sync(minecraft);
 		if (loaded) {
 			SoundStart in = START;
@@ -150,15 +159,23 @@ public final class SoundHook {
 			in.y = instance.getY();
 			in.z = instance.getZ();
 			WeighedSoundEvents events = minecraft.getSoundManager().getSoundEvent(id);
-			in.hasSubtitle = events != null && events.getSubtitle() != null;
+			subtitle = events == null ? null : events.getSubtitle();
+			in.hasSubtitle = subtitle != null;
 			in.bypass = ProfileManager.isBypassed();
 			in.nowMs = Util.getMillis();
 			result = RESULT;
 			DECIDER.start(in, result);
+			if (result.cue()) {
+				// FR-7: a muted sound in range whose entry has Cue on; the cue box shows its subtitle, or its ID (FR-7.2).
+				CueOverlay.add(result.cueUsesSoundId() ? null : subtitle, idString, !relative, in.looping, instance.getX(),
+						instance.getY(), instance.getZ(), range, in.nowMs);
+			}
 		}
 
 		PlayStatus status = result == null ? PlayStatus.PLAYING : result.status();
 		boolean handled = result != null && result.handled();
+		// A sound Sound Sculptor silences (muted, 0% or dropped) gets no vanilla subtitle; its cue replaces it (FR-7).
+		notifySubtitles = !(handled && result.factor() <= 0);
 		if (loaded && !(handled && result.cancel())) {
 			// Every sound that starts in a world is tracked, so a loop can follow the player and Bypass can reset it
 			// (FR-8.8, FR-13.1). A muted loop starts silently: vanilla skips a sound whose volume is exactly 0.
@@ -204,6 +221,12 @@ public final class SoundHook {
 			DECIDER.setProfile(precedence);
 			deciderProfile = precedence;
 		}
+		// The cue settings (FR-7.2, FR-7.7) change only when the player changes a setting: a new settings record.
+		AppSettings app = AppSettingsManager.get();
+		if (app != deciderSettings) {
+			DECIDER.setCueSettings(app.cueSettings(ProfileManager.profile().settings().cueDefault()));
+			deciderSettings = app;
+		}
 		LocalPlayer player = minecraft.player;
 		if (player == null) {
 			DECIDER.locateNowhere();
@@ -242,6 +265,16 @@ public final class SoundHook {
 			ID_STRINGS.put(id, idString);
 		}
 		return idString;
+	}
+
+	/**
+	 * Called from {@code SoundEngine.play} just before it notifies the subtitle listeners, for the sound
+	 * {@link #onSoundStart} just decided: false when Sound Sculptor silences it, so vanilla's subtitle box does not show
+	 * a muted sound (decided 2026-11-21; the cue box shows it when its entry has Cue on). Vanilla's own zero sliders are
+	 * not affected.
+	 */
+	public static boolean notifiesSubtitles() {
+		return notifySubtitles;
 	}
 
 	/**

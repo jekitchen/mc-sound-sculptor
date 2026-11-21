@@ -3,6 +3,29 @@
 All notable changes to Sound Sculptor. Versions follow `major.minor.patch`, with `-alpha` or `-beta` for test releases.
 Each release ships one jar that runs on every supported Minecraft version.
 
+## 1.0.0 (in progress)
+
+Work toward 1.0, after the alpha. Not released yet.
+
+### Features
+- **Cues for muted sounds:** when a muted sound plays close enough that vanilla would show its subtitle, a line such as
+  "(muted) Explosion" appears in its own box just above the subtitles, bottom right, with vanilla's `<` or `>` arrow.
+  Lines are in italics, start with "(muted)" and a muted-speaker icon, merge repeats ("×4") and stop at 5. Like
+  subtitles, each line follows its latest play in range, hides while you are out of range, and fades over 3 seconds
+  times vanilla's Notification Time. It works with vanilla Subtitles on or off. A play dropped by a repeat limit never
+  shows a cue.
+- **Muted sounds leave vanilla's subtitle box:** a sound Sound Sculptor mutes (or sets to 0%) no longer shows a vanilla
+  subtitle; its cue is the only note, and with Cue off nothing shows. Vanilla's own volume sliders work as before.
+- **Cue setting on entries:** the entry editor has Cue (Unchanged, On, Off) under Mute. On the Sounds tab, a row's
+  Level… button is now **Level and cue…**, and its pop-up has a Cue toggle. Every entry line in "Why does it sound like
+  this?" has a Cue button. A new mute gets Cue on, unless you change that in Settings.
+- **Settings › General:** Show muted-sound cues (also an optional hotkey in Controls, unbound by default), Cue sounds
+  without subtitles (shows the sound's ID instead) and New mutes get Cue (per world or server).
+- **Settings › Accessibility** (new page): Cue color (six named colors; the default is light blue-gray), Cue text size
+  (100 to 200%) and the cue box position (left/right and up/down, with a button to put it back). The box always stays on
+  screen.
+- A quick Cue change never turns a switched-off Quick changes entry back on.
+
 ## 0.1.0-alpha (unreleased)
 
 First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.
