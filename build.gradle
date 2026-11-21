@@ -93,9 +93,9 @@ tasks.matching { it.name == 'processGametestResources' }.configureEach { task ->
 		}
 	}
 }
-// On CI, Loom wraps the game in xvfb-run, whose screen has 8-bit color and so no OpenGL visual: vanilla falls back to
-// Vulkan there, but Sodium and Iris need OpenGL. So with -Pcompat=true Loom does not start its own Xvfb, and the CI job
-// runs Gradle inside xvfb-run with a 24-bit screen instead (.github/workflows/build.yml).
+// On CI the game gets no OpenGL context from GLX under Xvfb and vanilla falls back to Vulkan, but Sodium and Iris need
+// OpenGL. So with -Pcompat=true Loom does not start its own Xvfb (8-bit color); the CI job runs Gradle inside xvfb-run
+// with a 24-bit screen and SDL_VIDEO_FORCE_EGL=1, which gives Mesa's OpenGL (.github/workflows/build.yml).
 tasks.matching { it.name == 'runClientGameTest' }.configureEach {
 	if (compat) {
 		it.useXvfb.set(false)
