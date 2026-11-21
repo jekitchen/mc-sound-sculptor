@@ -35,6 +35,7 @@
 			"soundsculptor.gametest.SoundsTabClientGameTest",
 			"soundsculptor.gametest.TraceEditClientGameTest",
 			"soundsculptor.gametest.AccessibilityClientGameTest",
+			"soundsculptor.gametest.CoreTasksClientGameTest",
 			"soundsculptor.gametest.M8StressClientGameTest",
 			"soundsculptor.gametest.SetUsageClientGameTest",
 			"soundsculptor.gametest.SoundSetsTabClientGameTest",
