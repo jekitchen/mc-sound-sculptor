@@ -46,6 +46,8 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 	private int rowsCounted;
 	/** The content width the rows' heights were worked out for; a different width works them out again. */
 	private int heightsWidth = -1;
+	/** Whether rows' text changes while shown (a live readout), so their heights are checked every frame. */
+	private boolean liveText;
 
 	public SculptList(int width, int height, Component label) {
 		super(Minecraft.getInstance(), width, height, 0, ROW_HEIGHT);
@@ -145,6 +147,23 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		rowsCounted = 0;
 	}
 
+	/**
+	 * For a list whose rows' text changes while shown (a live readout): read-only rows wrap their text, so a longer
+	 * number can need another line. Their heights are then checked every frame; keep such lists short.
+	 */
+	public void setLiveText(boolean live) {
+		this.liveText = live;
+	}
+
+	private boolean heightsChanged() {
+		for (Row row : children()) {
+			if (row.heightFor(heightsWidth) != row.getHeight()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** Works the rows' heights out again after the list's width changed, keeping the scroll position. */
 	private void refreshHeights() {
 		heightsWidth = contentWidth();
@@ -175,7 +194,7 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 	@Override
 	public void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
 		rowsDrawnThisFrame = 0;
-		if (contentWidth() != heightsWidth && !children().isEmpty()) {
+		if (!children().isEmpty() && (contentWidth() != heightsWidth || liveText && heightsChanged())) {
 			refreshHeights();
 		}
 		super.extractWidgetRenderState(g, mouseX, mouseY, partialTick);
@@ -368,6 +387,8 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		private int swatch = -1;
 		/** Shown when the mouse is over the row's text, or {@code null}. */
 		private Component tooltip;
+		/** The height a held list keeps this row at ({@link #keepHeight}); 0 when it sizes itself. */
+		private int keptHeight;
 
 		public Row(Object key, List<Column> columns, List<SculptButton> buttons) {
 			this.key = key;
@@ -499,15 +520,16 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 				int textY = severalLines
 						? y + 1 + line * LINE_STEP
 						: y + (height - font.lineHeight) / 2 + 1;
-				int color = line == 0 ? Theme.TEXT : Theme.TEXT_DIM;
+				// A column keeps the look of the line it belongs on (main or second) when it wraps or moves down.
+				int color = placed.column().line() == 0 ? Theme.TEXT : Theme.TEXT_DIM;
 				int cx = placed.x();
-				String text = placed.column().text().get();
+				String text = placed.text();
 				boolean cut = Draw.truncatedText(g, font, text, cx, textY, placed.width(), color);
 				boolean over = hovered && !columnTooltipShown && mouseX >= cx && mouseX < cx + placed.width()
 						&& mouseY >= textY && mouseY < textY + font.lineHeight;
 				if (over && cut) {
 					g.setTooltipForNextFrame(font, Tooltip.splitTooltip(Minecraft.getInstance(),
-							withHidden(Component.literal(text), hiddenText)), mouseX, mouseY);
+							withHidden(Component.literal(placed.column().text().get()), hiddenText)), mouseX, mouseY);
 					columnTooltipShown = true;
 				} else if (over && placed.column().hint() != null) {
 					g.setTooltipForNextFrame(font, Tooltip.splitTooltip(Minecraft.getInstance(),
@@ -516,7 +538,10 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 				}
 			}
 			Component rowTooltip = tooltip == null ? hiddenText : withHidden(tooltip, hiddenText);
-			if (rowTooltip != null && !columnTooltipShown && hovered && mouseX >= layout.textLeft() && mouseX < layout.textRight()) {
+			// Over the text: left of the buttons, or above them when they are on their own line.
+			boolean overText = mouseX >= layout.textLeft() && mouseX < layout.textRight()
+					&& (!layout.buttonsBelow() || mouseY < y + layout.buttonsTop());
+			if (rowTooltip != null && !columnTooltipShown && hovered && overText) {
 				g.setTooltipForNextFrame(font, Tooltip.splitTooltip(Minecraft.getInstance(), rowTooltip), mouseX, mouseY);
 			}
 		}
@@ -543,14 +568,30 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		/**
 		 * How tall this row is in a list whose rows are {@code contentWidth} wide inside: {@link #ROW_HEIGHT} for up to two
 		 * lines beside the buttons, a line taller for each line past two, and room for the buttons' own line when they go
-		 * under the text.
+		 * under the text. A row {@linkplain #keepHeight keeping a height} has that height.
 		 */
 		int heightFor(int contentWidth) {
-			Layout layout = layout(0, contentWidth);
+			return keptHeight > 0 ? keptHeight : heightOf(layout(0, contentWidth));
+		}
+
+		private static int heightOf(Layout layout) {
 			if (layout.buttonsBelow()) {
 				return 4 + layout.buttonsTop() + Theme.WIDGET_HEIGHT;
 			}
 			return ROW_HEIGHT + Math.max(0, layout.lines() - 2) * EXTRA_LINE_HEIGHT;
+		}
+
+		/**
+		 * Keeps this row at {@code height} px, or lets it size itself again with 0. A held list (FR-1.3) gives a rebuilt
+		 * row the height of the row it replaces, so the rows under it do not move while the player points at them; text
+		 * that needs more lines than the height has is hidden until the hold ends, and stays in the tooltip and narration.
+		 */
+		public void keepHeight(int height) {
+			this.keptHeight = Math.max(0, height);
+		}
+
+		public int keptHeight() {
+			return keptHeight;
 		}
 
 		/**
@@ -564,19 +605,25 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		 * by line, the last column of a line that still does not fit (never its rest column or its only column) moves to
 		 * the end of the next line, adding a line when there is none. If a line still does not fit (its rest column alone
 		 * is too narrow beside the buttons), the buttons go on a line of their own under the text and the text is laid out
-		 * again across the row's whole width. Drawing and the layout check (A-3) both use this, so the check sees what the
-		 * player sees.
+		 * again across the row's whole width. A read-only row (no buttons) wraps a rest column too long for its line onto
+		 * the lines under it instead of cutting it. Drawing and the layout check (A-3) both use this, so the check sees
+		 * what the player sees.
 		 */
 		public Layout layout(int x, int width) {
-			Layout inline = arrange(x, width, false);
-			return inline.fits() || buttons.isEmpty() ? inline : arrange(x, width, true);
+			Layout inline = arrange(x, width, false, Integer.MAX_VALUE);
+			Layout chosen = inline.fits() || buttons.isEmpty() ? inline : arrange(x, width, true, Integer.MAX_VALUE);
+			if (keptHeight > 0 && heightOf(chosen) > keptHeight) {
+				int lines = keptHeight <= ROW_HEIGHT ? 2 : 2 + (keptHeight - ROW_HEIGHT) / EXTRA_LINE_HEIGHT;
+				chosen = arrange(x, width, false, lines);
+			}
+			return chosen;
 		}
 
 		/**
 		 * {@link #layout} with the buttons on the right of the text ({@code below} false) or on a line of their own under
-		 * it, right-aligned, so the text gets the row's whole width.
+		 * it, right-aligned, so the text gets the row's whole width. Columns on lines past {@code maxLines} are hidden.
 		 */
-		private Layout arrange(int x, int width, boolean below) {
+		private Layout arrange(int x, int width, boolean below, int maxLines) {
 			int buttonsWidth = 0;
 			for (SculptButton button : buttons) {
 				buttonsWidth += button.getWidth() + Theme.GAP;
@@ -623,8 +670,9 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 			boolean fits = allFit(lines, room);
 
 			List<Placed> placed = new ArrayList<>(columns.size());
-			for (int l = 0; l < lines.size(); l++) {
-				List<Integer> line = lines.get(l);
+			// The line each placed part goes on: one more for each extra line a wrapped read-only column takes.
+			int drawnLine = 0;
+			for (List<Integer> line : lines) {
 				int[] widths = new int[line.size()];
 				int fixed = 0;
 				boolean hasRest = false;
@@ -645,18 +693,74 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 					}
 				}
 				int cx = textLeft;
+				int extraLines = 0;
 				for (int k = 0; k < line.size(); k++) {
 					Column column = columns.get(line.get(k));
 					int columnWidth = column.width() > 0 ? widths[k] : Math.max(0, room - fixed);
 					columnWidth = Math.min(columnWidth, Math.max(0, textRight - cx));
-					placed.add(new Placed(column, l, cx, columnWidth));
+					List<String> pieces = buttons.isEmpty() && column.width() == 0 ? wrap(column.text().get(), columnWidth) : null;
+					if (pieces == null || pieces.size() < 2) {
+						placed.add(new Placed(column, drawnLine, cx, columnWidth, null));
+					} else {
+						for (int p = 0; p < pieces.size(); p++) {
+							placed.add(new Placed(column, drawnLine + p, cx, columnWidth, pieces.get(p)));
+						}
+						extraLines = Math.max(extraLines, pieces.size() - 1);
+					}
 					cx += columnWidth + Theme.GAP;
 				}
+				drawnLine += 1 + extraLines;
 			}
-			int buttonsTop = below ? 1 + lines.size() * LINE_STEP + 1 : -1;
-			return new Layout(textLeft, textRight, List.copyOf(buttonX), buttonsTop, List.copyOf(placed), lines.size(),
+			int lineCount = drawnLine;
+			if (lineCount > maxLines) {
+				List<Placed> shown = new ArrayList<>(placed.size());
+				for (Placed p : placed) {
+					if (p.line() < maxLines) {
+						shown.add(p);
+					} else if (!hidden.contains(p.column())) {
+						hidden.add(p.column());
+					}
+				}
+				placed = shown;
+				lineCount = maxLines;
+			}
+			int buttonsTop = below ? 1 + lineCount * LINE_STEP + 1 : -1;
+			return new Layout(textLeft, textRight, List.copyOf(buttonX), buttonsTop, List.copyOf(placed), lineCount,
 					List.copyOf(hidden), fits);
 		}
+
+		/** {@code text} broken into lines of at most {@code width} px, by the font (one line when it fits). */
+		private static List<String> wrap(String text, int width) {
+			if (width <= 0 || measure.width(text) <= width) {
+				return null;
+			}
+			List<String> pieces = measure.split(text, width);
+			return pieces.isEmpty() ? null : pieces;
+		}
+
+		/** How text is measured and broken into lines: the game's font; tests use a fixed width per character. */
+		interface Measure {
+			int width(String text);
+
+			List<String> split(String text, int width);
+		}
+
+		static Measure measure = new Measure() {
+			@Override
+			public int width(String text) {
+				return Minecraft.getInstance().font.width(text);
+			}
+
+			@Override
+			public List<String> split(String text, int width) {
+				List<String> pieces = new ArrayList<>();
+				for (net.minecraft.network.chat.FormattedText line : Minecraft.getInstance().font.getSplitter().splitLines(text, width,
+						net.minecraft.network.chat.Style.EMPTY)) {
+					pieces.add(line.getString());
+				}
+				return pieces;
+			}
+		};
 
 		private boolean allFit(List<List<Integer>> lines, int room) {
 			for (List<Integer> line : lines) {
@@ -719,8 +823,16 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 			}
 		}
 
-		/** A text column as placed: its line, its left edge and the width it gets (less than it asks for in a narrow row). */
-		public record Placed(Column column, int line, int x, int width) {
+		/**
+		 * A text column as placed: its line, its left edge and the width it gets (less than it asks for in a narrow row).
+		 *
+		 * @param piece the part of the column's text on this line, when a read-only row wraps it; {@code null} for all of it
+		 */
+		public record Placed(Column column, int line, int x, int width, String piece) {
+			/** The text drawn here. */
+			public String text() {
+				return piece != null ? piece : column.text().get();
+			}
 		}
 
 		/** The list this row is in (set when the row is added), for the drawn-rows counter. */

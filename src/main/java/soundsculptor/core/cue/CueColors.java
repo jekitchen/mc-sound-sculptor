@@ -20,7 +20,25 @@ public final class CueColors {
 			new Palette.Swatch("yellow", 0xF0E442),
 			new Palette.Swatch("orange", 0xE69F00));
 
+	/**
+	 * Colors Settings offered before 1.0 and no longer does (A-3: under 4.5:1 on the cue box over a bright sky). A player
+	 * who chose one keeps it; Settings names it with "(low contrast)" rather than as a custom color.
+	 */
+	public static final List<Palette.Swatch> WITHDRAWN = List.of(
+			new Palette.Swatch("reddish_purple", 0xCC79A7),
+			new Palette.Swatch("bluish_green", 0x009E73));
+
 	private CueColors() {
+	}
+
+	/** The withdrawn color with this RGB, or {@code null}. */
+	public static Palette.Swatch withdrawn(int rgb) {
+		for (Palette.Swatch swatch : WITHDRAWN) {
+			if (swatch.rgb() == (rgb & 0xFFFFFF)) {
+				return swatch;
+			}
+		}
+		return null;
 	}
 
 	/** The preset with this color, or {@code null} for a custom color. */

@@ -157,6 +157,7 @@
 	"soundsculptor.settings.cue_color": "Cue color",
 	"soundsculptor.settings.cue_color.tip": "The text color of muted-sound cues. Every cue also starts with \"(muted)\", so you do not need the color to tell cues from subtitles.",
 	"soundsculptor.settings.cue_color.custom": "Custom (%s)",
+	"soundsculptor.settings.cue_color.low_contrast": "%s (low contrast)",
 	"soundsculptor.settings.cue_scale": "Cue text size",
 	"soundsculptor.settings.reduced_motion": "Reduced motion",
 	"soundsculptor.settings.reduced_motion.tip": "Messages at the bottom of the screen appear at once instead of sliding in.",

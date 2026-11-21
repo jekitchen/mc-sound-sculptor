@@ -53,6 +53,32 @@ class SetNamesTest {
 	}
 
 	@Test
+	void aNumberedPatternWithoutTheNumberFallsBackToEnglish() {
+		// A translation that leaves out %2$s would give the same name at every try.
+		SetNames.use(new SetNames.Forms() {
+			@Override
+			public String copy(String name) {
+				return name + " (copie)";
+			}
+
+			@Override
+			public String imported(String name) {
+				return name + " (importé)";
+			}
+
+			@Override
+			public String numbered(String name, int n) {
+				return name + " (encore)";
+			}
+		});
+		SetLibrary lib = SetLibrary.EMPTY.put(new SoundSet("a", "Farm", List.of())).put(new SoundSet("b", "Farm (encore)", List.of()));
+		// The third try would repeat the second, so the English pattern takes over.
+		assertEquals("Farm (3)", lib.uniqueName("Farm", null));
+		lib = lib.put(new SoundSet("c", "Farm (3)", List.of()));
+		assertEquals("Farm (4)", lib.uniqueName("Farm", null));
+	}
+
+	@Test
 	void aLongNameIsCutSoTheFormFits() {
 		SetNames.use(NAME_LAST);
 		String name = "x".repeat(SoundSet.MAX_NAME_LENGTH);

@@ -97,6 +97,9 @@ public final class SetLibrary {
 	 * {@code exceptId} (the one being renamed) does not count as a clash. When the name grows, {@code wanted} is cut
 	 * short so the result still fits in {@link SoundSet#MAX_NAME_LENGTH} characters.
 	 */
+	/** More numbered tries than any library needs ({@link #uniqueName} stops there whatever the language file says). */
+	static final int MAX_NAME_TRIES = 10_000;
+
 	public String uniqueName(String wanted, String exceptId) {
 		return uniqueName(wanted, exceptId, null, Set.of());
 	}
@@ -117,9 +120,18 @@ public final class SetLibrary {
 		UnaryOperator<String> start = first == null ? UnaryOperator.identity() : first;
 		String candidate = fitted(wanted, start);
 		SetNames.Forms forms = SetNames.forms();
-		for (int n = 2; clashes(candidate, exceptId) || taken.contains(key(candidate)); n++) {
+		// A library holds at most a few hundred sets, so a free number is always found well before this many tries.
+		boolean english = false;
+		for (int n = 2; (clashes(candidate, exceptId) || taken.contains(key(candidate))) && n < MAX_NAME_TRIES; n++) {
 			int number = n;
-			candidate = fitted(wanted, name -> forms.numbered(start.apply(name), number));
+			SetNames.Forms use = english ? SetNames.ENGLISH : forms;
+			String next = fitted(wanted, name -> use.numbered(start.apply(name), number));
+			if (!english && next.equals(candidate)) {
+				// The translated pattern leaves the number out, so every try would be the same name: use the English one.
+				english = true;
+				next = fitted(wanted, name -> SetNames.ENGLISH.numbered(start.apply(name), number));
+			}
+			candidate = next;
 		}
 		return candidate;
 	}

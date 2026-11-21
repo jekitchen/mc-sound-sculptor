@@ -24,6 +24,7 @@ public class SculptButton extends AbstractButton {
 	/** The tooltip's own text, kept so a list row can add text it hides at narrow widths ({@link #tooltipExtra}). */
 	private Component tooltipText;
 	private Component tooltipExtra;
+	private Component tooltipNarration;
 
 	protected SculptButton(int width, int height, Component label, Identifier icon, Runnable onPress) {
 		super(0, 0, width, height, label);
@@ -67,7 +68,15 @@ public class SculptButton extends AbstractButton {
 
 	/** Sets the tooltip (shown on hover, and at once on keyboard focus). */
 	public SculptButton tooltipText(Component text) {
+		return tooltipText(text, null);
+	}
+
+	/**
+	 * Sets the tooltip, and what the narrator reads for it when that differs from its text ({@code null}: the text).
+	 */
+	public SculptButton tooltipText(Component text, Component narration) {
 		this.tooltipText = text;
+		this.tooltipNarration = narration;
 		applyTooltip();
 		return this;
 	}
@@ -85,12 +94,15 @@ public class SculptButton extends AbstractButton {
 	}
 
 	private void applyTooltip() {
-		if (tooltipExtra == null) {
-			setTooltip(tooltipText == null ? null : Tooltip.create(tooltipText));
-		} else if (tooltipText == null) {
-			setTooltip(Tooltip.create(tooltipExtra));
+		Component text = tooltipExtra == null ? tooltipText
+				: tooltipText == null ? tooltipExtra : Component.empty().append(tooltipText).append("\n").append(tooltipExtra);
+		if (text == null) {
+			setTooltip(null);
+		} else if (tooltipNarration == null) {
+			setTooltip(Tooltip.create(text));
 		} else {
-			setTooltip(Tooltip.create(Component.empty().append(tooltipText).append("\n").append(tooltipExtra)));
+			setTooltip(Tooltip.create(text, tooltipExtra == null ? tooltipNarration
+					: Component.empty().append(tooltipNarration).append(" ").append(tooltipExtra)));
 		}
 	}
 

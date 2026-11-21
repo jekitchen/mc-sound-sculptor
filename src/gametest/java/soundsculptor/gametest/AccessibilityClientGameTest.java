@@ -464,6 +464,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		List<String> pseudo;
 		try {
 			pseudo = layoutProblems(context, "pseudo");
+			heldRowsKeepTheirHeight(context);
 		} finally {
 			context.runOnClient(mc -> Language.inject(((PseudoLanguage) Language.getInstance()).english));
 		}
@@ -761,7 +762,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			}
 			for (int i = 0; i < layout.columns().size(); i++) {
 				SculptList.Row.Placed placed = layout.columns().get(i);
-				String text = placed.column().text().get();
+				String text = placed.text();
 				int asked = placed.column().width();
 				// A shrinking column (a zone's name) may be cut, and may give way down to its minimum.
 				boolean shrinks = placed.column().shrinks();
@@ -773,6 +774,9 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 					found.putIfAbsent("cut " + i, in + ": column " + i + " cut off \"" + text + "\"");
 				} else if (asked == 0 && cut && placed.width() < SculptList.Row.REST_MIN_WIDTH) {
 					found.putIfAbsent("narrow " + i, in + ": column " + i + " only " + placed.width() + " px for \"" + text + "\"");
+				} else if (cut && buttons.isEmpty()) {
+					// A read-only row (Diagnostics, search help) has no button whose tooltip could show the rest: it wraps.
+					found.putIfAbsent("read-only cut " + i, in + ": read-only row cuts \"" + text + "\" (row " + rowName + ")");
 				}
 			}
 		}
@@ -921,6 +925,78 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			check(screen.toast().slideOffset() > 0, "without it a new toast slides in");
 		});
 		context.setScreen(() -> null);
+	}
+
+	/**
+	 * FR-1.3 with the narrow-row layout: while the player points at the Sounds list it is held, and a row rebuilt with more
+	 * columns (a sound heard for the first time gains its recently played columns, which in the pseudo-language at
+	 * 854 × 480 need a third line) keeps its height, so the row under the pointer stays where it is. Once the hold ends
+	 * the row takes its full height.
+	 */
+	private static void heldRowsKeepTheirHeight(ClientGameTestContext context) {
+		context.getInput().resizeWindow(854, 480);
+		context.waitTicks(2);
+		context.runOnClient(mc -> {
+			mc.options.guiScale().set(2);
+			mc.resizeGui();
+			RecentLog.get().sounds().clear();
+			SoundsPanel.resetRememberedState();
+			SoundSculptorScreen screen = new SoundSculptorScreen();
+			mc.gui.setScreen(screen);
+			screen.selectTab(SoundSculptorScreen.TAB_SOUNDS);
+			screen.sounds().setRecentOnly(false);
+			screen.sounds().searchField.setValue("minecraft:entity.cow.");
+		});
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		List<Object> keys = context.computeOnClient(mc -> heldList(mc).children().stream().map(SculptList.Row::key).toList());
+		// The list is short here (the toolbar wraps in the pseudo-language): the first row is rebuilt, the second is pointed at.
+		check(keys.size() >= 2, "the cow search lists at least 2 sounds, was " + keys);
+		String rebuilt = (String) keys.get(0);
+		Object pointed = keys.get(1);
+		int heightBefore = context.computeOnClient(mc -> heldList(mc).findRow(rebuilt).getHeight());
+		int pointedY = context.computeOnClient(mc -> heldList(mc).findRow(pointed).getY());
+		double scale = context.computeOnClient(mc -> mc.getWindow().getGuiScale());
+		int pointX = context.computeOnClient(mc -> heldList(mc).getX() + 20);
+		int pointHeight = context.computeOnClient(mc -> heldList(mc).findRow(pointed).getHeight());
+		check(context.computeOnClient(mc -> pointedY + pointHeight / 2 < heldList(mc).getBottom()), "the second row is in view");
+		context.getInput().setCursorPos(pointX * scale, (pointedY + pointHeight / 2.0) * scale);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		check(context.computeOnClient(mc -> ((SoundSculptorScreen) mc.gui.screen()).sounds().isHeld()), "pointing at the second row holds the list: " + context.computeOnClient(mc -> "hovered " + heldList(mc).isHovered()
+				+ " mouse " + mc.mouseHandler.xpos() + "," + mc.mouseHandler.ypos() + " list " + heldList(mc).getX() + "," + heldList(mc).getY()
+				+ " " + heldList(mc).getWidth() + "x" + heldList(mc).getHeight() + " row y " + pointedY + " scale " + scale + " keys " + keys));
+
+		context.runOnClient(mc -> RecentLog.get().sounds().record(rebuilt, "neutral", true, 3.0, true, PlayStatus.PLAYING,
+				"Very long zone name for the bee farm by the river", Util.getMillis()));
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		context.runOnClient(mc -> {
+			SculptList list = heldList(mc);
+			check(((SoundSculptorScreen) mc.gui.screen()).sounds().isHeld(), "still held");
+			SculptList.Row row = list.findRow(rebuilt);
+			check(row.columnTexts().stream().anyMatch(t -> t.contains("×1")), "the first row now shows its play, was " + row.columnTexts());
+			check(row.getHeight() == heightBefore, "the first row keeps its height while held: " + heightBefore + " → " + row.getHeight());
+			check(list.findRow(pointed).getY() == pointedY, "the row under the pointer stays at y " + pointedY + ", now " + list.findRow(pointed).getY());
+		});
+		context.takeScreenshot("a11y-held-row-keeps-height");
+
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		int heightAfter = context.computeOnClient(mc -> heldList(mc).findRow(rebuilt).getHeight());
+		check(heightAfter > heightBefore, "released, the rebuilt row takes the taller height it needs: " + heightBefore + " → " + heightAfter);
+		context.runOnClient(mc -> {
+			mc.gui.setScreen(null);
+			RecentLog.get().sounds().clear();
+			SoundsPanel.resetRememberedState();
+		});
+		recordRecentPlaysOnClient(context);
+	}
+
+	private static SculptList heldList(Minecraft mc) {
+		return ((SoundSculptorScreen) mc.gui.screen()).sounds().list;
+	}
+
+	private static void recordRecentPlaysOnClient(ClientGameTestContext context) {
+		context.runOnClient(mc -> recordRecentPlays());
 	}
 
 	/** Controls with nothing to read: an empty label, including list row buttons. */

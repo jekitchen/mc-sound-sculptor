@@ -74,11 +74,14 @@ Work toward 1.0, after the alpha. Not released yet.
 - **Lists fit small windows and longer languages:** a list row that does not fit first hides less important text (a
   profile's world key, a zone's size), then moves text onto another line, and puts its buttons on their own line when
   even its name would be cut. Hidden text is in the row's tooltip, in its buttons' tooltips when you Tab to them, and
-  in what the narrator reads. On/Off and other states are never hidden.
-- **Settings › Diagnostics** scrolls instead of running past the bottom of a small window, with Copy report at the top.
+  in what the narrator reads. On/Off and other states are never hidden. Rows without buttons wrap long text instead.
+  While the Sounds list holds still under the pointer, rows keep their height too.
+- **Settings › Diagnostics** scrolls instead of running past the bottom of a small window, with Copy report at the top;
+  long lines wrap.
 - **Easier to read over a bright sky:** every screen now darkens the world behind it more, the highlight on the row
   with keyboard focus is softer, and the cue colors bluish green and reddish purple are no longer offered, so all text
-  keeps a contrast of at least 4.5:1. A color you already chose is kept.
+  keeps a contrast of at least 4.5:1. A color you already chose is kept, shown as "Bluish green (low contrast)" or
+  "Reddish purple (low contrast)".
 - **Ready for translation:** every text comes from the language file, including percentages, lists of names, the "Off"
   in a zone's row and the names "Farm (copy)" and "Farm (imported)", and none is built from sentence pieces, so a
   translation can put words in its own order.

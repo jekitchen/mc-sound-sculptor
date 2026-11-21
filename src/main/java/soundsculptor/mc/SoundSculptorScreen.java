@@ -315,7 +315,13 @@ public final class SoundSculptorScreen extends SculptScreen {
 	/** A cue color's name ("Light blue-gray"), or "Custom (#123456)" for a color set outside the game. */
 	private static Component cueColorName(int rgb) {
 		Palette.Swatch preset = CueColors.preset(rgb);
-		return preset != null ? Component.translatable("soundsculptor.color." + preset.id())
+		if (preset != null) {
+			return Component.translatable("soundsculptor.color." + preset.id());
+		}
+		// A color Settings no longer offers, chosen before it was withdrawn: its name, marked low contrast.
+		Palette.Swatch withdrawn = CueColors.withdrawn(rgb);
+		return withdrawn != null
+				? Component.translatable("soundsculptor.settings.cue_color.low_contrast", Component.translatable("soundsculptor.color." + withdrawn.id()))
 				: Component.translatable("soundsculptor.settings.cue_color.custom", Palette.formatHex(rgb));
 	}
 
@@ -435,7 +441,9 @@ public final class SoundSculptorScreen extends SculptScreen {
 			Supplier<Component> line = lines.get(i);
 			rows.add(new SculptList.Row(i, List.of(new SculptList.Row.Column(() -> line.get().getString(), 0)), List.of()));
 		}
-		// Placed first, so the rows are laid out where the list is.
+		// Placed first, so the rows are laid out where the list is. Its numbers change every tick, and a line that grows
+		// past the width wraps, so the rows' heights are kept up to date.
+		diagnosticsList.setLiveText(true);
 		body.fill(diagnosticsList);
 		diagnosticsList.setRows(rows);
 	}
