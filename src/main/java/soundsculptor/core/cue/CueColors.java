@@ -2,27 +2,26 @@ package soundsculptor.core.cue;
 
 import java.util.List;
 
-import soundsculptor.core.settings.AppSettings;
 import soundsculptor.core.ui.Palette;
 
 /**
- * The cue text colors offered in Settings (PRD FR-7.3, A-7): the default light blue-gray and the light Okabe–Ito
+ * The cue text colors offered in the Cues pop-up (PRD FR-7.3, A-7): the default light blue-gray and the light Okabe–Ito
  * colors, each with a name ("soundsculptor.color.&lt;id&gt;"). There is no free hex entry; a color set some other way
- * (an edited settings file) is kept and shown as a custom color. Each one keeps at least 4.5:1 contrast on the cue
+ * (an edited profile file) is kept and shown as a custom color. Each one keeps at least 4.5:1 contrast on the cue
  * box (vanilla's 80% black subtitle background) even over a white sky (A-3; bluish green and reddish purple did not,
  * so they are not offered), and none is vanilla's white, so a cue never looks like a subtitle even in color. Pure Java.
  */
 public final class CueColors {
 	/** The default first, then the Okabe–Ito colors that read well on a dark background. */
 	public static final List<Palette.Swatch> PRESETS = List.of(
-			new Palette.Swatch("light_blue_gray", AppSettings.DEFAULT_CUE_COLOR),
+			new Palette.Swatch("light_blue_gray", PlaceCues.DEFAULT_COLOR),
 			new Palette.Swatch("sky_blue", 0x56B4E9),
 			new Palette.Swatch("yellow", 0xF0E442),
 			new Palette.Swatch("orange", 0xE69F00));
 
 	/**
-	 * Colors Settings offered before 1.0 and no longer does (A-3: under 4.5:1 on the cue box over a bright sky). A player
-	 * who chose one keeps it; Settings names it with "(low contrast)" rather than as a custom color.
+	 * Colors offered before 1.0 and no longer (A-3: under 4.5:1 on the cue box over a bright sky). A player
+	 * who chose one keeps it; the pop-up names it with "(low contrast)" rather than as a custom color.
 	 */
 	public static final List<Palette.Swatch> WITHDRAWN = List.of(
 			new Palette.Swatch("reddish_purple", 0xCC79A7),
@@ -52,7 +51,7 @@ public final class CueColors {
 	}
 
 	/**
-	 * The colors the Settings dropdown offers: the presets, and the current color at the end when it is not one of
+	 * The colors the Cues pop-up's dropdown offers: the presets, and the current color at the end when it is not one of
 	 * them, so the dropdown never shows a color the player does not have.
 	 */
 	public static List<Integer> choices(int current) {

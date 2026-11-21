@@ -6,15 +6,14 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Profile settings (PRD FR-11: cue defaults, outline mode, show distance). Keybinds and UI preferences
- * are app-wide and live elsewhere.
+ * Profile settings (PRD FR-11: outline mode, show distance). Keybinds and UI preferences are app-wide and live
+ * elsewhere; cue settings belong to the places, Everywhere and each zone (FR-7, decided 2026-11-21).
  *
  * @param showDistance FR-1.4: show the distance band in the recently played list (default on)
- * @param cueDefault   FR-7.6: the Cue setting new mute rules start with (default on)
  * @param outlines     FR-10.1: "Show zone outlines" (default only while editing)
  */
-public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineMode outlines) {
-	public static final ProfileSettings DEFAULTS = new ProfileSettings(true, true, OutlineMode.DEFAULT);
+public record ProfileSettings(boolean showDistance, OutlineMode outlines) {
+	public static final ProfileSettings DEFAULTS = new ProfileSettings(true, OutlineMode.DEFAULT);
 
 	public ProfileSettings {
 		Objects.requireNonNull(outlines, "outlines");
@@ -22,26 +21,21 @@ public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineM
 
 	/** Only "show distance" set; every other setting at its default. */
 	public ProfileSettings(boolean showDistance) {
-		this(showDistance, true, OutlineMode.DEFAULT);
+		this(showDistance, OutlineMode.DEFAULT);
 	}
 
 	public ProfileSettings withShowDistance(boolean value) {
-		return new ProfileSettings(value, cueDefault, outlines);
-	}
-
-	public ProfileSettings withCueDefault(boolean value) {
-		return new ProfileSettings(showDistance, value, outlines);
+		return new ProfileSettings(value, outlines);
 	}
 
 	public ProfileSettings withOutlines(OutlineMode value) {
-		return new ProfileSettings(showDistance, cueDefault, value);
+		return new ProfileSettings(showDistance, value);
 	}
 
 	/** Whether this value is at its default, so its reset button has nothing to do. */
 	public boolean isDefault(ProfileSetting setting) {
 		return switch (setting) {
 			case SHOW_DISTANCE -> showDistance == DEFAULTS.showDistance;
-			case CUE_DEFAULT -> cueDefault == DEFAULTS.cueDefault;
 			case OUTLINES -> outlines == DEFAULTS.outlines;
 		};
 	}
@@ -61,7 +55,6 @@ public record ProfileSettings(boolean showDistance, boolean cueDefault, OutlineM
 	public ProfileSettings reset(ProfileSetting setting) {
 		return switch (setting) {
 			case SHOW_DISTANCE -> withShowDistance(DEFAULTS.showDistance);
-			case CUE_DEFAULT -> withCueDefault(DEFAULTS.cueDefault);
 			case OUTLINES -> withOutlines(DEFAULTS.outlines);
 		};
 	}

@@ -121,7 +121,7 @@ public final class EntryEditorScreen extends SculptScreen {
 		this.isNew = isNew;
 		this.set = set;
 		// FR-7.6: Mute set to Muted while Cue is Unchanged also sets Cue, to the profile's default.
-		this.draft = draft.useCueDefault(SoundSculptorSettings.cueDefault());
+		this.draft = draft.useCueDefault(SoundSculptorSettings.newMutesGetCue());
 		this.subtitle = subtitle;
 		this.quickPlace = quickPlace;
 		updatePreview();

@@ -14,6 +14,10 @@ final class ProfileText {
 	static final String PLACE_ZONE = "soundsculptor.profile.place.zone";
 	static final String PLACE_ATTACHMENT = "soundsculptor.profile.place.attachment";
 	static final String PLACE_QUICK = "soundsculptor.profile.place.quick";
+	/** A place's cue settings ("Zone 2, cue settings"). */
+	static final String PLACE_CUES = "soundsculptor.profile.place.cues";
+	/** A field inside an object field ("Everywhere, cue settings, field boxOffset"). */
+	static final String FIELD_IN = "soundsculptor.profile.place.field";
 
 	// A field's problem: "%1$s, field %2$s: %3$s." with a place, "Field %1$s: %2$s." at the top of the file.
 	static final String FIELD = "soundsculptor.profile.problem.field";
@@ -65,6 +69,10 @@ final class ProfileText {
 	// Unknown fields are ignored with a warning (FR-11.6).
 	static final String UNKNOWN_FIELD = "soundsculptor.profile.warning.unknown_field";
 	static final String UNKNOWN_FIELD_AT = "soundsculptor.profile.warning.unknown_field_at";
+	/** A cue setting that cannot be used is ignored (left Unchanged) with a warning, not refused (2026-11-21). */
+	static final String IGNORED = "soundsculptor.profile.warning.ignored";
+	static final String OFFSET_PART_MISSING = "soundsculptor.profile.problem.value.offset_part_missing";
+	static final String NOT_WHOLE = "soundsculptor.profile.problem.value.not_whole";
 
 	// Import and rename (FR-11.3, FR-11.5).
 	static final String IMPORT_TOO_MANY_ZONES = "soundsculptor.profile.problem.import_too_many_zones";

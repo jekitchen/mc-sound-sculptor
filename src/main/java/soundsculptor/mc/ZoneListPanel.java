@@ -22,7 +22,8 @@ import net.minecraft.resources.Identifier;
 
 /**
  * The Zones tab (PRD 6.1): "New zone" and the list of places. The first row is always Everywhere (FR-8.10): it has no
- * outline, color, shape or position and cannot be edited, moved or deleted, so its only control is Sound Sets. Then
+ * outline, color, shape or position and cannot be edited, moved or deleted, so its only controls are Sound Sets and
+ * Cues… (its cue settings, FR-7, the base every zone's Unchanged settings pass on to). Then
  * each zone's row shows its color, name, shape and mode, where it is ("Here", "120 blocks away", "Other world") and
  * its Sound Set count, with On/Off, Edit, Sound Sets, Move up/down and Delete. Sound Sets opens the place's attached
  * sets (FR-8.6). List order is the last tie-break between zones (FR-9 step 5). On/Off, Move and Delete save at once and
@@ -137,7 +138,27 @@ public final class ZoneListPanel {
 		return new SculptList.Row(PlaceRef.EVERYWHERE, List.of(
 				new SculptList.Row.Column(() -> nameText, 0, 0),
 				new SculptList.Row.Column(() -> scope, 0, 1),
-				new SculptList.Row.Column(() -> sets, setsWidth, 1)), List.of(setsButton(PlaceRef.EVERYWHERE)));
+				new SculptList.Row.Column(() -> sets, setsWidth, 1)), List.of(setsButton(PlaceRef.EVERYWHERE), everywhereCuesButton()));
+	}
+
+	/** "Cues…": Everywhere's cue settings (FR-7), the base every zone's Unchanged settings pass on to. */
+	private SculptButton everywhereCuesButton() {
+		Component label = Component.translatable("soundsculptor.zones.cues");
+		int width = Minecraft.getInstance().font.width(label) + SETS_PADDING;
+		SculptButton[] button = new SculptButton[1];
+		button[0] = Tooltips.describe(SculptButton.text(label, width, () -> openEverywhereCues(button[0])),
+				Component.translatable("soundsculptor.zones.cues.everywhere_tip"));
+		return button[0];
+	}
+
+	/** Opens Everywhere's Cues pop-up; focus goes back to the row's Cues… button when it closes. */
+	public CuePopup openEverywhereCues(SculptButton opener) {
+		return CuePopup.openEverywhere(host, () -> {
+					SculptList.Row row = list == null ? null : list.findRow(PlaceRef.EVERYWHERE);
+					if (row != null && opener != null && row.buttons().contains(opener)) {
+						host.focusPath(list.revealRow(row, row.buttons().indexOf(opener)));
+					}
+				});
 	}
 
 	/**

@@ -132,7 +132,12 @@ public record ImportPlan(Profile result, SetLibrary library, SetImportPlan sets,
 			}
 		}
 		Profile result = new Profile(current.name(), source.settings(), source.everywhere(), zones, colors,
-				current.lastJoined(), current.boostConfirmed());
+				current.lastJoined(), current.boostConfirmed(),
+				// Everywhere's cue settings come with its sets (FR-7, 2026-11-21). A file older than them has only "New mutes
+				// get Cue" (its old cueDefault, which the codec put there); the other five were app-wide then, so this
+				// profile's stay.
+				file.everywhereCuesSaved() ? source.everywhereCues()
+						: current.everywhereCues().withNewMutesGetCue(source.everywhereCues().newMutesGetCue()));
 		return new ImportPlan(result, applied.library(), setPlan, source.everywhere().attached().size(), fixedIn, skipped,
 				applied.library().size() - lib.size(), setPlan.missingRefs(), null);
 	}

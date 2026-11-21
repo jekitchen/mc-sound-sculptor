@@ -32,9 +32,9 @@ public final class ProfileOps {
 
 	/**
 	 * Copies the parts of {@code source} that are not tied to a place (FR-11.2): Everywhere's attachments, its Quick
-	 * changes and settings replace {@code target}'s. Library sets are linked, not copied: both profiles attach the same
-	 * set ID, so later edits to the set show in both. Quick changes are copied as they are (sets are immutable, so the
-	 * copy is independent). An attachment to a set {@code lib} lacks is dropped. Zones are never copied, because they
+	 * changes, its cue settings (FR-7) and the profile settings replace {@code target}'s. Library sets are linked, not
+	 * copied: both profiles attach the same set ID, so later edits to the set show in both. Quick changes are copied as
+	 * they are (sets are immutable, so the copy is independent). An attachment to a set {@code lib} lacks is dropped. Zones are never copied, because they
 	 * belong to their own server; the target's zones, their colors and its display name are kept. A one-time copy:
 	 * profiles are immutable, so later attaching or detaching on either does not reach the other.
 	 */
@@ -42,7 +42,7 @@ public final class ProfileOps {
 		PlaceSets everywhere = source.everywhere().dropMissing(lib.ids());
 		// Last joined and the boost confirm describe this server and this player's choices, so they stay.
 		Profile result = new Profile(target.name(), source.settings(), everywhere, target.zones(), target.zoneColors(),
-				target.lastJoined(), target.boostConfirmed());
+				target.lastJoined(), target.boostConfirmed(), source.everywhereCues());
 		return new Copy(result, everywhere.attached().size());
 	}
 

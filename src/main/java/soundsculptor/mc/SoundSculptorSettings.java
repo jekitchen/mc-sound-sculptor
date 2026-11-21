@@ -2,12 +2,11 @@ package soundsculptor.mc;
 
 import soundsculptor.core.outline.OutlineMode;
 
-/** Player settings (PRD 6.1, Settings tab), stored in the profile file (FR-11). */
+/** Player settings (PRD 6.1, Settings tab), stored in the profile file (FR-11) or the app-wide settings file. */
 public final class SoundSculptorSettings {
 	private SoundSculptorSettings() {
 	}
 
-	/** FR-1.4 "Show distance" (default on): show the distance band in the recently played list. */
 	/** FR-10.1 "Show zone outlines" (a profile setting). */
 	public static OutlineMode outlineMode() {
 		return ProfileManager.profile().settings().outlines();
@@ -32,6 +31,7 @@ public final class SoundSculptorSettings {
 		AppSettingsManager.update(settings -> settings.withOutlinesThroughBlocks(value));
 	}
 
+	/** FR-1.4 "Show distance" (default on): show the distance band in the recently played list. */
 	public static boolean showDistance() {
 		return ProfileManager.profile().settings().showDistance();
 	}
@@ -40,39 +40,11 @@ public final class SoundSculptorSettings {
 		ProfileManager.update(profile -> profile.withSettings(profile.settings().withShowDistance(value)));
 	}
 
-	/** FR-7.7 "Show muted-sound cues" (app-wide; default on). */
-	public static boolean showCues() {
-		return AppSettingsManager.get().showCues();
-	}
-
-	public static void setShowCues(boolean value) {
-		AppSettingsManager.update(settings -> settings.withShowCues(value));
-	}
-
-	/** FR-7.2 "Cue sounds without subtitles" (app-wide; default off): such a cue shows the sound ID. */
-	public static boolean cuesWithoutSubtitles() {
-		return AppSettingsManager.get().cuesWithoutSubtitles();
-	}
-
-	public static void setCuesWithoutSubtitles(boolean value) {
-		AppSettingsManager.update(settings -> settings.withCuesWithoutSubtitles(value));
-	}
-
-	/** FR-7.3, A-7 the cue text color, {@code 0xRRGGBB} (app-wide). */
-	public static int cueColor() {
-		return AppSettingsManager.get().cueColor();
-	}
-
-	public static void setCueColor(int rgb) {
-		AppSettingsManager.update(settings -> settings.withCueColor(rgb));
-	}
-
-	/** FR-7.6 "New mutes get Cue" (a profile setting; default on). */
-	public static boolean cueDefault() {
-		return ProfileManager.profile().settings().cueDefault();
-	}
-
-	public static void setCueDefault(boolean value) {
-		ProfileManager.update(profile -> profile.withSettings(profile.settings().withCueDefault(value)));
+	/**
+	 * FR-7.6 "New mutes get Cue" where the player stands now (a place's cue setting, decided 2026-11-21): the Cue a
+	 * quick Mute, or Mute set in the entry editor, starts with. Read at the moment the mute is made.
+	 */
+	public static boolean newMutesGetCue() {
+		return SoundHook.cuesNow().settings().newMuteRulesCueOn();
 	}
 }

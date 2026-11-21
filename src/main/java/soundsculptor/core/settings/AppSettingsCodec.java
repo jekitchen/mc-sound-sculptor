@@ -1,5 +1,6 @@
 package soundsculptor.core.settings;
 
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.ui.Palette;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -22,6 +23,12 @@ import java.util.Set;
  * older versions load), and a wrong or unknown value uses the default (or the nearest allowed number) and adds a
  * problem in plain words, for the log. Good values are never lost because of one bad one. Only text that is not a
  * JSON object at all cannot be read.
+ *
+ * <p>The cue settings were app-wide until 2026-11-21 and now belong to each profile's places. A file from before still
+ * reads without a problem: its {@code showCues}, {@code cuesWithoutSubtitles}, {@code cueColor}, {@code cueTextScale},
+ * {@code cueOffsetX} and {@code cueOffsetY} become {@link AppSettings#legacyCues()}, which is written back as one
+ * {@code legacyCues} object (with the same field names) so profiles loaded later still start from them; the old fields
+ * themselves are no longer written.
  */
 public final class AppSettingsCodec {
 	public static final int SCHEMA_VERSION = 1;
@@ -29,8 +36,12 @@ public final class AppSettingsCodec {
 	/** Tab names from before the Sounds tab (FR-12.1), read as the Sounds tab. */
 	private static final Set<String> RETIRED_TABS = Set.of("recent", "search");
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+	/** The app-wide cue settings of files saved before 2026-11-21, and the names inside {@code legacyCues}. */
+	private static final List<String> OLD_CUE_FIELDS = List.of("showCues", "cuesWithoutSubtitles", "cueColor", "cueTextScale",
+			"cueOffsetX", "cueOffsetY");
+	private static final String LEGACY_CUES = "legacyCues";
 	private static final Set<String> FIELDS = Set.of("schemaVersion", "showCues", "cuesWithoutSubtitles", "cueColor",
-			"cueTextScale", "cueOffsetX", "cueOffsetY", "outlinesThroughBlocks", "reducedMotion", "lastTab");
+			"cueTextScale", "cueOffsetX", "cueOffsetY", LEGACY_CUES, "outlinesThroughBlocks", "reducedMotion", "lastTab");
 
 	private AppSettingsCodec() {
 	}
@@ -45,15 +56,30 @@ public final class AppSettingsCodec {
 	public static String toJson(AppSettings s) {
 		JsonObject root = new JsonObject();
 		root.addProperty("schemaVersion", SCHEMA_VERSION);
-		root.addProperty("showCues", s.showCues());
-		root.addProperty("cuesWithoutSubtitles", s.cuesWithoutSubtitles());
-		root.addProperty("cueColor", Palette.formatHex(s.cueColor()));
-		root.addProperty("cueTextScale", s.cueTextScale());
-		root.addProperty("cueOffsetX", s.cueOffsetX());
-		root.addProperty("cueOffsetY", s.cueOffsetY());
 		root.addProperty("outlinesThroughBlocks", s.outlinesThroughBlocks());
 		root.addProperty("reducedMotion", s.reducedMotion());
 		root.addProperty("lastTab", s.lastTab());
+		PlaceCues legacy = s.legacyCues();
+		if (legacy != null) {
+			JsonObject cues = new JsonObject();
+			if (legacy.showCues() != null) {
+				cues.addProperty("showCues", legacy.showCues());
+			}
+			if (legacy.withoutSubtitles() != null) {
+				cues.addProperty("cuesWithoutSubtitles", legacy.withoutSubtitles());
+			}
+			if (legacy.color() != null) {
+				cues.addProperty("cueColor", Palette.formatHex(legacy.color()));
+			}
+			if (legacy.textScale() != null) {
+				cues.addProperty("cueTextScale", legacy.textScale());
+			}
+			if (legacy.boxOffset() != null) {
+				cues.addProperty("cueOffsetX", legacy.boxOffset().x());
+				cues.addProperty("cueOffsetY", legacy.boxOffset().y());
+			}
+			root.add(LEGACY_CUES, cues);
+		}
 		return GSON.toJson(root) + "\n";
 	}
 
@@ -77,20 +103,32 @@ public final class AppSettingsCodec {
 			}
 		}
 		AppSettings d = AppSettings.DEFAULTS;
-		boolean showCues = bool(root, "showCues", d.showCues(), problems);
-		boolean withoutSubtitles = bool(root, "cuesWithoutSubtitles", d.cuesWithoutSubtitles(), problems);
-		int color = color(root, "cueColor", d.cueColor(), problems);
-		int scale = number(root, "cueTextScale", d.cueTextScale(), AppSettings.MIN_CUE_SCALE, AppSettings.MAX_CUE_SCALE,
-				problems);
-		int offsetX = number(root, "cueOffsetX", d.cueOffsetX(), -AppSettings.MAX_CUE_OFFSET, AppSettings.MAX_CUE_OFFSET,
-				problems);
-		int offsetY = number(root, "cueOffsetY", d.cueOffsetY(), -AppSettings.MAX_CUE_OFFSET, AppSettings.MAX_CUE_OFFSET,
-				problems);
 		boolean throughBlocks = bool(root, "outlinesThroughBlocks", d.outlinesThroughBlocks(), problems);
 		boolean reducedMotion = bool(root, "reducedMotion", d.reducedMotion(), problems);
 		String lastTab = tab(root, "lastTab", d.lastTab(), problems);
-		return new Read(new AppSettings(showCues, withoutSubtitles, color, scale, offsetX, offsetY, throughBlocks,
-				reducedMotion, lastTab), problems);
+		PlaceCues legacy = null;
+		JsonElement saved = root.get(LEGACY_CUES);
+		if (saved != null && saved.isJsonObject()) {
+			legacy = legacyCues(saved.getAsJsonObject(), problems);
+		} else if (saved != null) {
+			problems.add(LEGACY_CUES + ": " + saved + " is not an object, so it was ignored.");
+		} else if (OLD_CUE_FIELDS.stream().anyMatch(root::has)) {
+			// A file from before 2026-11-21: its cue settings were app-wide.
+			legacy = legacyCues(root, problems);
+		}
+		return new Read(new AppSettings(throughBlocks, reducedMotion, lastTab, legacy), problems);
+	}
+
+	/** The old app-wide cue settings in {@code json}; one that is missing takes its old default. */
+	private static PlaceCues legacyCues(JsonObject json, List<String> problems) {
+		PlaceCues d = PlaceCues.EVERYWHERE_DEFAULTS;
+		boolean showCues = bool(json, "showCues", d.showCues(), problems);
+		boolean withoutSubtitles = bool(json, "cuesWithoutSubtitles", d.withoutSubtitles(), problems);
+		int color = color(json, "cueColor", d.color(), problems);
+		int scale = number(json, "cueTextScale", d.textScale(), PlaceCues.MIN_TEXT_SCALE, PlaceCues.MAX_TEXT_SCALE, problems);
+		int offsetX = number(json, "cueOffsetX", d.boxOffset().x(), -PlaceCues.MAX_OFFSET, PlaceCues.MAX_OFFSET, problems);
+		int offsetY = number(json, "cueOffsetY", d.boxOffset().y(), -PlaceCues.MAX_OFFSET, PlaceCues.MAX_OFFSET, problems);
+		return new PlaceCues(showCues, withoutSubtitles, null, color, scale, new PlaceCues.Offset(offsetX, offsetY));
 	}
 
 	private static void checkVersion(JsonObject root, List<String> problems) {

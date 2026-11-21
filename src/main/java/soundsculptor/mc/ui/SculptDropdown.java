@@ -93,7 +93,8 @@ public class SculptDropdown<T> extends AbstractButton {
 		for (Option option : buttons) {
 			option.setPosition(getX(), y + option.index * Theme.WIDGET_HEIGHT);
 		}
-		screen.openOverlay(getX(), y, getWidth(), listHeight, buttons, current, () -> screen.setFocused(this));
+		// Over a pop-up the dropdown is in (the Cues pop-up), which comes back when the list closes.
+		screen.openNestedOverlay(getX(), y, getWidth(), listHeight, buttons, current, () -> screen.setFocused(this));
 	}
 
 	private void choose(T option) {

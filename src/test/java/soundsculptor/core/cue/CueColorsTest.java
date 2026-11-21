@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashSet;
 import java.util.List;
 
-import soundsculptor.core.settings.AppSettings;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.ui.Palette;
 
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 class CueColorsTest {
 	@Test
 	void theDefaultLightBlueGrayComesFirst() {
-		assertEquals(AppSettings.DEFAULT_CUE_COLOR, CueColors.PRESETS.get(0).rgb());
+		assertEquals(PlaceCues.DEFAULT_COLOR, CueColors.PRESETS.get(0).rgb());
 		assertEquals("light_blue_gray", CueColors.PRESETS.get(0).id());
 	}
 
@@ -55,7 +55,7 @@ class CueColorsTest {
 	@Test
 	void choicesAreThePresetsPlusACustomColor() {
 		List<Integer> presets = CueColors.PRESETS.stream().map(Palette.Swatch::rgb).toList();
-		assertEquals(presets, CueColors.choices(AppSettings.DEFAULT_CUE_COLOR));
+		assertEquals(presets, CueColors.choices(PlaceCues.DEFAULT_COLOR));
 		List<Integer> withCustom = CueColors.choices(0x123456);
 		assertEquals(presets.size() + 1, withCustom.size());
 		assertEquals(0x123456, withCustom.get(withCustom.size() - 1));

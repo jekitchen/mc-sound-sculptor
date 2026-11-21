@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import soundsculptor.core.cue.CueSettings;
+import soundsculptor.core.cue.CueField;
+import soundsculptor.core.cue.CueResolution;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.recent.PlayStatus;
 import soundsculptor.core.sets.Limit;
 import soundsculptor.core.sets.PlaceSets;
@@ -534,10 +536,14 @@ class SoundStartDeciderTest {
 		assertFalse(start(s).cue());
 	}
 
+	/** Everywhere's Quick changes holding {@code global}, Everywhere's cue settings {@code cues}, and these zones. */
+	private void profile(List<SetEntry> global, PlaceCues cues, Zone... zones) {
+		decider.setProfile(new Precedence(quick(global), cues, List.of(zones), SetLibrary.EMPTY));
+	}
+
 	@Test
 	void masterSwitchOffHidesAllCues() {
-		profile(List.of(villagers("g1").withMute(true).withCue(true)));
-		decider.setCueSettings(new CueSettings(false, true, true));
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(false));
 		assertFalse(start(villagerAt(0)).cue());
 	}
 
@@ -548,10 +554,54 @@ class SoundStartDeciderTest {
 		s.hasSubtitle = false;
 		assertFalse(start(s).cue());
 
-		decider.setCueSettings(new CueSettings(true, true, true));
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS.withWithoutSubtitles(true));
 		SoundStartResult r = start(s);
 		assertTrue(r.cue());
 		assertTrue(r.cueUsesSoundId());
+	}
+
+	@Test
+	void aZoneThatTurnsCuesOffHidesThemOnlyWhileYouStandInIt() {
+		// The mute is on Everywhere; the zone sets only "Show muted-sound cues: Off" (decided 2026-11-21).
+		Zone quiet = cube("q", 0, 10).withCues(PlaceCues.UNCHANGED.withShowCues(false));
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS, quiet);
+		assertFalse(start(villagerAt(0)).cue(), "inside the zone no cue shows");
+		assertEquals(soundsculptor.core.sets.PlaceRef.zone("q"), decider.cues().source(CueField.SHOW_CUES));
+		assertTrue(start(villagerAt(50)).cue(), "stepping out, Everywhere's On applies again");
+		assertEquals(soundsculptor.core.sets.PlaceRef.EVERYWHERE, decider.cues().source(CueField.SHOW_CUES));
+	}
+
+	@Test
+	void aPreviewOfEverywheresCuesAppliesUntilTheNextSnapshot() {
+		// Everywhere's Cues pop-up previews a slider without saving the profile on every step.
+		Zone room = cube("r", 0, 10).withCues(PlaceCues.UNCHANGED.withTextScale(50));
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS, room);
+		start(villagerAt(50));
+		decider.previewEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(180));
+		assertEquals(180, decider.cues().settings().textScale());
+		start(villagerAt(0));
+		assertEquals(50, decider.cues().settings().textScale(), "a zone that sets it still wins over the preview");
+		start(villagerAt(50));
+		decider.previewEverywhereCues(null);
+		assertEquals(100, decider.cues().settings().textScale(), "dropping the preview gives the saved value");
+		decider.previewEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(180));
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(170), room);
+		assertEquals(170, decider.cues().settings().textScale(), "a new snapshot holds what was saved; the preview is gone");
+	}
+
+	@Test
+	void theCueSettingsAreWorkedOutOnlyWhenWhereYouStandOrTheProfileChanges() {
+		Zone room = cube("r", 0, 10).withCues(PlaceCues.UNCHANGED.withTextScale(50));
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS, room);
+		start(villagerAt(0));
+		CueResolution inRoom = decider.cues();
+		assertEquals(50, inRoom.settings().textScale());
+		start(villagerAt(1));
+		assertSame(inRoom, decider.cues(), "moving inside the same zone keeps the same result");
+		start(villagerAt(50));
+		assertEquals(100, decider.cues().settings().textScale());
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(150), room);
+		assertEquals(150, decider.cues().settings().textScale(), "a new profile snapshot is read at once");
 	}
 
 	@Test

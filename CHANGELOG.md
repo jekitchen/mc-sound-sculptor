@@ -18,12 +18,19 @@ Work toward 1.0, after the alpha. Not released yet.
   subtitle; its cue is the only note, and with Cue off nothing shows. Vanilla's own volume sliders work as before.
 - **Cue setting on entries:** the entry editor has Cue (Unchanged, On, Off) under Mute. On the Sounds tab, a row's
   Level… button is now **Level and cue…**, and its pop-up has a Cue toggle. Every entry line in "Why does it sound like
-  this?" has a Cue button. A new mute gets Cue on, unless you change that in Settings.
-- **Settings › General:** Show muted-sound cues (also an optional hotkey in Controls, unbound by default), Cue sounds
-  without subtitles (shows the sound's ID instead) and New mutes get Cue (per world or server).
-- **Settings › Accessibility** (new page): Cue color (four named colors; the default is light blue-gray), Cue text size
-  (100 to 200%), the cue box position (left/right and up/down, with a button to put it back) and Reduced motion. The box
-  always stays on screen.
+  this?" has a Cue button. A new mute gets Cue on, unless New mutes get Cue is off where you stand.
+- **Cue settings per place:** Everywhere and every zone have the cue settings: Show muted-sound cues, Cue sounds without
+  subtitles (shows the sound's ID instead), New mutes get Cue, the cue text color (four named colors; the default is
+  light blue-gray), the text size (50 to 200%) and the cue box position (left/right and up/down, with a button to put
+  it back above the subtitles). Everywhere is the base. In a zone each one can stay **Unchanged**, which passes it on to
+  the next bigger zone you stand in and then Everywhere, the same way entries are decided; a smaller zone wins. Whether
+  a muted sound gets a cue is decided when it starts, from where you stand then; the color, size and position follow
+  where you stand now, for the whole box at once. The box always stays on screen.
+- **Cues… pop-up:** the zone editor and the Zones tab's Everywhere row have **Cues…**; in a zone, an Unchanged setting
+  says what it gets and from where ("Unchanged (On, from Main base)"). Settings › General and Accessibility say that
+  cue settings are set per zone and open Everywhere's. Settings › Accessibility (new page) keeps Reduced motion.
+- **Cues hotkey** (optional, in Controls, unbound by default): turns Show muted-sound cues on or off in the place that
+  decides it where you stand, and says which: "Muted-sound cues: Off in Main base".
 - A quick Cue change never turns a switched-off Quick changes entry back on.
 - **Repeat limits:** an entry can cap how often its sounds start, from 1 to 100 plays per 0.05 to 10 seconds, for
   example "3 per 1 s" for villager mumbles. Plays over the limit are dropped. The count is shared by every matching

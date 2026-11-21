@@ -32,7 +32,7 @@ public record TraceEditContext(String soundId, LastPlay play, Standing now, bool
 	/** The trace for this profile and library, exactly as {@link SoundTracer} builds it. */
 	public SoundTrace trace(Workspace ws) {
 		Profile profile = ws.profile();
-		Precedence p = new Precedence(profile.everywhere(), profile.zones(), ws.library());
+		Precedence p = new Precedence(profile.everywhere(), profile.everywhereCues(), profile.zones(), ws.library());
 		return SoundTracer.trace(p, ws.library(), setId -> profile.placesUsing(setId).size() + usedElsewhere.applyAsInt(setId),
 				soundId, play, now, bypass, soundsculptor.core.boost.BoostSupport.allows(profile));
 	}

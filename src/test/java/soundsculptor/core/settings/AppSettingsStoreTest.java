@@ -41,7 +41,7 @@ class AppSettingsStoreTest {
 
 	@Test
 	void saveCreatesTheFolderAndLoadReadsItBack() throws IOException {
-		AppSettings s = AppSettings.DEFAULTS.withReducedMotion(true).withCueTextScale(140).withLastTab("rules");
+		AppSettings s = AppSettings.DEFAULTS.withReducedMotion(true).withLastTab("rules");
 		store().save(s);
 		assertEquals(AppSettingsCodec.toJson(s), Files.readString(file(), StandardCharsets.UTF_8));
 		AppSettingsStore.LoadResult result = store().load();
@@ -52,11 +52,11 @@ class AppSettingsStoreTest {
 
 	@Test
 	void savingKeepsThePreviousFileAsBak() throws IOException {
-		store().save(AppSettings.DEFAULTS.withCueTextScale(120));
+		store().save(AppSettings.DEFAULTS.withLastTab("zones"));
 		assertFalse(Files.exists(sibling(".bak")), "nothing to back up the first time");
-		store().save(AppSettings.DEFAULTS.withCueTextScale(130));
-		assertEquals(120, AppSettingsCodec.read(Files.readString(sibling(".bak"))).settings().cueTextScale());
-		assertEquals(130, store().load().settings().cueTextScale());
+		store().save(AppSettings.DEFAULTS.withLastTab("profiles"));
+		assertEquals("zones", AppSettingsCodec.read(Files.readString(sibling(".bak"))).settings().lastTab());
+		assertEquals("profiles", store().load().settings().lastTab());
 	}
 
 	@Test
@@ -74,7 +74,7 @@ class AppSettingsStoreTest {
 	@Test
 	void aFileWithOneBadValueKeepsTheGoodValuesAndStaysInPlace() throws IOException {
 		Files.createDirectories(file().getParent());
-		String text = "{\"schemaVersion\": 1, \"reducedMotion\": true, \"cueTextScale\": \"big\"}";
+		String text = "{\"schemaVersion\": 1, \"reducedMotion\": true, \"lastTab\": \"Big Tab\"}";
 		Files.writeString(file(), text);
 		AppSettingsStore.LoadResult result = store().load();
 		assertEquals(AppSettings.DEFAULTS.withReducedMotion(true), result.settings());

@@ -134,8 +134,11 @@ public final class ProfileManager {
 	 */
 	public static synchronized void join(String worldKey, String displayName) {
 		Profile pending = profileWriter.latest(worldKey);
+		// FR-7, decided 2026-11-21: a profile file saved before cue settings moved to the places, or a new profile, gets
+		// Everywhere's from the old app-wide settings as it is read (ProfileStore). A pending profile was read that way
+		// before it was changed, so it already has its own.
 		ProfileStore.LoadResult result = pending != null ? new ProfileStore.LoadResult(pending, null, null)
-				: store.load(worldKey, displayName);
+				: store.load(worldKey, displayName, appWideCues());
 		SetLibrary library = current.library();
 		ProfilePrune.Pruned pruned = ProfilePrune.dropMissingSetsIfComplete(result.profile(), library, libraryComplete,
 				Map.copyOf(deletedNames));
@@ -154,6 +157,11 @@ public final class ProfileManager {
 		// Always a change, so the profile is saved, pruned or not.
 		update(profile -> profile.withLastJoined(Instant.now()));
 		reindex();
+	}
+
+	/** The cue settings the app-wide settings held before 2026-11-21, which profiles without their own start from. */
+	private static soundsculptor.core.cue.PlaceCues appWideCues() {
+		return AppSettingsManager.get().legacyCues();
 	}
 
 	/** The player left the world: back to vanilla until the next join. */
@@ -437,11 +445,9 @@ public final class ProfileManager {
 			Profile profile = null;
 			Message problem = null;
 			try {
-				if (Files.size(file.file()) > ProfileStore.MAX_FILE_BYTES) {
-					problem = Message.of("soundsculptor.profile.problem.too_large");
-				} else {
-					profile = ProfileCodec.read(Files.readString(file.file(), StandardCharsets.UTF_8), version -> { }).profile();
-				}
+				// Migrated as a join would load it (old app-wide cue settings included), so Rename, Copy from and Export
+				// keep what the player had.
+				profile = store.readStored(file.file(), appWideCues());
 			} catch (ProfileFormatException e) {
 				problem = e.problem();
 			} catch (IOException e) {
@@ -517,7 +523,7 @@ public final class ProfileManager {
 
 	private static Snapshot snapshot(String key, Profile profile, SetLibrary library) {
 		return new Snapshot(key, profile, library,
-				new Precedence(profile.everywhere(), profile.zones(), library));
+				new Precedence(profile.everywhere(), profile.everywhereCues(), profile.zones(), library));
 	}
 
 	// ---- Bypass (FR-13.1) ----

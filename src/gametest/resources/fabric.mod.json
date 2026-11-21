@@ -24,6 +24,7 @@
 			"soundsculptor.gametest.M7cClientGameTest",
 			"soundsculptor.gametest.M8ReviewClientGameTest",
 			"soundsculptor.gametest.M9CuesClientGameTest",
+			"soundsculptor.gametest.ZoneCuesClientGameTest",
 			"soundsculptor.gametest.M11LimitsClientGameTest",
 			"soundsculptor.gametest.M10BoostClientGameTest",
 			"soundsculptor.gametest.ZoneToolsClientGameTest",

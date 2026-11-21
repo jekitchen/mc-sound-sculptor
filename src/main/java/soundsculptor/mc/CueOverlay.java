@@ -5,7 +5,11 @@ import soundsculptor.core.cue.CueBox;
 import soundsculptor.core.cue.CueColors;
 import soundsculptor.core.cue.CueDirection;
 import soundsculptor.core.cue.CueLine;
-import soundsculptor.core.settings.AppSettings;
+import soundsculptor.core.cue.CueField;
+import soundsculptor.core.cue.CueResolution;
+import soundsculptor.core.cue.CueSettings;
+import soundsculptor.core.cue.PlaceCues;
+import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.mc.mixin.HudAccessor;
 import soundsculptor.mc.mixin.SubtitleOverlayAccessor;
 import soundsculptor.mc.ui.Draw;
@@ -34,8 +38,9 @@ import net.minecraft.world.phys.Vec3;
  * box is laid out like vanilla's: one background row per line, 10 GUI pixels apart, the same width for every line,
  * vanilla's {@code <} and {@code >} arrows at its edges, worked out every frame from where the listener is (FR-7.4), and
  * a line is hidden while the listener is out of the sound's range (FR-7.1). Each line tracks its plays like a vanilla
- * subtitle ({@link CueBox}) and fades over 3 seconds times vanilla's Notification Time option. The cue text scale (A-7)
- * grows the box up and left from its place, and the cue box offset (section 8.1) moves it; it always stays on screen.
+ * subtitle ({@link CueBox}) and fades over 3 seconds times vanilla's Notification Time option. The cue text size (A-7, 50%
+ * to 200%, never under one screen pixel per font pixel) grows or shrinks the box up and left from its place, and the
+ * cue box offset (section 8.1) moves it; it always stays on screen.
  *
  * <p>{@link #add} is called by the sound hook for each muted sound whose cue is due, on the hot path: it allocates
  * nothing once a sound ID's text is cached. Drawing may allocate. Render thread only.
@@ -108,20 +113,45 @@ public final class CueOverlay {
 		return shown;
 	}
 
-	/** The optional hotkey (FR-7.7): turns "Show muted-sound cues" on or off and says which in the action bar. */
-	public static void toggleShowCues(Minecraft minecraft) {
-		AppSettingsManager.update(settings -> settings.withShowCues(!settings.showCues()));
-		boolean on = AppSettingsManager.get().showCues();
-		minecraft.gui.hud.setOverlayMessage(Component.translatable(on ? "soundsculptor.cue.hotkey.on" : "soundsculptor.cue.hotkey.off"), false);
+	/**
+	 * The optional hotkey (FR-7.7): turns "Show muted-sound cues" on or off in the place that decides it where the player
+	 * stands (the smallest zone there that sets it, or Everywhere), saves, and says which in the action bar, naming the
+	 * zone ("Muted-sound cues: Off in Main base"). Does nothing outside a world.
+	 *
+	 * @return the message shown, or {@code null} outside a world
+	 */
+	public static Component toggleShowCues(Minecraft minecraft) {
+		if (!ProfileManager.isLoaded()) {
+			return null;
+		}
+		CueResolution cues = SoundHook.cuesNow();
+		PlaceRef place = cues.source(CueField.SHOW_CUES);
+		boolean on = !cues.settings().showCues();
+		ProfileManager.update(profile -> {
+			PlaceCues current = profile.cues(place);
+			return current == null ? profile : profile.withCues(place, current.withShowCues(on));
+		});
+		String key = on ? "soundsculptor.cue.hotkey.on" : "soundsculptor.cue.hotkey.off";
+		Component message = place.isEverywhere() ? Component.translatable(key)
+				: Component.translatable(key + "_in", SetDeleteDialog.placeName(ProfileManager.profile(), place));
+		minecraft.gui.hud.setOverlayMessage(message, false);
+		return message;
 	}
 
 	private static void extract(GuiGraphicsExtractor g, DeltaTracker delta) {
 		Minecraft minecraft = Minecraft.getInstance();
-		AppSettings settings = AppSettingsManager.get();
 		long now = Util.getMillis();
 		double timeScale = timeScale(minecraft);
-		// FR-7.7: the master switch hides every cue, and lines do not wait to come back when it is turned on again.
-		if (!settings.showCues() || !ProfileManager.isLoaded() || minecraft.level == null) {
+		if (!ProfileManager.isLoaded() || minecraft.level == null) {
+			BOX.clear();
+			shown = List.of();
+			return;
+		}
+		// The look (color, text size, position) follows where the player stands now, for the whole box at once.
+		CueSettings settings = SoundHook.cuesNow().settings();
+		// FR-7.7: the master switch hides every cue, and lines do not wait to come back when it is turned on again. Whether
+		// a sound gets a cue is decided when it starts; walking into a place that turns cues off hides those shown too.
+		if (!settings.showCues()) {
 			BOX.clear();
 			shown = List.of();
 			return;
@@ -164,11 +194,12 @@ public final class CueOverlay {
 		// The box is laid out around an anchor: its right edge and the bottom row's center. Unscaled and with no offset it
 		// is where vanilla's next subtitle row would go; the text scale (A-7) grows it up and left from there, and the
 		// offset (section 8.1) moves it, but never off the screen.
-		float scale = settings.cueTextScale() / 100F;
+		// Below 100% the text never gets smaller than one screen pixel per font pixel: at GUI scale 1, 50% would blur.
+		float scale = Math.max(settings.textScale() / 100F, 1F / (float) minecraft.getWindow().getGuiScale());
 		int subtitleRows = vanillaSubtitleRows(minecraft);
-		float anchorX = g.guiWidth() - RIGHT_MARGIN + settings.cueOffsetX();
+		float anchorX = g.guiWidth() - RIGHT_MARGIN + settings.offsetX();
 		float anchorY = g.guiHeight() - BOTTOM_ROW_OFFSET - subtitleRows * ROW_HEIGHT - (subtitleRows > 0 ? GAP_ABOVE_SUBTITLES : 0)
-				+ settings.cueOffsetY();
+				+ settings.offsetY();
 		// In the anchor's units: rows go up from 0; the box spans x from -(boxWidth - 1) to 1.
 		int relLeft = -boxWidth + 1;
 		int relTop = -(lines.size() - 1) * ROW_HEIGHT - halfHeight - 1;
@@ -187,7 +218,7 @@ public final class CueOverlay {
 			CueLine<Component> line = lines.get(row);
 			Component body = bodies.get(row);
 			int centerY = -row * ROW_HEIGHT;
-			int color = CueColors.faded(settings.cueColor(), line.fadeFraction());
+			int color = CueColors.faded(settings.color(), line.fadeFraction());
 			int left = centerX - halfWidth - 1;
 			int top = centerY - halfHeight - 1;
 			Draw.fill(g, left, top, boxWidth, boxHeight, background);

@@ -165,7 +165,9 @@ public abstract class SculptScreen extends Screen {
 	 */
 	public void openOverlay(int x, int y, int panelWidth, int panelHeight, List<? extends AbstractWidget> widgets,
 			AbstractWidget initialFocus, Runnable onClosed) {
-		closeOverlay();
+		while (overlayOpen) {
+			closeOverlay();
+		}
 		overlayX = x;
 		overlayY = y;
 		overlayWidth = panelWidth;
@@ -178,6 +180,34 @@ public abstract class SculptScreen extends Screen {
 		setFocused(initialFocus);
 	}
 
+	/**
+	 * Like {@link #openOverlay}, but over the pop-up that is open, which comes back when this one closes: a dropdown's
+	 * list inside a pop-up (the Cues pop-up, FR-7). With no pop-up open it is {@link #openOverlay}. Until it closes only
+	 * its widgets take input; the pop-up under it stays drawn.
+	 */
+	public void openNestedOverlay(int x, int y, int panelWidth, int panelHeight, List<? extends AbstractWidget> widgets,
+			AbstractWidget initialFocus, Runnable onClosed) {
+		if (!overlayOpen) {
+			openOverlay(x, y, panelWidth, panelHeight, widgets, initialFocus, onClosed);
+			return;
+		}
+		outerOverlays.add(new Layer(new ArrayList<>(overlayWidgets), overlayX, overlayY, overlayWidth, overlayHeight, overlayClosed,
+				overlayBackdrop));
+		overlayWidgets.clear();
+		// Drawn after the pop-up's widgets and before the new ones, so its panel covers the pop-up under it.
+		overlayBackdrop = addRenderableOnly(new Backdrop(x, y, panelWidth, panelHeight));
+		overlayX = x;
+		overlayY = y;
+		overlayWidth = panelWidth;
+		overlayHeight = panelHeight;
+		overlayClosed = onClosed;
+		for (AbstractWidget widget : widgets) {
+			overlayWidgets.add(addRenderableWidget(widget));
+		}
+		setFocused(initialFocus);
+	}
+
+	/** Closes the pop-up on top; a pop-up it was opened over ({@link #openNestedOverlay}) takes input again. */
 	public void closeOverlay() {
 		if (!overlayOpen) {
 			return;
@@ -186,11 +216,52 @@ public abstract class SculptScreen extends Screen {
 			removeWidget(widget);
 		}
 		overlayWidgets.clear();
-		overlayOpen = false;
+		if (overlayBackdrop != null) {
+			removeWidget(overlayBackdrop);
+			overlayBackdrop = null;
+		}
 		Runnable closed = overlayClosed;
 		overlayClosed = null;
+		if (outerOverlays.isEmpty()) {
+			overlayOpen = false;
+		} else {
+			Layer under = outerOverlays.remove(outerOverlays.size() - 1);
+			overlayWidgets.addAll(under.widgets());
+			overlayX = under.x();
+			overlayY = under.y();
+			overlayWidth = under.width();
+			overlayHeight = under.height();
+			overlayClosed = under.closed();
+			overlayBackdrop = under.backdrop();
+		}
 		if (closed != null) {
 			closed.run();
+		}
+	}
+
+	/** A pop-up under the one on top: its widgets, panel and what runs when it closes. */
+	private record Layer(List<AbstractWidget> widgets, int x, int y, int width, int height, Runnable closed, Backdrop backdrop) {
+	}
+
+	private final List<Layer> outerOverlays = new ArrayList<>();
+	/** The panel of a pop-up opened over another one; {@code null} for the bottom pop-up, drawn by {@link #drawLayers}. */
+	private Backdrop overlayBackdrop;
+
+	/** A nested pop-up's panel: a renderable only, never focused or clicked. */
+	private static final class Backdrop extends AbstractWidget {
+		Backdrop(int x, int y, int width, int height) {
+			super(x, y, width, height, Component.empty());
+			this.active = false;
+		}
+
+		@Override
+		protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+			Draw.fill(g, getX() - 1, getY() - 1, getWidth() + 2, getHeight() + 2, Theme.SEPARATOR);
+			Draw.fill(g, getX(), getY(), getWidth(), getHeight(), Theme.TOAST);
+		}
+
+		@Override
+		protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput output) {
 		}
 	}
 
@@ -408,10 +479,16 @@ public abstract class SculptScreen extends Screen {
 
 	private void drawLayers(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
 		if (overlayOpen) {
-			// Dim everything behind the pop-up: its buttons cannot be pressed (a click outside only closes the pop-up).
+			// Dim everything behind the pop-up: its buttons cannot be pressed (a click outside only closes the pop-up). With
+			// one pop-up over another, this is the bottom one's panel; the one on top draws its own (Backdrop).
 			Draw.fill(g, 0, 0, width, height, Theme.SCRIM);
-			Draw.fill(g, overlayX - 1, overlayY - 1, overlayWidth + 2, overlayHeight + 2, Theme.SEPARATOR);
-			Draw.fill(g, overlayX, overlayY, overlayWidth, overlayHeight, Theme.TOAST);
+			Layer bottom = outerOverlays.isEmpty() ? null : outerOverlays.get(0);
+			int x = bottom == null ? overlayX : bottom.x();
+			int y = bottom == null ? overlayY : bottom.y();
+			int w = bottom == null ? overlayWidth : bottom.width();
+			int h = bottom == null ? overlayHeight : bottom.height();
+			Draw.fill(g, x - 1, y - 1, w + 2, h + 2, Theme.SEPARATOR);
+			Draw.fill(g, x, y, w, h, Theme.TOAST);
 		}
 		// Last, so it is above the dimming and clear of the pop-up (Toast.y), and its Undo button (a widget) above it.
 		if (toast != null) {
@@ -437,6 +514,8 @@ public abstract class SculptScreen extends Screen {
 		overlayWidgets.clear();
 		overlayOpen = false;
 		overlayClosed = null;
+		outerOverlays.clear();
+		overlayBackdrop = null;
 
 		// Header, right-aligned: subclass widgets, then the close button.
 		List<AbstractWidget> header = new ArrayList<>();
