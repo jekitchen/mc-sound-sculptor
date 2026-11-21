@@ -159,6 +159,8 @@ public final class ZoneEditorScreen extends SculptScreen {
 
 	@Override
 	protected void buildTab(int index, Body body) {
+		// A rebuild (a resize, a new box from marking corners) drops any open pop-up without its close callback.
+		cuePopup = null;
 		nameField = textField(Field.NAME, NAME_WIDTH, "name");
 		nameField.setMaxLength(64);
 		enabledToggle = Tooltips.describe(new SculptToggle(ENABLED_WIDTH, Component.translatable("soundsculptor.zone_editor.enabled"),
@@ -408,10 +410,13 @@ public final class ZoneEditorScreen extends SculptScreen {
 	 */
 	public void openCues() {
 		Zone zone = draftZone();
-		cuePopup = CuePopup.open(this, PlaceRef.zone(zoneId), draft.cues(), zone, cues -> {
+		// The title names the zone as edited: a new zone's typed name, or a renamed zone's new one.
+		String typed = draft.text(Field.NAME).trim();
+		String name = typed.isEmpty() ? zoneId : typed;
+		cuePopup = CuePopup.open(this, PlaceRef.zone(zoneId), name, draft.cues(), zone, cues -> {
 			draft.setCues(cues);
 			changed();
-		}, () -> {
+		}, null, () -> {
 			cuePopup = null;
 			setFocused(cuesButton);
 		});

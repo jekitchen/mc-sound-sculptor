@@ -572,6 +572,24 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
+	void aPreviewOfEverywheresCuesAppliesUntilTheNextSnapshot() {
+		// Everywhere's Cues pop-up previews a slider without saving the profile on every step.
+		Zone room = cube("r", 0, 10).withCues(PlaceCues.UNCHANGED.withTextScale(50));
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS, room);
+		start(villagerAt(50));
+		decider.previewEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(180));
+		assertEquals(180, decider.cues().settings().textScale());
+		start(villagerAt(0));
+		assertEquals(50, decider.cues().settings().textScale(), "a zone that sets it still wins over the preview");
+		start(villagerAt(50));
+		decider.previewEverywhereCues(null);
+		assertEquals(100, decider.cues().settings().textScale(), "dropping the preview gives the saved value");
+		decider.previewEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(180));
+		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS.withTextScale(170), room);
+		assertEquals(170, decider.cues().settings().textScale(), "a new snapshot holds what was saved; the preview is gone");
+	}
+
+	@Test
 	void theCueSettingsAreWorkedOutOnlyWhenWhereYouStandOrTheProfileChanges() {
 		Zone room = cube("r", 0, 10).withCues(PlaceCues.UNCHANGED.withTextScale(50));
 		profile(List.of(), PlaceCues.EVERYWHERE_DEFAULTS, room);

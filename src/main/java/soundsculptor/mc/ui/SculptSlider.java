@@ -25,6 +25,26 @@ public class SculptSlider extends AbstractSliderButton {
 	/** Text with a warning icon under the slider, or {@code null}; see {@link #noteBelow}. */
 	private java.util.function.DoubleFunction<Component> note;
 	private java.util.function.IntSupplier noteWidth;
+	/** Runs when a change is done: the mouse is let go, or a key moved it; see {@link #onCommit}. */
+	private Runnable onCommit;
+
+	/**
+	 * Also tells {@code commit} when a change is done: when the mouse is let go after a drag or click, and after each
+	 * arrow key step. The change listener still hears every value while dragging, for a live preview; work too heavy for
+	 * every step (saving a profile) belongs here.
+	 */
+	public SculptSlider onCommit(Runnable commit) {
+		this.onCommit = commit;
+		return this;
+	}
+
+	@Override
+	public void onRelease(net.minecraft.client.input.MouseButtonEvent event) {
+		super.onRelease(event);
+		if (onCommit != null) {
+			onCommit.run();
+		}
+	}
 
 	/**
 	 * @param format      turns a value into display text, e.g. {@code v -> Component.literal((int) v + "%")}
@@ -87,6 +107,9 @@ public class SculptSlider extends AbstractSliderButton {
 			return super.keyPressed(event);
 		}
 		syncFromModel(before);
+		if (onCommit != null && model.value() != before) {
+			onCommit.run();
+		}
 		return true;
 	}
 

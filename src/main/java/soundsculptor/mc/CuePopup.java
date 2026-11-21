@@ -40,9 +40,10 @@ import soundsculptor.mc.ui.Tooltips;
  * room), and its tooltip names the place. The dropdowns offer Unchanged as their first choice; the sliders have an
  * Unchanged button, and move off Unchanged as soon as they are moved. Everywhere is the base, so it has no Unchanged.
  *
- * <p>Each change is handed to the caller at once: the zone editor keeps it in its draft until Save, Everywhere saves it
- * straight away (like the Settings pages did). Keyboard: Tab goes through the controls in reading order; Esc, Done or a
- * click outside closes it.
+ * <p>A dropdown choice or a button is handed to the caller at once; a slider while it is dragged only through a preview,
+ * and for good when it is let go or moved by a key, so Everywhere's profile is not saved on every step. The zone editor
+ * keeps the settings in its draft until Save; Everywhere saves them straight away (like the Settings pages did).
+ * Keyboard: Tab goes through the controls in reading order; Esc, Done or a click outside closes it.
  */
 public final class CuePopup {
 	/** The widest the pop-up grows. */
@@ -83,16 +84,22 @@ public final class CuePopup {
 	private final CueResolution inherited;
 	private final Profile profile;
 	private final Consumer<PlaceCues> apply;
+	private final Consumer<PlaceCues> preview;
+	/** The settings last handed to {@link #apply}. */
+	private PlaceCues applied;
 	private PlaceCues cues;
 	/** Set while a slider is moved to show an inherited value, so that move is not taken as the player's. */
 	private boolean showingInherited;
 
-	private CuePopup(SculptScreen host, PlaceRef where, PlaceCues initial, CueResolution inherited, Consumer<PlaceCues> apply,
+	private CuePopup(SculptScreen host, PlaceRef where, String placeName, PlaceCues initial, CueResolution inherited,
+			Consumer<PlaceCues> apply, Consumer<PlaceCues> preview,
 			Runnable onClosed) {
 		this.everywhere = where.isEverywhere();
 		this.inherited = inherited;
 		this.profile = ProfileManager.profile();
 		this.apply = apply;
+		this.preview = preview != null ? preview : apply;
+		this.applied = initial;
 		this.cues = initial;
 		Font font = Minecraft.getInstance().font;
 		int room = Math.min(MAX_WIDTH, host.width - 2 * Theme.PADDING) - 2 * Theme.GAP;
@@ -112,9 +119,9 @@ public final class CuePopup {
 				value -> shown(CueField.TEXT_SCALE, Texts.percent((int) value)), null,
 				value -> {
 					if (!showingInherited) {
-						change(cues.withTextScale((int) value));
+						slide(cues.withTextScale((int) value));
 					}
-				}), tip("soundsculptor.cues.size.tip", CueField.TEXT_SCALE, Texts.percent(inheritedSettings().textScale())));
+				}).onCommit(this::commit), tip("soundsculptor.cues.size.tip", CueField.TEXT_SCALE, Texts.percent(inheritedSettings().textScale())));
 		textScaleUnchanged = everywhere ? null : unchangedButton(CueField.TEXT_SCALE, Texts.percent(inheritedSettings().textScale()));
 
 		CueSettings now = initial.boxOffset() != null ? null : inheritedSettings();
@@ -135,7 +142,7 @@ public final class CuePopup {
 		refreshButtons();
 
 		// Lay out: the title, then each group of controls flowing onto as many lines as it needs, Done at the end.
-		String name = SetDeleteDialog.placeName(profile, where);
+		String name = placeName;
 		SculptText title = new SculptText(Component.translatable("soundsculptor.cues.title", name));
 		if (title.getWidth() > room) {
 			title = new SculptText(Component.translatable("soundsculptor.cues.title.short"));
@@ -194,31 +201,53 @@ public final class CuePopup {
 			}
 			lineY += RowFlow.lines(placed) * (Theme.WIDGET_HEIGHT + Theme.GAP);
 		}
-		host.openOverlay(x, y, panelWidth, panelHeight, widgets, showCues, onClosed);
+		// Closing also saves a slider move not yet saved (a drag the pop-up closed during).
+		host.openOverlay(x, y, panelWidth, panelHeight, widgets, showCues, () -> {
+			commit();
+			onClosed.run();
+		});
 	}
 
 	/**
 	 * Opens a place's Cues pop-up on {@code host}.
 	 *
-	 * @param where    Everywhere, or the zone
-	 * @param initial  the place's settings now
-	 * @param zone     the zone as edited (for what Unchanged passes on to), or {@code null} for Everywhere or a zone whose
-	 *                 values cannot be read yet, which then pass on to Everywhere
-	 * @param apply    called with the place's new settings after each change
-	 * @param onClosed runs after the pop-up closes, e.g. to put focus back on the button that opened it
+	 * @param where     Everywhere, or the zone
+	 * @param placeName the name in the title: "Everywhere", or the zone's name as edited
+	 * @param initial   the place's settings now
+	 * @param zone      the zone as edited (for what Unchanged passes on to), or {@code null} for Everywhere or a zone whose
+	 *                  values cannot be read yet, which then pass on to Everywhere
+	 * @param apply     called with the place's new settings after each finished change: a choice, a button, and a slider
+	 *                  when it is let go or moved by a key (and when the pop-up closes, if a move is not handed on yet)
+	 * @param preview   called with every slider value while it is dragged, for a live look without saving; {@code null}
+	 *                  to use {@code apply} for those too (cheap callers, such as the zone editor's draft)
+	 * @param onClosed  runs after the pop-up closes, e.g. to put focus back on the button that opened it
 	 */
-	public static CuePopup open(SculptScreen host, PlaceRef where, PlaceCues initial, Zone zone, Consumer<PlaceCues> apply,
-			Runnable onClosed) {
+	public static CuePopup open(SculptScreen host, PlaceRef where, String placeName, PlaceCues initial, Zone zone,
+			Consumer<PlaceCues> apply, Consumer<PlaceCues> preview, Runnable onClosed) {
 		Profile profile = ProfileManager.profile();
 		CueResolution inherited = where.isEverywhere() ? null
 				: zone != null ? CueResolver.inheritedBy(profile, zone) : CueResolver.resolve(List.of(), profile.everywhereCues());
-		return new CuePopup(host, where, initial, inherited, apply, onClosed);
+		return new CuePopup(host, where, placeName, initial, inherited, apply, preview, onClosed);
 	}
 
-	/** Everywhere's Cues pop-up, saving each change at once; focus goes back to {@code opener} when it closes. */
+	/**
+	 * Everywhere's Cues pop-up. Each finished change is saved at once; while a slider is dragged the cue box shows its
+	 * value through a preview, without saving the profile on every step. {@code onClosed} runs after it closes.
+	 */
+	public static CuePopup openEverywhere(SculptScreen host, Runnable onClosed) {
+		return open(host, PlaceRef.EVERYWHERE, SetDeleteDialog.placeName(ProfileManager.profile(), PlaceRef.EVERYWHERE),
+				ProfileManager.profile().everywhereCues(), null, cues -> {
+					ProfileManager.update(p -> p.withEverywhereCues(cues));
+					SoundHook.previewEverywhereCues(null);
+				}, SoundHook::previewEverywhereCues, () -> {
+					SoundHook.previewEverywhereCues(null);
+					onClosed.run();
+				});
+	}
+
+	/** Everywhere's Cues pop-up; focus goes back to {@code opener} when it closes. */
 	public static CuePopup openEverywhere(SculptScreen host, AbstractWidget opener) {
-		return open(host, PlaceRef.EVERYWHERE, ProfileManager.profile().everywhereCues(), null,
-				cues -> ProfileManager.update(p -> p.withEverywhereCues(cues)), () -> host.setFocused(opener));
+		return openEverywhere(host, () -> host.setFocused(opener));
 	}
 
 	/** The settings the zone's Unchanged ones pass on to; Everywhere's own for Everywhere. */
@@ -226,9 +255,24 @@ public final class CuePopup {
 		return inherited != null ? inherited.settings() : CueSettings.of(cues);
 	}
 
+	/** A finished change (a dropdown choice, a button): handed to the caller at once. */
 	private void change(PlaceCues value) {
 		cues = value;
-		apply.accept(value);
+		commit();
+	}
+
+	/** A slider moving: shown at once through the preview; saved when the move is done ({@link #commit}). */
+	private void slide(PlaceCues value) {
+		cues = value;
+		preview.accept(value);
+	}
+
+	/** Hands the settings to the caller if they changed since last time. */
+	private void commit() {
+		if (!cues.equals(applied)) {
+			applied = cues;
+			apply.accept(cues);
+		}
 	}
 
 	/** The settings as changed so far. */
@@ -363,12 +407,12 @@ public final class CuePopup {
 					// The two parts are one setting: moving one sets both, the other where it is shown now.
 					boolean wasUnchanged = !cues.has(CueField.BOX_OFFSET);
 					int other = (int) (isX ? offsetY : offsetX).modelValue();
-					change(cues.withBoxOffset(isX ? new PlaceCues.Offset((int) value, other) : new PlaceCues.Offset(other, (int) value)));
+					slide(cues.withBoxOffset(isX ? new PlaceCues.Offset((int) value, other) : new PlaceCues.Offset(other, (int) value)));
 					if (wasUnchanged) {
 						show(isX ? offsetY : offsetX, other);
 					}
 					refreshButtons();
-				}), tip(key + ".tip", CueField.BOX_OFFSET, inheritedValue));
+				}).onCommit(this::commit), tip(key + ".tip", CueField.BOX_OFFSET, inheritedValue));
 		return self[0];
 	}
 

@@ -56,6 +56,16 @@ public final class CueResolver {
 	 * @throws IllegalArgumentException if {@code where} belongs to another snapshot
 	 */
 	public static CueResolution resolve(Precedence p, WhereYouAre where) {
+		return resolve(p, where, p.everywhereCues());
+	}
+
+	/**
+	 * The settings where the player stands now, with {@code everywhere} in place of the snapshot's Everywhere settings
+	 * (a preview from Everywhere's Cues pop-up, not saved yet).
+	 *
+	 * @throws IllegalArgumentException if {@code where} belongs to another snapshot
+	 */
+	public static CueResolution resolve(Precedence p, WhereYouAre where, PlaceCues everywhere) {
 		if (where.precedence() != p) {
 			throw new IllegalArgumentException("where you are was worked out for another profile snapshot");
 		}
@@ -63,7 +73,7 @@ public final class CueResolver {
 		for (int k = 0; k < where.count(); k++) {
 			zones.add(p.zoneAt(where.zone(k)));
 		}
-		return resolve(zones, p.everywhereCues());
+		return resolve(zones, everywhere);
 	}
 
 	/**

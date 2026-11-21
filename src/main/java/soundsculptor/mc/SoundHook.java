@@ -271,6 +271,17 @@ public final class SoundHook {
 		return DECIDER.cues();
 	}
 
+	/**
+	 * Everywhere's cue settings while its Cues pop-up's slider is dragged, shown at once without saving the profile (which
+	 * would build a new snapshot on every step); {@code null} drops the preview. Saving a profile drops it too. Render
+	 * thread only.
+	 */
+	public static void previewEverywhereCues(soundsculptor.core.cue.PlaceCues cues) {
+		if (sync(Minecraft.getInstance())) {
+			DECIDER.previewEverywhereCues(cues);
+		}
+	}
+
 	/** Where the player is, for {@link #precedence()} (FR-8.4). Render thread only. */
 	public static WhereYouAre where() {
 		return DECIDER.where();

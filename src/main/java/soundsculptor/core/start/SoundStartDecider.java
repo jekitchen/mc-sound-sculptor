@@ -12,6 +12,7 @@ import soundsculptor.core.cue.CueRules;
 import soundsculptor.core.cue.CueResolution;
 import soundsculptor.core.cue.CueResolver;
 import soundsculptor.core.cue.CueSettings;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.limit.RepeatLimiter;
 import soundsculptor.core.recent.PlayStatus;
 import soundsculptor.core.sets.EntryResolver;
@@ -143,16 +144,37 @@ public final class SoundStartDecider {
 		if (p == null) {
 			return CueResolution.DEFAULT;
 		}
-		if (p != cuesFor || where.version() != cuesVersion || where.precedence() != p) {
+		PlaceCues everywhere = preview != null && previewFor == p ? preview : p.everywhereCues();
+		if (p != cuesFor || where.version() != cuesVersion || where.precedence() != p || everywhere != cuesEverywhere) {
 			if (where.precedence() != p) {
 				where.updateNowhere(p);
 			}
-			cues = CueResolver.resolve(p, where);
+			cues = CueResolver.resolve(p, where, everywhere);
 			cuesFor = p;
 			cuesVersion = where.version();
+			cuesEverywhere = everywhere;
 		}
 		return cues;
 	}
+
+	/**
+	 * Everywhere's cue settings as its Cues pop-up shows them while a slider is dragged, before they are saved: they
+	 * apply at once without a new profile snapshot. Dropped by {@code null}, and by the next snapshot ({@link #setProfile}),
+	 * which then holds what was saved.
+	 *
+	 * @param value all set, or {@code null}
+	 */
+	public void previewEverywhereCues(PlaceCues value) {
+		if (value != null && !value.isComplete()) {
+			throw new IllegalArgumentException("Everywhere's cue settings must all be set: " + value);
+		}
+		preview = value;
+		previewFor = precedence;
+	}
+
+	private PlaceCues preview;
+	private Precedence previewFor;
+	private PlaceCues cuesEverywhere;
 
 	/** False when boost is off or the audio device ignores a raised gain cap: volumes then stop at 100% (section 7.2). */
 	public void setBoostSupported(boolean supported) {

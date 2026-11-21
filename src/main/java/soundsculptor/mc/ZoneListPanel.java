@@ -153,8 +153,7 @@ public final class ZoneListPanel {
 
 	/** Opens Everywhere's Cues pop-up; focus goes back to the row's Cues… button when it closes. */
 	public CuePopup openEverywhereCues(SculptButton opener) {
-		return CuePopup.open(host, PlaceRef.EVERYWHERE, ProfileManager.profile().everywhereCues(), null,
-				cues -> ProfileManager.update(p -> p.withEverywhereCues(cues)), () -> {
+		return CuePopup.openEverywhere(host, () -> {
 					SculptList.Row row = list == null ? null : list.findRow(PlaceRef.EVERYWHERE);
 					if (row != null && opener != null && row.buttons().contains(opener)) {
 						host.focusPath(list.revealRow(row, row.buttons().indexOf(opener)));
