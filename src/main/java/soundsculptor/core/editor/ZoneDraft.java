@@ -3,6 +3,7 @@ package soundsculptor.core.editor;
 import java.util.EnumMap;
 import java.util.List;
 
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.outline.ColorError;
 import soundsculptor.core.outline.ZoneColors;
 import soundsculptor.core.sets.PlaceSets;
@@ -13,7 +14,8 @@ import soundsculptor.core.zones.Zone;
 
 /**
  * The zone editor's values (PRD 6.1): name, color, coordinates and the box's size (zones are boxes only, FR-8.3). The
- * zone's attached sets are edited in their own editors and kept here as they are.
+ * zone's attached sets are edited in their own editors and kept here as they are; its cue settings (FR-7) are edited in
+ * its Cues pop-up and saved with the zone.
  *
  * <p>The color is kept beside the zone (it belongs to the profile model): read it with {@link #color()}.
  */
@@ -52,10 +54,16 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 	private final String id;
 	private final PlaceSets sets;
 
-	private ZoneDraft(String id, PlaceSets sets, EnumMap<Field, String> values, EnumMap<Field, String> defaults) {
+	/** The zone's cue settings as edited in its Cues pop-up (FR-7), and as they were when the editor opened. */
+	private PlaceCues cues;
+	private final PlaceCues originalCues;
+
+	private ZoneDraft(String id, PlaceSets sets, PlaceCues cues, EnumMap<Field, String> values, EnumMap<Field, String> defaults) {
 		super(Field.class, values, defaults);
 		this.id = id;
 		this.sets = sets;
+		this.cues = cues;
+		this.originalCues = cues;
 	}
 
 	/**
@@ -103,7 +111,23 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		for (Field f : List.of(Field.WIDTH, Field.HEIGHT, Field.DEPTH)) {
 			defaults.put(f, size);
 		}
-		return new ZoneDraft(zone.id(), zone.sets(), values, defaults);
+		return new ZoneDraft(zone.id(), zone.sets(), zone.cues(), values, defaults);
+	}
+
+	/** The zone's cue settings (FR-7), each one set or Unchanged. */
+	public PlaceCues cues() {
+		return cues;
+	}
+
+	/** From the zone's Cues pop-up; saved with the zone. */
+	public void setCues(PlaceCues value) {
+		cues = java.util.Objects.requireNonNull(value, "cues");
+	}
+
+	/** Changed cue settings count as unsaved changes too (FR-12.4). */
+	@Override
+	public boolean isDirty() {
+		return super.isDirty() || !cues.equals(originalCues);
 	}
 
 	public boolean enabled() {
@@ -171,7 +195,7 @@ public final class ZoneDraft extends Draft<ZoneDraft.Field, Zone> {
 		// Every edge on a block boundary, however the center was set (typed, My position, Looking at).
 		Point anchor = BoxEdit.snap(new Point(number(Field.X), number(Field.Y), number(Field.Z)), shape).center();
 		return new Zone(id, text(Field.NAME).trim(), enabled(), text(Field.WORLD_KEY), text(Field.DIMENSION), anchor, shape,
-				sets);
+				sets, cues);
 	}
 
 	private double number(Field field) {

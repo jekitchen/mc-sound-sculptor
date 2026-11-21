@@ -241,10 +241,17 @@ public final class SoundSculptorScreen extends SculptScreen {
 
 	/**
 	 * "Cue settings are set per zone, with Everywhere as the base." (FR-7, decided 2026-11-21), wrapped to the page's
-	 * width.
+	 * width, and in a world "Everywhere's cues…", which opens Everywhere's Cues pop-up.
 	 */
 	private void cueSettingsNote(Body body) {
 		body.wrappedLabel(() -> Component.translatable("soundsculptor.settings.cues_moved"));
+		if (!ProfileManager.isLoaded()) {
+			cuesButton = null;
+			return;
+		}
+		cuesButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.settings.cues_button"),
+				() -> CuePopup.openEverywhere(this, cuesButton)), Component.translatable("soundsculptor.settings.cues_button.tip"));
+		body.row(cuesButton);
 	}
 
 	/** A hotkey's key, or "not set (Options → Controls)". */

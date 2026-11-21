@@ -33,8 +33,9 @@ import net.minecraft.world.phys.Vec3;
 /**
  * The zone editor (PRD 6.1 Zones, FR-8 MVP, FR-10.4): name, on/off, color, the center with "My position" and "Block
  * I'm looking at" (FR-8.1), and the box's size (FR-8.3), drawn by marking two corners in the world or moved one side at
- * a time (M8 review). The zone's attached Sound Sets are edited on their own screen ("Sound Sets…", FR-8.6). Save and Cancel with the unsaved-changes dialog (FR-12.4), errors under the fields that
- * disable Save (FR-12.7). Zones are boxes only.
+ * a time (M8 review). The zone's attached Sound Sets are edited on their own screen ("Sound Sets…", FR-8.6), and its cue
+ * settings in a pop-up ("Cues…", FR-7). Save and Cancel with the unsaved-changes dialog (FR-12.4), errors under the
+ * fields that disable Save (FR-12.7). Zones are boxes only.
  */
 public final class ZoneEditorScreen extends SculptScreen {
 	private static final int NAME_WIDTH = 200;
@@ -64,6 +65,10 @@ public final class ZoneEditorScreen extends SculptScreen {
 	public SculptTextField depthField;
 	public SculptButton saveButton;
 	public SculptButton setsButton;
+	/** "Cues…": the zone's Cues pop-up (FR-7). */
+	public SculptButton cuesButton;
+	/** The open Cues pop-up, or {@code null}. */
+	public CuePopup cuePopup;
 	public SculptButton markCornersButton;
 	public SculptDropdown<BoxEdit.Side> sideDropdown;
 	public SculptButton shrinkButton;
@@ -143,6 +148,9 @@ public final class ZoneEditorScreen extends SculptScreen {
 		setsButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.sets"), this::openSets),
 				Component.translatable("soundsculptor.zone_editor.sets.tip"));
 		footer.add(setsButton);
+		cuesButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.zone_editor.cues"), this::openCues),
+				Component.translatable("soundsculptor.zone_editor.cues.tip"));
+		footer.add(cuesButton);
 		footer.add(SculptButton.text(Component.translatable("soundsculptor.ui.cancel"), this::onClose));
 		saveButton = SculptButton.text(Component.translatable("soundsculptor.ui.save"), this::save);
 		footer.add(saveButton);
@@ -391,6 +399,22 @@ public final class ZoneEditorScreen extends SculptScreen {
 			return profile.putZone(zone).withZoneColor(zoneId, color);
 		});
 		return true;
+	}
+
+	/**
+	 * "Cues…": the zone's cue settings (FR-7) in a pop-up. Changes go into the editor's draft and are saved with the zone
+	 * (Cancel drops them). What Unchanged passes on to is worked out for the zone as edited, or as saved while a value is
+	 * invalid.
+	 */
+	public void openCues() {
+		Zone zone = draftZone();
+		cuePopup = CuePopup.open(this, PlaceRef.zone(zoneId), draft.cues(), zone, cues -> {
+			draft.setCues(cues);
+			changed();
+		}, () -> {
+			cuePopup = null;
+			setFocused(cuesButton);
+		});
 	}
 
 	/** "Sound Sets…": saves the zone (it must exist to have sets attached), then opens its attached sets (FR-8.6). */

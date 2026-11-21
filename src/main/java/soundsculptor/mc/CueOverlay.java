@@ -38,8 +38,9 @@ import net.minecraft.world.phys.Vec3;
  * box is laid out like vanilla's: one background row per line, 10 GUI pixels apart, the same width for every line,
  * vanilla's {@code <} and {@code >} arrows at its edges, worked out every frame from where the listener is (FR-7.4), and
  * a line is hidden while the listener is out of the sound's range (FR-7.1). Each line tracks its plays like a vanilla
- * subtitle ({@link CueBox}) and fades over 3 seconds times vanilla's Notification Time option. The cue text scale (A-7)
- * grows the box up and left from its place, and the cue box offset (section 8.1) moves it; it always stays on screen.
+ * subtitle ({@link CueBox}) and fades over 3 seconds times vanilla's Notification Time option. The cue text size (A-7, 50%
+ * to 200%, never under one screen pixel per font pixel) grows or shrinks the box up and left from its place, and the
+ * cue box offset (section 8.1) moves it; it always stays on screen.
  *
  * <p>{@link #add} is called by the sound hook for each muted sound whose cue is due, on the hot path: it allocates
  * nothing once a sound ID's text is cached. Drawing may allocate. Render thread only.
@@ -116,10 +117,12 @@ public final class CueOverlay {
 	 * The optional hotkey (FR-7.7): turns "Show muted-sound cues" on or off in the place that decides it where the player
 	 * stands (the smallest zone there that sets it, or Everywhere), saves, and says which in the action bar, naming the
 	 * zone ("Muted-sound cues: Off in Main base"). Does nothing outside a world.
+	 *
+	 * @return the message shown, or {@code null} outside a world
 	 */
-	public static void toggleShowCues(Minecraft minecraft) {
+	public static Component toggleShowCues(Minecraft minecraft) {
 		if (!ProfileManager.isLoaded()) {
-			return;
+			return null;
 		}
 		CueResolution cues = SoundHook.cuesNow();
 		PlaceRef place = cues.source(CueField.SHOW_CUES);
@@ -132,6 +135,7 @@ public final class CueOverlay {
 		Component message = place.isEverywhere() ? Component.translatable(key)
 				: Component.translatable(key + "_in", SetDeleteDialog.placeName(ProfileManager.profile(), place));
 		minecraft.gui.hud.setOverlayMessage(message, false);
+		return message;
 	}
 
 	private static void extract(GuiGraphicsExtractor g, DeltaTracker delta) {
@@ -190,7 +194,8 @@ public final class CueOverlay {
 		// The box is laid out around an anchor: its right edge and the bottom row's center. Unscaled and with no offset it
 		// is where vanilla's next subtitle row would go; the text scale (A-7) grows it up and left from there, and the
 		// offset (section 8.1) moves it, but never off the screen.
-		float scale = settings.textScale() / 100F;
+		// Below 100% the text never gets smaller than one screen pixel per font pixel: at GUI scale 1, 50% would blur.
+		float scale = Math.max(settings.textScale() / 100F, 1F / (float) minecraft.getWindow().getGuiScale());
 		int subtitleRows = vanillaSubtitleRows(minecraft);
 		float anchorX = g.guiWidth() - RIGHT_MARGIN + settings.offsetX();
 		float anchorY = g.guiHeight() - BOTTOM_ROW_OFFSET - subtitleRows * ROW_HEIGHT - (subtitleRows > 0 ? GAP_ABOVE_SUBTITLES : 0)

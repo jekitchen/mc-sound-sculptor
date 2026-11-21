@@ -30,6 +30,22 @@ class ZoneDraftTest {
 	private static final List<SetEntry> RULES = List.of(SetEntry.of("zr1", "*villager*").withVolume(50));
 
 	@Test
+	void theCuesPopupsChangesAreSavedWithTheZoneAndCountAsUnsaved() {
+		// FR-7, decided 2026-11-21: a new zone leaves every cue setting Unchanged; the Cues pop-up edits the draft.
+		ZoneDraft d = ZoneDraft.blank("z1", "Trading hall", WORLD, OVERWORLD, new Point(0, 64, 0), ORANGE);
+		assertEquals(soundsculptor.core.cue.PlaceCues.UNCHANGED, d.cues());
+		soundsculptor.core.cue.PlaceCues quiet = soundsculptor.core.cue.PlaceCues.UNCHANGED.withShowCues(false);
+		d.setCues(quiet);
+		assertTrue(d.isDirty(), "a cue change is an unsaved change");
+		assertEquals(quiet, d.build().cues());
+		ZoneDraft again = ZoneDraft.of(d.build(), ORANGE, ORANGE);
+		assertEquals(quiet, again.cues());
+		assertFalse(again.isDirty());
+		again.setCues(quiet);
+		assertFalse(again.isDirty(), "the same settings again are no change");
+	}
+
+	@Test
 	void aNewZoneIsATenBlockBoxAtThePlayerOnTheBlockGrid() {
 		// FR-8.1a, FR-8.3: new zones are boxes, and every box edge is on a block boundary.
 		ZoneDraft d = ZoneDraft.blank("z1", "Trading hall", WORLD, OVERWORLD, new Point(120.5, 64, -33.5), ORANGE);
