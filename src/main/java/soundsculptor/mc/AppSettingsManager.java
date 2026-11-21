@@ -3,6 +3,7 @@ package soundsculptor.mc;
 import soundsculptor.SoundSculptorClient;
 import soundsculptor.core.settings.AppSettings;
 import soundsculptor.core.settings.AppSettingsStore;
+import soundsculptor.mc.ui.UiSettings;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
@@ -31,6 +32,7 @@ public final class AppSettingsManager {
 		store = new AppSettingsStore(configDir.resolve("soundsculptor").resolve("settings.json"));
 		AppSettingsStore.LoadResult result = store.load();
 		current = result.settings();
+		UiSettings.reducedMotion = current.reducedMotion();
 		if (result.hasProblems()) {
 			SoundSculptorClient.LOGGER.warn("Sound Sculptor settings {}: {}{}", store.file(), String.join(" ", result.problems()),
 					result.brokenCopy() == null ? "" : " The file was renamed to " + result.brokenCopy());
@@ -47,6 +49,7 @@ public final class AppSettingsManager {
 			return;
 		}
 		current = after;
+		UiSettings.reducedMotion = after.reducedMotion();
 		if (store != null) {
 			SAVER.execute(() -> {
 				try {

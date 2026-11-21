@@ -25,7 +25,7 @@ public final class SculptCheckbox extends SculptButton {
 				onPress);
 		this.label = label;
 		this.checked = checked;
-		setTooltip(Tooltip.create(tooltip));
+		tooltipText(tooltip);
 	}
 
 	public boolean checked() {

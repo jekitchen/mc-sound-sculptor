@@ -1,8 +1,9 @@
 package soundsculptor.mc.ui;
 
 /**
- * Colors and sizes shared by all components. Text colors keep a contrast ratio of at least 4.5:1 against
- * {@link #PANEL} (PRD A-3); the ratio is noted next to each.
+ * Colors and sizes shared by all components. Every text color keeps a contrast ratio of at least 4.5:1 against each
+ * background it is drawn on, even with a white sky behind the screen (PRD A-3); {@code ThemeContrastTest} works each
+ * one out. The ratios noted below are on {@link #PANEL}.
  */
 public final class Theme {
 	private Theme() {
@@ -22,10 +23,18 @@ public final class Theme {
 	/** Warning text and outlines (e.g. volume above 100%), about 13:1 on PANEL. */
 	public static final int WARNING = 0xFFFFD24D;
 
+	/**
+	 * Laid over the whole screen behind everything else, on top of vanilla's menu background, so text stays readable
+	 * over a bright sky or snow (A-3): the dim gray of labels keeps about 7:1 even then.
+	 */
+	public static final int BODY = 0xC0000000;
 	/** Scrolling list background; row text on it is about 17:1. */
 	public static final int LIST_BACKGROUND = 0xC0000000;
-	/** Row with keyboard focus (paired with the focus ring on its button and the narration). */
-	public static final int ROW_FOCUSED = 0x60FFFFFF;
+	/**
+	 * Row with keyboard focus (paired with the focus ring on its button and the narration). Light enough to see, dark
+	 * enough that a row's dim second line keeps 4.5:1 on it.
+	 */
+	public static final int ROW_FOCUSED = 0x40FFFFFF;
 	/** Row under the mouse. */
 	public static final int ROW_HOVER = 0x30FFFFFF;
 	/** Toast background. */

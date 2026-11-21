@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.LongSupplier;
 
@@ -92,50 +93,65 @@ public final class SetLibrary {
 
 	/**
 	 * A name no other set uses, ignoring case (the same rule the list is sorted by): {@code wanted}, else
-	 * "wanted (2)", "wanted (3)" and so on. The set {@code exceptId} (the one being renamed) does not count as a clash.
-	 * When a suffix is added, {@code wanted} is cut short so the result still fits in {@link SoundSet#MAX_NAME_LENGTH}
-	 * characters.
+	 * "wanted (2)", "wanted (3)" and so on ({@link SetNames.Forms#numbered}, in the player's language). The set
+	 * {@code exceptId} (the one being renamed) does not count as a clash. When the name grows, {@code wanted} is cut
+	 * short so the result still fits in {@link SoundSet#MAX_NAME_LENGTH} characters.
 	 */
+	/** More numbered tries than any library needs ({@link #uniqueName} stops there whatever the language file says). */
+	static final int MAX_NAME_TRIES = 10_000;
+
 	public String uniqueName(String wanted, String exceptId) {
-		return uniqueName(wanted, exceptId, "");
+		return uniqueName(wanted, exceptId, null, Set.of());
 	}
 
 	/**
-	 * Like {@link #uniqueName(String, String)}, but a name that clashes first gets {@code firstSuffix} (for example
-	 * " (copy)"), and only then " (2)", " (3)" and so on after it. The result fits in {@link SoundSet#MAX_NAME_LENGTH}.
+	 * Like {@link #uniqueName(String, String)}, but a name that clashes first takes the form {@code first} (for example
+	 * {@link SetNames.Forms#copy}: "Farm (copy)"), and only then "Farm (copy) (2)", "Farm (copy) (3)" and so on. The
+	 * names in {@code alsoTaken} (ignoring case) clash too, for names that are about to be added, such as the other sets
+	 * of an import.
+	 *
+	 * @param first the first form, or {@code null} to try {@code wanted} itself first
 	 */
-	public String uniqueName(String wanted, String exceptId, String firstSuffix) {
-		return uniqueName(wanted, exceptId, firstSuffix, Set.of());
-	}
-
-	/**
-	 * Like {@link #uniqueName(String, String, String)}, but the names in {@code alsoTaken} (ignoring case) clash too, for
-	 * names that are about to be added, such as the other sets of an import.
-	 */
-	public String uniqueName(String wanted, String exceptId, String firstSuffix, Collection<String> alsoTaken) {
+	public String uniqueName(String wanted, String exceptId, UnaryOperator<String> first, Collection<String> alsoTaken) {
 		Set<String> taken = new HashSet<>();
 		for (String name : alsoTaken) {
 			taken.add(key(name));
 		}
-		String candidate = firstSuffix.isEmpty() ? wanted : fit(wanted, firstSuffix) + firstSuffix;
-		for (int n = 2; clashes(candidate, exceptId) || taken.contains(key(candidate)); n++) {
-			String suffix = firstSuffix + " (" + n + ")";
-			candidate = fit(wanted, suffix) + suffix;
+		UnaryOperator<String> start = first == null ? UnaryOperator.identity() : first;
+		String candidate = fitted(wanted, start);
+		SetNames.Forms forms = SetNames.forms();
+		// A library holds at most a few hundred sets, so a free number is always found well before this many tries.
+		boolean english = false;
+		for (int n = 2; (clashes(candidate, exceptId) || taken.contains(key(candidate))) && n < MAX_NAME_TRIES; n++) {
+			int number = n;
+			SetNames.Forms use = english ? SetNames.ENGLISH : forms;
+			String next = fitted(wanted, name -> use.numbered(start.apply(name), number));
+			if (!english && next.equals(candidate)) {
+				// The translated pattern leaves the number out, so every try would be the same name: use the English one.
+				english = true;
+				next = fitted(wanted, name -> SetNames.ENGLISH.numbered(start.apply(name), number));
+			}
+			candidate = next;
 		}
 		return candidate;
 	}
 
-	/** {@code wanted} cut so that it plus {@code suffix} has at most the maximum name length, never inside a surrogate pair. */
-	private static String fit(String wanted, String suffix) {
-		int room = SoundSet.MAX_NAME_LENGTH - suffix.length();
-		if (wanted.length() <= room) {
-			return wanted;
+	/**
+	 * {@code form} applied to {@code wanted}, with {@code wanted} cut short (never inside a surrogate pair) until the
+	 * result has at most the maximum name length.
+	 */
+	private static String fitted(String wanted, UnaryOperator<String> form) {
+		String name = wanted;
+		String result = form.apply(name);
+		while (result.length() > SoundSet.MAX_NAME_LENGTH && !name.isEmpty()) {
+			int end = Math.max(0, name.length() - (result.length() - SoundSet.MAX_NAME_LENGTH));
+			if (end > 0 && Character.isHighSurrogate(name.charAt(end - 1))) {
+				end--;
+			}
+			name = name.substring(0, end).stripTrailing();
+			result = form.apply(name);
 		}
-		int end = room;
-		if (end > 0 && Character.isHighSurrogate(wanted.charAt(end - 1))) {
-			end--;
-		}
-		return wanted.substring(0, end).stripTrailing();
+		return result;
 	}
 
 	/** "set-" and 12 lowercase hex digits that no set in the library uses. */

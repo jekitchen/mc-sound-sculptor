@@ -21,9 +21,9 @@ Work toward 1.0, after the alpha. Not released yet.
   this?" has a Cue button. A new mute gets Cue on, unless you change that in Settings.
 - **Settings › General:** Show muted-sound cues (also an optional hotkey in Controls, unbound by default), Cue sounds
   without subtitles (shows the sound's ID instead) and New mutes get Cue (per world or server).
-- **Settings › Accessibility** (new page): Cue color (six named colors; the default is light blue-gray), Cue text size
-  (100 to 200%) and the cue box position (left/right and up/down, with a button to put it back). The box always stays on
-  screen.
+- **Settings › Accessibility** (new page): Cue color (four named colors; the default is light blue-gray), Cue text size
+  (100 to 200%), the cue box position (left/right and up/down, with a button to put it back) and Reduced motion. The box
+  always stays on screen.
 - A quick Cue change never turns a switched-off Quick changes entry back on.
 - **Repeat limits:** an entry can cap how often its sounds start, from 1 to 100 plays per 0.05 to 10 seconds, for
   example "3 per 1 s" for villager mumbles. Plays over the limit are dropped. The count is shared by every matching
@@ -67,6 +67,24 @@ Work toward 1.0, after the alpha. Not released yet.
 - `-Pgametests=<name>,<name>` runs only the named client game tests.
 - `./gradlew build` checks that the jar stays under 1 MB and holds only Sound Sculptor's own files.
 - The mod's description in `fabric.mod.json` now says it can boost and rate-limit sounds too.
+
+### Accessibility and translations
+- **Reduced motion** (Settings › Accessibility): messages at the bottom of the screen appear at once instead of
+  sliding in. It is saved with your other settings.
+- **Lists fit small windows and longer languages:** a list row that does not fit first hides less important text (a
+  profile's world key, a zone's size), then moves text onto another line, and puts its buttons on their own line when
+  even its name would be cut. Hidden text is in the row's tooltip, in its buttons' tooltips when you Tab to them, and
+  in what the narrator reads. On/Off and other states are never hidden. Rows without buttons wrap long text instead.
+  While the Sounds list holds still under the pointer, rows keep their height too.
+- **Settings › Diagnostics** scrolls instead of running past the bottom of a small window, with Copy report at the top;
+  long lines wrap.
+- **Easier to read over a bright sky:** every screen now darkens the world behind it more, the highlight on the row
+  with keyboard focus is softer, and the cue colors bluish green and reddish purple are no longer offered, so all text
+  keeps a contrast of at least 4.5:1. A color you already chose is kept, shown as "Bluish green (low contrast)" or
+  "Reddish purple (low contrast)".
+- **Ready for translation:** every text comes from the language file, including percentages, lists of names, the "Off"
+  in a zone's row and the names "Farm (copy)" and "Farm (imported)", and none is built from sentence pieces, so a
+  translation can put words in its own order.
 
 ## 0.1.0-alpha (unreleased)
 

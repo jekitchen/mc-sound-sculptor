@@ -334,7 +334,7 @@ public final class TraceScreen extends SculptScreen {
 		Component label = Component.translatable(target.set().quick() ? "soundsculptor.trace.edit.open_quick" : "soundsculptor.trace.edit.open_set");
 		SculptButton button = SculptButton.icon(EDIT_ICON, label, () -> openSetEditor(target.place(), setId, null));
 		if (places != null) {
-			button.setTooltip(Tooltip.create(Component.empty().append(label).append("\n").append(places), places));
+			button.tooltipText(Component.empty().append(label).append("\n").append(places), places);
 		}
 		return button;
 	}

@@ -31,7 +31,6 @@ import soundsculptor.mc.SoundsPanel;
 import soundsculptor.mc.TraceScreen;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptList;
-import soundsculptor.mc.ui.SculptScreen;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
@@ -170,8 +169,8 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 			main(mc).setSettingsPage(SoundSculptorScreen.SettingsPage.DIAGNOSTICS);
 		});
 		context.waitTicks(2);
-		// A long line wraps onto two labels at a small window; joined with a space it reads as one line again.
-		String diag = context.computeOnClient(mc -> String.join(" ", labels(main(mc))).replaceAll("\\s+", " "));
+		// One list row per line; a line too long for its row is cut on screen, but its text is whole.
+		String diag = context.computeOnClient(mc -> String.join("\n", main(mc).diagnosticsLines()));
 		check(diag.contains("Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)"), "the Diagnostics page shows it:\n" + diag);
 		context.takeScreenshot("m11-diagnostics");
 		closeScreen(context);
@@ -628,14 +627,6 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 		world.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.2f %.2f %.2f", x, y, z));
 		context.waitFor(mc -> mc.player != null && mc.player.position().distanceToSqr(x, y, z) < 0.25, 200);
 		context.waitTicks(2);
-	}
-
-	private static List<String> labels(SculptScreen screen) {
-		List<String> texts = new ArrayList<>();
-		for (SculptScreen.Body.Label label : screen.body().labels()) {
-			texts.add(label.text().get().getString());
-		}
-		return texts;
 	}
 
 	private static void openMain(ClientGameTestContext context) {

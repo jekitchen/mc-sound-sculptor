@@ -87,8 +87,8 @@ public final class ZoneListPanel {
 		for (Zone zone : zones) {
 			List<SummaryPart> parts = ZoneSummary.parts(zone, key, dimension, feet);
 			String where = parts.get(parts.size() - 1).text(TRANSLATOR);
-			String place = zone.enabled() ? where
-					: Component.translatable("soundsculptor.summary.rule.disabled").getString() + ", " + where;
+			// A zone that is off says so with where it is, in one sentence pattern: "Off, 12 blocks away".
+			String place = zone.enabled() ? where : Component.translatable("soundsculptor.zones.place_off", where).getString();
 			summaries.add(parts);
 			places.add(place);
 			placeWidth = Math.max(placeWidth, SculptList.Row.Column.widthFor(Component.literal(place)));
@@ -104,7 +104,8 @@ public final class ZoneListPanel {
 			List<SculptList.Row.Column> columns = List.of(
 					new SculptList.Row.Column(() -> name, 0, 0),
 					new SculptList.Row.Column(() -> place, placeWidth, 0),
-					new SculptList.Row.Column(() -> shape, 0, 1),
+					// The shape and size give way first in a narrow row; they stay in the tooltip and the narration.
+					new SculptList.Row.Column(() -> shape, 0, 1).hiddenWhenNarrow(),
 					new SculptList.Row.Column(() -> sets, setsWidth, 1));
 			List<SculptButton> buttons = new ArrayList<>();
 			buttons.add(Tooltips.describe(SculptButton.text(SculptToggle.stateText(zone.enabled()), onOffWidth, () -> setEnabled(zone.id(), !zone.enabled())),

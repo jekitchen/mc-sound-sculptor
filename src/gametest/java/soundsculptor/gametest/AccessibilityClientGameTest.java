@@ -33,6 +33,13 @@ import soundsculptor.mc.ProfileTransfer;
 import soundsculptor.core.Message;
 import soundsculptor.core.sets.SetImportPlan;
 import soundsculptor.mc.EntryEditorScreen;
+import soundsculptor.mc.BoostUi;
+import soundsculptor.mc.CueOverlay;
+import soundsculptor.mc.AppSettingsManager;
+import soundsculptor.mc.ui.UiSettings;
+import soundsculptor.core.sets.Limit;
+import soundsculptor.core.settings.AppSettings;
+import soundsculptor.gametest.compat.KeyEventCompat;
 import soundsculptor.mc.TraceScreen;
 import soundsculptor.mc.ZoneEditorScreen;
 import soundsculptor.gametest.compat.NarrationCompat;
@@ -61,6 +68,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The automatable part of the release checklist (PRD 11.5) and FR-12.3:
@@ -80,9 +93,14 @@ import net.minecraft.util.Util;
  *   label to read.</li>
  *   <li>Long place lists (FR-4.11): with a set used in {@value #MANY_ZONES} long-named zones, the delete warning and the
  *   linked-save confirmation keep their buttons on screen and scroll, and every place is still listed and read.</li>
- *   <li>Pseudo-language (PRD 9.3): the same layout check with every Sound Sculptor text about 40% longer, reported, and
- *   held at or under {@value #PSEUDO_CEILING} problems (the Diagnostics timing lines, and the labels their live
- *   numbers push down, aside) so new ones fail the test.</li>
+ *   <li>Every screen and pop-up of the layout check (the cue box's settings, the Level, cue and limit pop-up, the boost
+ *   question, the entry editor with a limit and a boost, and Settings › Accessibility among them): every control has a
+ *   label (A-4), and Tab reaches every control in reading order with Shift+Tab going back (A-1).</li>
+ *   <li>The cue box (FR-7) at 100% and 200% text scale stays inside the window at every window size and GUI scale.</li>
+ *   <li>Reduced motion (A-6): the Settings › Accessibility toggle works by keyboard, is saved, and stops toasts sliding
+ *   in.</li>
+ *   <li>Pseudo-language (PRD 9.3, 11.5): the same layout check with every Sound Sculptor text about 40% longer; like
+ *   English, it must find no problem.</li>
  * </ul>
  * Grayscale, Sodium, Iris, Sound Physics Remastered and servers stay manual checks.
  */
@@ -97,6 +115,12 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	private static final String COW = "minecraft:entity.cow.ambient";
 	/** A sound for the Sounds tab's Level pop-up and Add to set…. */
 	private static final String VILLAGER = "minecraft:entity.villager.ambient";
+	/** Muted with Cue on and a per-source limit: the cue box, and the Level, cue and limit controls (FR-6, FR-7). */
+	private static final String EXPLODE = "minecraft:entity.generic.explode";
+	/** At 150%: the boost warning under the level slider (FR-5.4). */
+	private static final String CAT = "minecraft:entity.cat.ambient";
+	/** The fixture's entries for EXPLODE and CAT in Everywhere's Quick changes, as the trace lists them. */
+	private static final EntryLocation QUICK_R3 = new EntryLocation(PlaceRef.EVERYWHERE, SoundSet.QUICK_ID, "r3");
 	/** A sound nothing on Everywhere matches: the trace's Add to Quick changes line. */
 	private static final String PIG = "minecraft:entity.pig.ambient";
 	/** A library set for the Sound Sets tab, its name screen and its delete warning. */
@@ -108,14 +132,6 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	private static final int MANY_ZONES = 40;
 	/** Another server's profile, seeded so the Profiles tab has the same rows every run. */
 	private static final String OTHER_PROFILE = "a11y-other.example.net";
-	/**
-	 * The most pseudo-language layout problems allowed, not counting the Diagnostics timing lines (their live numbers change
-	 * length from run to run): a ratchet at the count this check finds today. Buttons and choices now fit their text and
-	 * long hints wrap; what is left are 38 list columns squeezed at the narrowest GUI widths (Sounds, picker, Zones,
-	 * Profiles and a place's Sound Sets), due in M16. Lower it when fixes bring the count down.
-	 */
-	private static final int PSEUDO_CEILING = 38;
-
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		// Outside a world (title screen): per-world tabs explain instead of showing settings.
@@ -166,9 +182,13 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		// SET is attached to Everywhere and the first zone, so the set editor's Attached to panel has lines, Attach to…
 		// has a choice, Everywhere's Sound Sets show the pinned Quick changes and a shared set, and Attach set… for the
 		// second zone offers SET.
-		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name())
+		// Boost is confirmed (FR-5.4), so the 150% entry does not ask when the screen opens.
+		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()).withBoostConfirmed(true)
 				.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("r1", "minecraft:entity.villager.*").withMute(true),
-						SetEntry.of("r2", "minecraft:entity.villager.ambient").withVolume(30))).attach(SET.id()))
+						SetEntry.of("r2", "minecraft:entity.villager.ambient").withVolume(30),
+						// The cue box (FR-7), and the entry editor and pop-ups with a repeat limit (FR-6) and a boost (FR-5.4).
+						SetEntry.of("r3", EXPLODE).withMute(true).withCue(true).withLimit(new Limit(50, 1000, true)),
+						SetEntry.of("r4", CAT).withVolume(150))).attach(SET.id()))
 				.withZones(List.of(attached(zone("z1", "Trading hall", key), SET.id()),
 						zone("z2", "Very long zone name for the bee farm by the river", key))), ws.library().put(SET))));
 		// Recently played rows (FR-1.2), so the Sounds tab and the picker show their two-line rows: in a zone with a short
@@ -419,8 +439,23 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("a11y-delete-many-places");
 		context.setScreen(() -> null);
 
+		// A-4 for every screen and pop-up the layout check opens (the M9, M10 and M11 ones among them), and A-1: Tab
+		// reaches every control of each, in reading order, and Shift+Tab goes back.
+		List<String> silentAll = new ArrayList<>();
+		List<String> tabOrder = new ArrayList<>();
+		for (Screens screen : Screens.values()) {
+			silentAll.addAll(context.computeOnClient(mc -> silentControls(screen.openAndApply(mc)).stream().map(w -> screen.name() + ": " + w).toList()));
+			tabOrder.addAll(context.computeOnClient(mc -> tabOrderProblems(screen.openAndApply(mc), screen.name())));
+		}
+		check(silentAll.isEmpty(), "controls without a label: " + silentAll);
+		System.out.println("A11Y Tab order: " + tabOrder.size() + " problems" + (tabOrder.isEmpty() ? "" : "\n  " + String.join("\n  ", tabOrder)));
+		check(tabOrder.isEmpty(), tabOrder.size() + " Tab order problems, first: " + (tabOrder.isEmpty() ? "" : tabOrder.get(0)));
+		context.setScreen(() -> null);
+
+		checkReducedMotion(context);
+
 		// A-3: every screen at every window size and GUI scale.
-		List<String> english = layoutProblems(context);
+		List<String> english = layoutProblems(context, "english");
 		System.out.println("A11Y layout (English): " + english.size() + " problems" + (english.isEmpty() ? "" : "\n  " + String.join("\n  ", english)));
 		check(english.isEmpty(), english.size() + " layout problems in English, first: " + (english.isEmpty() ? "" : english.get(0)));
 
@@ -428,24 +463,27 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> Language.inject(new PseudoLanguage(Language.getInstance())));
 		List<String> pseudo;
 		try {
-			pseudo = layoutProblems(context);
+			pseudo = layoutProblems(context, "pseudo");
+			heldRowsKeepTheirHeight(context);
 		} finally {
 			context.runOnClient(mc -> Language.inject(((PseudoLanguage) Language.getInstance()).english));
 		}
 		System.out.println("A11Y layout (pseudo-language, text 40% longer): " + pseudo.size() + " problems"
 				+ (pseudo.isEmpty() ? "" : "\n  " + String.join("\n  ", pseudo)));
-		// The Diagnostics timing lines ("… µs") show live numbers whose length changes from run to run, so whether they are
-		// cut does too, and so does how many lines they wrap onto, which decides whether the labels under them still fit
-		// the body: both are reported above but not counted against the ceiling. English is still checked in full.
-		long gated = pseudo.stream().filter(p -> !(p.contains("SETTINGS_DIAGNOSTICS: label cut off") && p.contains("µ"))
-				&& !p.contains("SETTINGS_DIAGNOSTICS: label below the body")).count();
-		System.out.println("A11Y layout (pseudo-language) counted against the ceiling: " + gated + " of at most " + PSEUDO_CEILING);
-		check(gated <= PSEUDO_CEILING, "pseudo-language layout problems rose to " + gated + " (ceiling " + PSEUDO_CEILING
-				+ "): fix the new ones, or lower the ceiling when the count falls");
+		// PRD 11.5 "Pseudo-language build: no clipped text": enforced since M16, like English.
+		check(pseudo.isEmpty(), pseudo.size() + " layout problems in the pseudo-language, first: " + (pseudo.isEmpty() ? "" : pseudo.get(0)));
 	}
 
 	/** Every screen, tab and settings page, at every window size and GUI scale. */
-	private static List<String> layoutProblems(ClientGameTestContext context) {
+	/** The list screens whose rows change at narrow widths, saved as screenshots at the smallest size for a visual check. */
+	private static final java.util.Set<Screens> ROW_SCREENSHOTS = java.util.EnumSet.of(Screens.SOUNDS_RECENT, Screens.SOUNDS_ALL,
+			Screens.PICKER_RECENT, Screens.PICKER_ALL, Screens.ZONES, Screens.PROFILES, Screens.PLACE_SETS_EVERYWHERE,
+			Screens.SETTINGS_DIAGNOSTICS);
+
+	/**
+	 * @param language "english" or "pseudo", for the screenshots of {@link #ROW_SCREENSHOTS} at 854 × 480, GUI scale 2
+	 */
+	private static List<String> layoutProblems(ClientGameTestContext context, String language) {
 		List<String> problems = new ArrayList<>();
 		int originalScale = context.computeOnClient(mc -> mc.options.guiScale().get());
 		for (int[] window : WINDOWS) {
@@ -467,7 +505,12 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 						}
 						return check(mc, mc.gui.screen(), where + " " + screen.name());
 					}));
+					if (window[0] == 854 && scale == 2 && ROW_SCREENSHOTS.contains(screen)) {
+						context.waitTicks(1);
+						context.takeScreenshot("a11y-rows-" + language + "-" + screen.name().toLowerCase(java.util.Locale.ROOT));
+					}
 				}
+				problems.addAll(cueBoxProblems(context, where));
 			}
 		}
 		context.runOnClient(mc -> {
@@ -498,6 +541,21 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			((SoundSculptorScreen) s).sounds().openLevel(VILLAGER);
 			return null;
 		}),
+		// The Level, cue and limit pop-up with Cue on and a per-source limit (FR-6, FR-7).
+		SOUNDS_LEVEL_LIMIT(mc -> tab(SoundSculptorScreen.TAB_SOUNDS), s -> {
+			((SoundSculptorScreen) s).sounds().openLevel(EXPLODE);
+			return null;
+		}),
+		// At 150%, with the boost warning under the slider (FR-5.4).
+		SOUNDS_LEVEL_BOOST(mc -> tab(SoundSculptorScreen.TAB_SOUNDS), s -> {
+			((SoundSculptorScreen) s).sounds().openLevel(CAT);
+			return null;
+		}),
+		// The boost question (FR-5.4), asked over the Sounds tab.
+		BOOST_DIALOG(mc -> {
+			BoostUi.ask(tab(SoundSculptorScreen.TAB_SOUNDS), () -> { }, () -> { });
+			return mc.gui.screen();
+		}, null),
 		ADD_TO_SET(mc -> new AddToSetScreen((SculptScreen) tab(SoundSculptorScreen.TAB_SOUNDS), VILLAGER, "Villager mumbles", () -> { }), null),
 		ADD_TO_SET_TARGETS(mc -> new AddToSetScreen((SculptScreen) tab(SoundSculptorScreen.TAB_SOUNDS), VILLAGER, "Villager mumbles", () -> { }), s -> {
 			((AddToSetScreen) s).chooseSet(SET.id());
@@ -554,6 +612,8 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		}),
 		SET_EDITOR_QUICK(mc -> SetEditorScreen.forQuickChanges(null, PlaceRef.EVERYWHERE), null),
 		ENTRY_EDITOR(mc -> EntryEditorScreen.edit(null, SetDraft.of(SET), "e1"), null),
+		ENTRY_EDITOR_LIMIT(mc -> EntryEditorScreen.forQuickEntry(null, PlaceRef.EVERYWHERE, "r3"), null),
+		ENTRY_EDITOR_BOOST(mc -> EntryEditorScreen.forQuickEntry(null, PlaceRef.EVERYWHERE, "r4"), null),
 		ZONE_EDITOR_NEW(mc -> ZoneEditorScreen.create(null), null),
 		ZONE_EDITOR(mc -> ZoneEditorScreen.edit(null, ProfileManager.profile().zone("z1")), null),
 		PLACE_SETS_EVERYWHERE(mc -> new PlaceSetsScreen(null, PlaceRef.EVERYWHERE), null),
@@ -569,6 +629,11 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			return null;
 		}),
 		TRACE_SHARED_SET(mc -> new TraceScreen(null, COW), null),
+		// The trace's Level… panel for an entry with Cue on and a per-source limit.
+		TRACE_LEVEL_LIMIT(mc -> new TraceScreen(null, EXPLODE), s -> {
+			((TraceScreen) s).openVolume(QUICK_R3, QuickEntries.get(ProfileManager.profile(), "r3"));
+			return null;
+		}),
 		TRACE_ADD_TO_QUICK(mc -> new TraceScreen(null, PIG), s -> {
 			((TraceScreen) s).openAddToQuickChanges(PlaceRef.EVERYWHERE);
 			return null;
@@ -584,6 +649,16 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 
 		Screen open(Minecraft mc) {
 			return opener.apply(mc);
+		}
+
+		/** Opens the screen, shows it, and opens its pop-up if it has one; returns what is showing. */
+		Screen openAndApply(Minecraft mc) {
+			Screen opened = open(mc);
+			mc.gui.setScreen(opened);
+			if (after != null) {
+				after.apply((SculptScreen) opened);
+			}
+			return mc.gui.screen();
 		}
 
 		/** The import's rename screen for SET, the first of two clashes, refusing SET's own name as the library would. */
@@ -680,9 +755,14 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 					found.putIfAbsent("button " + i, in + ": text cut off in row button \"" + button.getMessage().getString() + "\"");
 				}
 			}
+			// Every text line ends inside the row: a row that wraps onto more lines must have grown to hold them.
+			int textBottom = layout.lines() <= 1 ? 0 : 3 + (layout.lines() - 1) * SculptList.Row.LINE_STEP + font.lineHeight;
+			if (textBottom > row.getHeight()) {
+				found.putIfAbsent("height", in + ": " + layout.lines() + " text lines do not fit a row " + row.getHeight() + " px tall (row " + rowName + ")");
+			}
 			for (int i = 0; i < layout.columns().size(); i++) {
 				SculptList.Row.Placed placed = layout.columns().get(i);
-				String text = placed.column().text().get();
+				String text = placed.text();
 				int asked = placed.column().width();
 				// A shrinking column (a zone's name) may be cut, and may give way down to its minimum.
 				boolean shrinks = placed.column().shrinks();
@@ -694,6 +774,9 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 					found.putIfAbsent("cut " + i, in + ": column " + i + " cut off \"" + text + "\"");
 				} else if (asked == 0 && cut && placed.width() < SculptList.Row.REST_MIN_WIDTH) {
 					found.putIfAbsent("narrow " + i, in + ": column " + i + " only " + placed.width() + " px for \"" + text + "\"");
+				} else if (cut && buttons.isEmpty()) {
+					// A read-only row (Diagnostics, search help) has no button whose tooltip could show the rest: it wraps.
+					found.putIfAbsent("read-only cut " + i, in + ": read-only row cuts \"" + text + "\" (row " + rowName + ")");
 				}
 			}
 		}
@@ -703,6 +786,217 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	private static String describe(AbstractWidget widget) {
 		String text = widget.getMessage().getString();
 		return widget.getClass().getSimpleName() + " \"" + (text.length() > 40 ? text.substring(0, 40) + "…" : text) + "\"";
+	}
+
+	/**
+	 * A-1: from no focus, Tab visits every visible, active control once before coming back to the first (a list counts
+	 * once: inside it arrows move), in reading order (each one right of the one before on its row, or below it), and
+	 * Shift+Tab goes back one. With a pop-up open, focus stays in the pop-up and goes round its controls.
+	 */
+	private static List<String> tabOrderProblems(Screen screen, String where) {
+		List<String> problems = new ArrayList<>();
+		List<AbstractWidget> expected = new ArrayList<>();
+		boolean popUp = screen instanceof SculptScreen sculpt && sculpt.hasOverlay();
+		List<? extends GuiEventListener> candidates = popUp ? ((SculptScreen) screen).overlayWidgets() : screen.children();
+		for (GuiEventListener child : candidates) {
+			if (child instanceof AbstractWidget w && w.visible && w.active && !(child instanceof SculptList list && list.children().isEmpty())) {
+				expected.add(w);
+			}
+		}
+		if (expected.isEmpty()) {
+			return problems;
+		}
+		screen.setFocused(null);
+		List<AbstractWidget> visited = new ArrayList<>();
+		for (int i = 0; i <= expected.size() + 1; i++) {
+			screen.keyPressed(KeyEventCompat.of(InputConstants.KEY_TAB, 0));
+			if (!(screen.getFocused() instanceof AbstractWidget focused)) {
+				problems.add(where + ": Tab focused " + screen.getFocused());
+				return problems;
+			}
+			if (!visited.isEmpty() && focused == visited.get(0)) {
+				break;
+			}
+			if (visited.contains(focused)) {
+				problems.add(where + ": Tab came back to " + describe(focused) + " before reaching every control");
+				return problems;
+			}
+			visited.add(focused);
+		}
+		List<AbstractWidget> missing = expected.stream().filter(w -> !visited.contains(w)).toList();
+		if (!missing.isEmpty()) {
+			problems.add(where + ": Tab never reaches " + missing.stream().map(AccessibilityClientGameTest::describe).toList());
+		}
+		for (int i = 1; i < visited.size(); i++) {
+			AbstractWidget a = visited.get(i - 1);
+			AbstractWidget b = visited.get(i);
+			boolean sameRow = b.getY() < a.getBottom() && a.getY() < b.getBottom();
+			boolean readingOrder = sameRow ? b.getX() >= a.getRight() : b.getY() > a.getY();
+			if (!readingOrder) {
+				problems.add(where + ": Tab goes from " + describe(a) + " at " + a.getX() + "," + a.getY() + " to " + describe(b)
+						+ " at " + b.getX() + "," + b.getY() + ", not in reading order");
+			}
+		}
+		if (visited.size() > 1) {
+			// Focus is back on the first control: Shift+Tab goes round to the last.
+			screen.keyPressed(KeyEventCompat.of(InputConstants.KEY_TAB, InputConstants.MOD_SHIFT));
+			if (screen.getFocused() != visited.get(visited.size() - 1)) {
+				problems.add(where + ": Shift+Tab from the first control should go round to the last, went to "
+						+ (screen.getFocused() instanceof AbstractWidget w ? describe(w) : String.valueOf(screen.getFocused())));
+			}
+		}
+		return problems;
+	}
+
+	/**
+	 * A-3 for the cue box (FR-7): a muted sound with Cue on, at 100% and 200% text scale, keeps its box inside the window
+	 * at this window size and GUI scale.
+	 */
+	private static List<String> cueBoxProblems(ClientGameTestContext context, String where) {
+		List<String> problems = new ArrayList<>();
+		context.runOnClient(mc -> mc.gui.setScreen(null));
+		for (int scale : new int[] {AppSettings.MIN_CUE_SCALE, AppSettings.MAX_CUE_SCALE}) {
+			context.runOnClient(mc -> {
+				AppSettingsManager.update(s -> s.withCueTextScale(scale));
+				CueOverlay.clear();
+				Vec3 at = mc.getSoundManager().getListenerTransform().position();
+				mc.getSoundManager().play(new SimpleSoundInstance(Identifier.parse(EXPLODE), SoundSource.NEUTRAL, 1.0F, 1.0F,
+						RandomSource.create(), false, 0, SoundInstance.Attenuation.LINEAR, at.x() + 4, at.y(), at.z(), false));
+			});
+			context.waitTicks(2);
+			problems.addAll(context.computeOnClient(mc -> {
+				List<String> found = new ArrayList<>();
+				List<CueOverlay.Shown> lines = CueOverlay.shown();
+				int width = mc.getWindow().getGuiScaledWidth();
+				int height = mc.getWindow().getGuiScaledHeight();
+				if (lines.isEmpty()) {
+					found.add(where + " cue box at " + scale + "%: no cue shown for a muted sound with Cue on");
+				}
+				for (CueOverlay.Shown line : lines) {
+					if (line.x() < 0 || line.y() < 0 || line.x() + line.width() > width || line.y() + line.height() > height) {
+						found.add(where + " cue box at " + scale + "%: " + line + " is outside the " + width + "x" + height + " window");
+					}
+				}
+				return found;
+			}));
+		}
+		context.runOnClient(mc -> {
+			AppSettingsManager.update(s -> s.withCueTextScale(AppSettings.MIN_CUE_SCALE));
+			CueOverlay.clear();
+		});
+		return problems;
+	}
+
+	/**
+	 * A-6: Reduced motion is on Settings › Accessibility. Pressing it with the keyboard saves it, and a toast then appears
+	 * in place instead of sliding in; turned off again, toasts slide in.
+	 */
+	private static void checkReducedMotion(ClientGameTestContext context) {
+		context.runOnClient(mc -> {
+			SoundSculptorScreen screen = (SoundSculptorScreen) Screens.SETTINGS_ACCESSIBILITY.openAndApply(mc);
+			check(screen.reducedMotionToggle != null && !screen.reducedMotionToggle.value(), "Settings › Accessibility has Reduced motion, off");
+			screen.setFocused(screen.reducedMotionToggle);
+		});
+		context.getInput().pressKey(InputConstants.KEY_RETURN);
+		context.waitTicks(1);
+		context.runOnClient(mc -> {
+			SoundSculptorScreen screen = (SoundSculptorScreen) mc.gui.screen();
+			check(AppSettingsManager.get().reducedMotion() && UiSettings.reducedMotion, "Enter turns Reduced motion on");
+			check(NarrationCompat.collect(screen.reducedMotionToggle::updateNarration).contains("Reduced motion"), "the toggle reads its name");
+			screen.showToast(Component.literal("Saved"), null);
+			check(screen.toast().slideOffset() == 0, "with Reduced motion a toast appears in place");
+		});
+		check(context.computeOnClient(mc -> AppSettingsManager.flushSaves()), "the settings save finishes");
+		String saved = context.computeOnClient(mc -> {
+			try {
+				return java.nio.file.Files.readString(FabricLoader.getInstance().getConfigDir().resolve("soundsculptor").resolve("settings.json"));
+			} catch (java.io.IOException e) {
+				return e.toString();
+			}
+		});
+		check(saved.contains("\"reducedMotion\": true"), "Reduced motion is saved in settings.json: " + saved);
+		context.takeScreenshot("a11y-reduced-motion");
+		context.getInput().pressKey(InputConstants.KEY_RETURN);
+		context.waitTicks(1);
+		context.runOnClient(mc -> {
+			SoundSculptorScreen screen = (SoundSculptorScreen) mc.gui.screen();
+			check(!AppSettingsManager.get().reducedMotion() && !UiSettings.reducedMotion, "Enter turns it off again");
+			screen.showToast(Component.literal("Saved"), null);
+			check(screen.toast().slideOffset() > 0, "without it a new toast slides in");
+		});
+		context.setScreen(() -> null);
+	}
+
+	/**
+	 * FR-1.3 with the narrow-row layout: while the player points at the Sounds list it is held, and a row rebuilt with more
+	 * columns (a sound heard for the first time gains its recently played columns, which in the pseudo-language at
+	 * 854 × 480 need a third line) keeps its height, so the row under the pointer stays where it is. Once the hold ends
+	 * the row takes its full height.
+	 */
+	private static void heldRowsKeepTheirHeight(ClientGameTestContext context) {
+		context.getInput().resizeWindow(854, 480);
+		context.waitTicks(2);
+		context.runOnClient(mc -> {
+			mc.options.guiScale().set(2);
+			mc.resizeGui();
+			RecentLog.get().sounds().clear();
+			SoundsPanel.resetRememberedState();
+			SoundSculptorScreen screen = new SoundSculptorScreen();
+			mc.gui.setScreen(screen);
+			screen.selectTab(SoundSculptorScreen.TAB_SOUNDS);
+			screen.sounds().setRecentOnly(false);
+			screen.sounds().searchField.setValue("minecraft:entity.cow.");
+		});
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		List<Object> keys = context.computeOnClient(mc -> heldList(mc).children().stream().map(SculptList.Row::key).toList());
+		// The list is short here (the toolbar wraps in the pseudo-language): the first row is rebuilt, the second is pointed at.
+		check(keys.size() >= 2, "the cow search lists at least 2 sounds, was " + keys);
+		String rebuilt = (String) keys.get(0);
+		Object pointed = keys.get(1);
+		int heightBefore = context.computeOnClient(mc -> heldList(mc).findRow(rebuilt).getHeight());
+		int pointedY = context.computeOnClient(mc -> heldList(mc).findRow(pointed).getY());
+		double scale = context.computeOnClient(mc -> mc.getWindow().getGuiScale());
+		int pointX = context.computeOnClient(mc -> heldList(mc).getX() + 20);
+		int pointHeight = context.computeOnClient(mc -> heldList(mc).findRow(pointed).getHeight());
+		check(context.computeOnClient(mc -> pointedY + pointHeight / 2 < heldList(mc).getBottom()), "the second row is in view");
+		context.getInput().setCursorPos(pointX * scale, (pointedY + pointHeight / 2.0) * scale);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		check(context.computeOnClient(mc -> ((SoundSculptorScreen) mc.gui.screen()).sounds().isHeld()), "pointing at the second row holds the list: " + context.computeOnClient(mc -> "hovered " + heldList(mc).isHovered()
+				+ " mouse " + mc.mouseHandler.xpos() + "," + mc.mouseHandler.ypos() + " list " + heldList(mc).getX() + "," + heldList(mc).getY()
+				+ " " + heldList(mc).getWidth() + "x" + heldList(mc).getHeight() + " row y " + pointedY + " scale " + scale + " keys " + keys));
+
+		context.runOnClient(mc -> RecentLog.get().sounds().record(rebuilt, "neutral", true, 3.0, true, PlayStatus.PLAYING,
+				"Very long zone name for the bee farm by the river", Util.getMillis()));
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		context.runOnClient(mc -> {
+			SculptList list = heldList(mc);
+			check(((SoundSculptorScreen) mc.gui.screen()).sounds().isHeld(), "still held");
+			SculptList.Row row = list.findRow(rebuilt);
+			check(row.columnTexts().stream().anyMatch(t -> t.contains("×1")), "the first row now shows its play, was " + row.columnTexts());
+			check(row.getHeight() == heightBefore, "the first row keeps its height while held: " + heightBefore + " → " + row.getHeight());
+			check(list.findRow(pointed).getY() == pointedY, "the row under the pointer stays at y " + pointedY + ", now " + list.findRow(pointed).getY());
+		});
+		context.takeScreenshot("a11y-held-row-keeps-height");
+
+		context.getInput().setCursorPos(0, 0);
+		context.waitTicks(SoundsPanel.REFRESH_TICKS + 2);
+		int heightAfter = context.computeOnClient(mc -> heldList(mc).findRow(rebuilt).getHeight());
+		check(heightAfter > heightBefore, "released, the rebuilt row takes the taller height it needs: " + heightBefore + " → " + heightAfter);
+		context.runOnClient(mc -> {
+			mc.gui.setScreen(null);
+			RecentLog.get().sounds().clear();
+			SoundsPanel.resetRememberedState();
+		});
+		recordRecentPlaysOnClient(context);
+	}
+
+	private static SculptList heldList(Minecraft mc) {
+		return ((SoundSculptorScreen) mc.gui.screen()).sounds().list;
+	}
+
+	private static void recordRecentPlaysOnClient(ClientGameTestContext context) {
+		context.runOnClient(mc -> recordRecentPlays());
 	}
 
 	/** Controls with nothing to read: an empty label, including list row buttons. */

@@ -21,6 +21,10 @@ public class SculptButton extends AbstractButton {
 	private final Runnable onPress;
 	private final Identifier icon;
 	private Supplier<Component> narrationContext;
+	/** The tooltip's own text, kept so a list row can add text it hides at narrow widths ({@link #tooltipExtra}). */
+	private Component tooltipText;
+	private Component tooltipExtra;
+	private Component tooltipNarration;
 
 	protected SculptButton(int width, int height, Component label, Identifier icon, Runnable onPress) {
 		super(0, 0, width, height, label);
@@ -58,8 +62,48 @@ public class SculptButton extends AbstractButton {
 	 */
 	public static SculptButton icon(Identifier icon, Component label, Runnable onPress) {
 		SculptButton button = new SculptButton(Theme.ICON_BUTTON_SIZE, Theme.ICON_BUTTON_SIZE, label, icon, onPress);
-		button.setTooltip(Tooltip.create(label));
+		button.tooltipText(label);
 		return button;
+	}
+
+	/** Sets the tooltip (shown on hover, and at once on keyboard focus). */
+	public SculptButton tooltipText(Component text) {
+		return tooltipText(text, null);
+	}
+
+	/**
+	 * Sets the tooltip, and what the narrator reads for it when that differs from its text ({@code null}: the text).
+	 */
+	public SculptButton tooltipText(Component text, Component narration) {
+		this.tooltipText = text;
+		this.tooltipNarration = narration;
+		applyTooltip();
+		return this;
+	}
+
+	/**
+	 * Text shown under the tooltip's own, or {@code null} for none: a list row's columns it hides at a narrow width, so
+	 * keyboard users still see them when the button has focus (A-1, A-4).
+	 */
+	public void tooltipExtra(Component extra) {
+		if (java.util.Objects.equals(extra, tooltipExtra)) {
+			return;
+		}
+		this.tooltipExtra = extra;
+		applyTooltip();
+	}
+
+	private void applyTooltip() {
+		Component text = tooltipExtra == null ? tooltipText
+				: tooltipText == null ? tooltipExtra : Component.empty().append(tooltipText).append("\n").append(tooltipExtra);
+		if (text == null) {
+			setTooltip(null);
+		} else if (tooltipNarration == null) {
+			setTooltip(Tooltip.create(text));
+		} else {
+			setTooltip(Tooltip.create(text, tooltipExtra == null ? tooltipNarration
+					: Component.empty().append(tooltipNarration).append(" ").append(tooltipExtra)));
+		}
 	}
 
 	/** Text read before the button's own narration, e.g. the row a list button belongs to. */

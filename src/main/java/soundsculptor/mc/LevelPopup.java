@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -92,7 +93,7 @@ public final class LevelPopup {
 		});
 		SculptSlider slider = Tooltips.describe(new SculptSlider(sliderWidth, Component.translatable("soundsculptor.rule_editor.volume"),
 				new SliderModel(SetEntry.MIN_VOLUME, max, 5, 1, 100, Math.min(max, initial)),
-				value -> Component.literal((int) value + "%"), Component.translatable(BoostWarning.WARNING_KEY),
+				value -> Texts.percent((int) value), Component.translatable(BoostWarning.WARNING_KEY),
 				value -> {
 					if (!field.isFocused()) {
 						field.setValue(Integer.toString((int) value));

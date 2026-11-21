@@ -550,11 +550,33 @@ public final class SoundsPanel {
 			HoldOrder.Held<SculptList.Row> held = HoldOrder.hold(list.children(), rows, SculptList.Row::key);
 			rows = held.rows();
 			waiting = held.waiting();
+			// A kept row rebuilt with other columns (a first play, a new zone) keeps the height it had, so the row under
+			// the pointer does not slide away from it while held.
+			Map<Object, SculptList.Row> shownRows = new HashMap<>(list.children().size() * 2);
+			for (SculptList.Row shown : list.children()) {
+				shownRows.put(shown.key(), shown);
+			}
+			for (SculptList.Row row : rows) {
+				SculptList.Row shown = shownRows.get(row.key());
+				if (shown != null && shown != row) {
+					row.keepHeight(shown.getHeight());
+				}
+			}
 		} else {
 			waiting = 0;
 		}
+		// Once the hold ends, every row takes its own height again.
+		boolean released = false;
+		if (!hold) {
+			for (SculptList.Row row : rows) {
+				if (row.keptHeight() > 0) {
+					row.keepHeight(0);
+					released = true;
+				}
+			}
+		}
 		count = rows.size();
-		if (!sameRows(rows, list.children())) {
+		if (released || !sameRows(rows, list.children())) {
 			list.setRows(rows);
 		}
 	}

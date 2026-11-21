@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -261,7 +262,7 @@ public final class SetEditorScreen extends SculptScreen {
 	}
 
 	private static String join(String a, String b) {
-		return b.isEmpty() ? a : a + " · " + b;
+		return Texts.pair(a, b);
 	}
 
 	/**
@@ -480,7 +481,7 @@ public final class SetEditorScreen extends SculptScreen {
 		if (parts.size() <= 1) {
 			return parts.isEmpty() ? "" : parts.get(0);
 		}
-		return Component.translatable("soundsculptor.set_editor.confirm.and", String.join(", ", parts.subList(0, parts.size() - 1)),
+		return Component.translatable("soundsculptor.set_editor.confirm.and", Texts.list(parts.subList(0, parts.size() - 1)),
 				parts.get(parts.size() - 1)).getString();
 	}
 

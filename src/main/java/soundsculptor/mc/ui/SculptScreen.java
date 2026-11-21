@@ -618,6 +618,7 @@ public abstract class SculptScreen extends Screen {
 	@Override
 	public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
 		super.extractBackground(g, mouseX, mouseY, partialTick);
+		Draw.fill(g, 0, 0, width, height, Theme.BODY);
 		Draw.fill(g, 0, 0, width, HEADER_HEIGHT + tabBarHeight(), Theme.PANEL);
 		Draw.fill(g, 0, HEADER_HEIGHT + tabBarHeight(), width, 1, Theme.SEPARATOR);
 		Draw.fill(g, 0, height - FOOTER_HEIGHT, width, FOOTER_HEIGHT, Theme.PANEL);

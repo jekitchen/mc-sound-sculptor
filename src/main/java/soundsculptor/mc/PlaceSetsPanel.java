@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -193,7 +194,7 @@ public final class PlaceSetsPanel {
 	}
 
 	private static String join(String a, String b) {
-		return a.isEmpty() ? b : b.isEmpty() ? a : a + " · " + b;
+		return Texts.pair(a, b);
 	}
 
 	/** The name Quick changes shows under, and the name Save to library suggests. */

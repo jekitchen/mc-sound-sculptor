@@ -35,6 +35,19 @@ class CueColorsTest {
 	}
 
 	@Test
+	void withdrawnColorsAreNamedButNotOffered() {
+		for (Palette.Swatch swatch : CueColors.WITHDRAWN) {
+			assertNull(CueColors.preset(swatch.rgb()), swatch.id() + " is no longer offered");
+			assertEquals(swatch, CueColors.withdrawn(swatch.rgb()));
+			// A player who chose it keeps it: it is the extra choice at the end, as a custom color is.
+			List<Integer> choices = CueColors.choices(swatch.rgb());
+			assertEquals(CueColors.PRESETS.size() + 1, choices.size());
+			assertEquals(swatch.rgb(), choices.get(choices.size() - 1));
+		}
+		assertNull(CueColors.withdrawn(0x123456));
+	}
+
+	@Test
 	void presetIgnoresAlpha() {
 		assertEquals("sky_blue", CueColors.preset(0xFF56B4E9).id());
 	}
