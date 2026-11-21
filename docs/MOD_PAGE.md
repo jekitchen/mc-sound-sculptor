@@ -54,8 +54,8 @@ Minecraft's sounds and subtitles don't already tell them. This is a hard rule of
   never blocks and never a direction, and players can hide it.
 - **Zone outlines show only zones the player drew.**
 
-Coming in 1.0, with the same rule: a volume boost that is still silent wherever vanilla is silent, on-screen cues only
-where vanilla shows subtitles, and an inspector that only selects mobs in clear sight.
+Coming in 1.0, with the same rule: a volume boost that is still silent wherever vanilla is silent, and on-screen cues
+only where vanilla shows subtitles.
 
 Questions or concerns: open an issue with "fair play" in the title at
 <https://github.com/jekitchen/mc-sound-sculptor/issues>.
@@ -76,7 +76,7 @@ Questions or concerns: open an issue with "fair play" in the title at
 ## Status
 
 This is an **alpha**: the features above are complete and tested, but expect rough edges. Planned for 1.0: volume boost
-above 100%, cues for muted sounds, repeat limits and the mob inspector.
+above 100%, cues for muted sounds and repeat limits.
 
 Sound Sculptor is open source under the MIT license: <https://github.com/jekitchen/mc-sound-sculptor>.
 

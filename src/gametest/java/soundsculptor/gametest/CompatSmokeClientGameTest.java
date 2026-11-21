@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
@@ -195,16 +196,40 @@ public final class CompatSmokeClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	/** ERROR lines in this run's log that come from Sound Sculptor. */
+	/**
+	 * ERROR entries in this run's log that come from Sound Sculptor: the ERROR line names it, or one of the lines after it
+	 * (its exception and stack frames, up to the next log line) has a {@code soundsculptor.} frame. A mod logging an error
+	 * that Sound Sculptor's code threw is caught this way too.
+	 */
 	private static List<String> logErrors() {
 		Path log = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("latest.log");
+		List<String> lines;
 		try {
-			return Files.readAllLines(log, StandardCharsets.UTF_8).stream()
-					.filter(line -> line.contains("/ERROR]") && (line.contains("soundsculptor") || line.contains("Sound Sculptor")))
-					.toList();
+			lines = Files.readAllLines(log, StandardCharsets.UTF_8);
 		} catch (IOException e) {
 			throw new AssertionError("could not read the log " + log, e);
 		}
+		List<String> errors = new ArrayList<>();
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (!line.contains("/ERROR]")) {
+				continue;
+			}
+			String frame = null;
+			// The entry's own lines run until the next log line, which starts with its "[hh:mm:ss]" time.
+			for (int j = i + 1; j < lines.size() && !lines.get(j).startsWith("["); j++) {
+				if (lines.get(j).contains("soundsculptor.")) {
+					frame = lines.get(j).trim();
+					break;
+				}
+			}
+			if (line.contains("soundsculptor") || line.contains("Sound Sculptor")) {
+				errors.add(line);
+			} else if (frame != null) {
+				errors.add(line + "\n    " + frame);
+			}
+		}
+		return errors;
 	}
 
 	private static SoundSculptorScreen main(Minecraft mc) {

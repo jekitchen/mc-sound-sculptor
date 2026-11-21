@@ -138,4 +138,4 @@ Mod Menu (present and absent), Sodium, Iris with a shader pack and Sound Physics
 singleplayer.
 
 ### Not yet included (planned for 1.0)
-Volume boost above 100%, on-screen cues for muted sounds, repeat limits and the point-at-a-mob inspector.
+Volume boost above 100%, on-screen cues for muted sounds and repeat limits.

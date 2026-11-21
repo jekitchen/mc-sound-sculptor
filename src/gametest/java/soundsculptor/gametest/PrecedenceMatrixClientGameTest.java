@@ -1,6 +1,8 @@
 package soundsculptor.gametest;
 
 import soundsculptor.core.boost.BoostSupport;
+import soundsculptor.core.diag.DiagnosticsReport;
+import soundsculptor.core.limit.RepeatLimiter;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.recent.PlayStatus;
 import soundsculptor.core.sets.Limit;
@@ -21,6 +23,7 @@ import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
 import soundsculptor.mc.CueOverlay;
+import soundsculptor.mc.Diagnostics;
 import soundsculptor.mc.PlayingChannels;
 import soundsculptor.mc.ProfileManager;
 import soundsculptor.mc.SoundHook;
@@ -73,7 +76,7 @@ import net.minecraft.world.phys.Vec3;
  *   <caption>Where each case is also tested</caption>
  *   <tr><th>Case</th><th>Here</th><th>Also</th></tr>
  *   <tr><td>P1, P2, P3, P5</td><td>levels, zone named, trace</td><td>{@code M7ClientGameTest} (Quick changes form)</td></tr>
- *   <tr><td>P4, P4b</td><td>5 plays at once; 30 plays over 3 s</td><td>{@code M11LimitsClientGameTest}</td></tr>
+ *   <tr><td>P4, P4b</td><td>5 plays at once; 30 plays over 3 s, and the Diagnostics readout</td><td>{@code M11LimitsClientGameTest}</td></tr>
  *   <tr><td>P5b</td><td>list order swapped</td><td>-</td></tr>
  *   <tr><td>P8</td><td>150% with A's cue, no cue shown</td><td>{@code M10BoostClientGameTest}</td></tr>
  *   <tr><td>P10</td><td>the player really in the Nether</td><td>{@code M7ClientGameTest} (a Nether zone seen from the Overworld)</td></tr>
@@ -300,6 +303,13 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 			check(startedAt.get(i) - startedAt.get(i - 2) >= 1000, "3 started within 1 s: " + startedAt);
 		}
 		check(factors.stream().allMatch(f -> Math.abs(f - 0.4F) < 1e-6), "each at 40%: " + factors);
+		// Diagnostics agrees: 6 played, 24 dropped, and at most 2 in any one window of B's limit (M11's readout).
+		DiagnosticsReport.Data data = context.computeOnClient(mc -> Diagnostics.data());
+		check(data.limits().allowed() == 6 && data.limits().dropped() == 24
+				&& data.limits().fullest().equals(List.of(new RepeatLimiter.Fullest(2, TWO_PER_SECOND))),
+				"Diagnostics: 6 played, 24 dropped, most in one window 2 of 2 per 1 s, was " + data.limits());
+		String report = context.computeOnClient(mc -> Diagnostics.report());
+		check(report.contains("Most in one window: 2 (limit 2 per 1 s)"), "the Diagnostics report shows at most 2 per second:\n" + report);
 		SoundTrace t = trace(context, VILLAGER);
 		check(TWO_PER_SECOND.equals(t.limit()) && Math.abs(t.volumePercent() - 40) < 0.01, "the trace says 40% with 2 per 1 s, was "
 				+ t.volumePercent() + "%, " + t.limit());
@@ -524,16 +534,20 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 		expectDecided(h, TraceProperty.LOUDNESS, "A", "p17-a", "m");
 	}
 
-	/** P18: A mutes villagers; you stand outside A; the villager is inside A: 100% (Everywhere sets nothing). */
+	/**
+	 * P18: A mutes villagers; you stand outside A; the villager is inside A: it plays at Everywhere's value. Everywhere sets
+	 * villagers to 70% here, so the result is told apart from "nothing decided".
+	 */
 	private static void p18(ClientGameTestContext context) {
 		SoundSet mute = set("p18-a", "Mute villagers", SetEntry.of("m", VILLAGERS).withMute(true));
+		SoundSet everywhere = set("p18-e", "Villagers 70%", SetEntry.of("v", VILLAGERS).withVolume(70));
 		Zone a = zone("p18-a", "A", 14, 0, box(8), attach(mute));
-		setUp(context, PlaceSets.EMPTY, List.of(mute), a);
+		setUp(context, attach(everywhere), List.of(mute, everywhere), a);
 		check(a.containsBlock((int) Math.floor(HOME_X + 14), (int) HOME_Y, (int) Math.floor(HOME_Z)), "the villager is inside A");
 		Heard h = villager(context, VILLAGER, 14, 0);
-		expect(h, 1.0F, PlayStatus.PLAYING, null, null);
+		expect(h, 0.7F, PlayStatus.PLAYING, null, null);
 		check(h.trace().zones().isEmpty(), "the trace lists no zone: you are not in A");
-		expectDecided(h, TraceProperty.LOUDNESS, null, null, null);
+		expectDecided(h, TraceProperty.LOUDNESS, "Everywhere", "p18-e", "v");
 	}
 
 	/**
@@ -557,11 +571,14 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 				"Bypass on: vanilla volume within one tick, was " + bypassed + ", vanilla " + vanilla);
 		check(trace(context, RECORD).notices().contains(TraceNotice.BYPASS), "the trace leads with Bypass");
 
+		// Bypass off: the record plays on at vanilla volume, sampled every 10 ticks for 2 s (as P20 does).
 		context.runOnClient(mc -> ProfileManager.setBypass(false));
-		context.waitTicks(10);
-		float after = context.computeOnClient(mc -> PlayingChannels.get().gain(record.instance()));
-		check(Math.abs(after - vanilla) < 1e-3 && context.computeOnClient(mc -> mc.getSoundManager().isActive(record.instance())),
-				"Bypass off: the playing record stays at vanilla volume, was " + after);
+		for (int i = 0; i < 4; i++) {
+			context.waitTicks(10);
+			float after = context.computeOnClient(mc -> PlayingChannels.get().gain(record.instance()));
+			check(Math.abs(after - vanilla) < 1e-3 && context.computeOnClient(mc -> mc.getSoundManager().isActive(record.instance())),
+					"Bypass off: the playing record stays at vanilla volume, was " + after + " after " + (i + 1) * 10 + " ticks");
+		}
 
 		Heard next = heard(context, mc -> SimpleSoundInstance.forJukeboxSong(event(RECORD_NEXT), mc.player.position().add(-3, 0, 0)));
 		expect(next, 0.3F, PlayStatus.PLAYING, "A", null);
