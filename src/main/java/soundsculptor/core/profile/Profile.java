@@ -1,5 +1,6 @@
 package soundsculptor.core.profile;
 
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.sets.Attachment;
 import soundsculptor.core.sets.PlaceRef;
 import soundsculptor.core.sets.PlaceSets;
@@ -29,16 +30,26 @@ import java.util.Set;
  * @param lastJoined when the player last joined this server or world (FR-11.3), or null if never
  * @param boostConfirmed whether the player has confirmed the boost dialog for this profile (FR-5.4: asked once per
  *                   profile, the first time a level goes above 100%)
+ * @param everywhereCues Everywhere's cue settings (FR-7), every one set: the base that each zone's Unchanged settings
+ *                   pass on to (decided 2026-11-21)
  */
 public record Profile(String name, ProfileSettings settings, PlaceSets everywhere, List<Zone> zones,
-		Map<String, Integer> zoneColors, Instant lastJoined, boolean boostConfirmed) {
-	/** Bumped on every change to the file format (PRD 7.6). Schema 3 is the first with Sound Sets. */
+		Map<String, Integer> zoneColors, Instant lastJoined, boolean boostConfirmed, PlaceCues everywhereCues) {
+	/**
+	 * Bumped on every change to the file format that older readers cannot skip (PRD 7.6). Schema 3 is the first with
+	 * Sound Sets; optional fields added since (last joined, boost confirmed, cue settings) are skipped by older readers,
+	 * so they did not need one.
+	 */
 	public static final int SCHEMA_VERSION = 3;
 
 	public Profile {
 		Objects.requireNonNull(name, "name");
 		Objects.requireNonNull(settings, "settings");
 		Objects.requireNonNull(everywhere, "everywhere");
+		Objects.requireNonNull(everywhereCues, "everywhereCues");
+		if (!everywhereCues.isComplete()) {
+			throw new IllegalArgumentException("Everywhere's cue settings must all be set: " + everywhereCues);
+		}
 		zones = List.copyOf(zones);
 		Set<String> ids = new HashSet<>();
 		for (Zone zone : zones) {
@@ -52,6 +63,12 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 			}
 		}
 		zoneColors = Map.copyOf(zoneColors);
+	}
+
+	/** A profile with Everywhere's cue settings at their defaults. */
+	public Profile(String name, ProfileSettings settings, PlaceSets everywhere, List<Zone> zones,
+			Map<String, Integer> zoneColors, Instant lastJoined, boolean boostConfirmed) {
+		this(name, settings, everywhere, zones, zoneColors, lastJoined, boostConfirmed, PlaceCues.EVERYWHERE_DEFAULTS);
 	}
 
 	/** A profile never joined, with boost not yet confirmed. */
@@ -70,25 +87,25 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 	}
 
 	public Profile withSettings(ProfileSettings value) {
-		return new Profile(name, value, everywhere, zones, zoneColors, lastJoined, boostConfirmed);
+		return new Profile(name, value, everywhere, zones, zoneColors, lastJoined, boostConfirmed, everywhereCues);
 	}
 
 	public Profile withName(String value) {
-		return new Profile(value, settings, everywhere, zones, zoneColors, lastJoined, boostConfirmed);
+		return new Profile(value, settings, everywhere, zones, zoneColors, lastJoined, boostConfirmed, everywhereCues);
 	}
 
 	public Profile withEverywhere(PlaceSets value) {
-		return new Profile(name, settings, value, zones, zoneColors, lastJoined, boostConfirmed);
+		return new Profile(name, settings, value, zones, zoneColors, lastJoined, boostConfirmed, everywhereCues);
 	}
 
 	/** Records a join (FR-11.3); called with the time the player joined this server or world. */
 	public Profile withLastJoined(Instant value) {
-		return new Profile(name, settings, everywhere, zones, zoneColors, value, boostConfirmed);
+		return new Profile(name, settings, everywhere, zones, zoneColors, value, boostConfirmed, everywhereCues);
 	}
 
 	/** Set after the player confirms the boost dialog, so it is not shown again for this profile (FR-5.4). */
 	public Profile withBoostConfirmed(boolean value) {
-		return new Profile(name, settings, everywhere, zones, zoneColors, lastJoined, value);
+		return new Profile(name, settings, everywhere, zones, zoneColors, lastJoined, value, everywhereCues);
 	}
 
 	// ---- Places (Everywhere and zones, FR-8.6, FR-8.10) ----
@@ -109,6 +126,32 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 		}
 		Zone zone = zone(where.zoneId());
 		return zone == null ? this : putZone(zone.withSets(value));
+	}
+
+	/** Everywhere's cue settings; every one must be set. */
+	public Profile withEverywhereCues(PlaceCues value) {
+		return new Profile(name, settings, everywhere, zones, zoneColors, lastJoined, boostConfirmed, value);
+	}
+
+	/** The cue settings of Everywhere or of the zone (FR-7); {@code null} for a zone this profile does not have. */
+	public PlaceCues cues(PlaceRef where) {
+		if (where.isEverywhere()) {
+			return everywhereCues;
+		}
+		Zone zone = zone(where.zoneId());
+		return zone == null ? null : zone.cues();
+	}
+
+	/**
+	 * Replaces the cue settings of Everywhere or of the zone; unchanged for a zone this profile does not have. Everywhere
+	 * has no Unchanged: a setting left Unchanged there keeps its current value.
+	 */
+	public Profile withCues(PlaceRef where, PlaceCues value) {
+		if (where.isEverywhere()) {
+			return withEverywhereCues(value.orElse(everywhereCues));
+		}
+		Zone zone = zone(where.zoneId());
+		return zone == null ? this : putZone(zone.withCues(value));
 	}
 
 	/** Every place that attaches the set: Everywhere first, then zones in list order. */
@@ -196,14 +239,14 @@ public record Profile(String name, ProfileSettings settings, PlaceSets everywher
 				colors.put(zone.id(), rgb);
 			}
 		}
-		return new Profile(name, settings, everywhere, value, colors, lastJoined, boostConfirmed);
+		return new Profile(name, settings, everywhere, value, colors, lastJoined, boostConfirmed, everywhereCues);
 	}
 
 	/** Sets the outline color of a zone in this profile. */
 	public Profile withZoneColor(String zoneId, int rgb) {
 		Map<String, Integer> colors = new LinkedHashMap<>(zoneColors);
 		colors.put(zoneId, rgb);
-		return new Profile(name, settings, everywhere, zones, colors, lastJoined, boostConfirmed);
+		return new Profile(name, settings, everywhere, zones, colors, lastJoined, boostConfirmed, everywhereCues);
 	}
 
 	/** The zone's color as {@code 0xRRGGBB}, or null if it has none. */

@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import soundsculptor.core.cue.CueResolver;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.diag.MemoryEstimate;
 import soundsculptor.core.sets.CacheBudget;
 import soundsculptor.core.sets.EntryResolution;
@@ -40,6 +42,7 @@ public final class Precedence {
 	public static final int ROW_CACHE_IDS = 1024;
 
 	private final EntryResolver everywhere;
+	private final PlaceCues everywhereCues;
 	private final Zone[] zones;
 	private final EntryResolver[] zoneResolvers;
 	private final double[] volumes;
@@ -58,9 +61,22 @@ public final class Precedence {
 	 * @param library    the library the places' set IDs refer to; attachments to sets it does not have are skipped
 	 */
 	public Precedence(PlaceSets everywhere, List<Zone> zones, SetLibrary library) {
+		this(everywhere, PlaceCues.EVERYWHERE_DEFAULTS, zones, library);
+	}
+
+	/**
+	 * @param everywhere     the sets attached to Everywhere
+	 * @param everywhereCues Everywhere's cue settings, all set; the zones carry their own (FR-7, {@link CueResolver})
+	 * @param library        the library the places' set IDs refer to; attachments to sets it does not have are skipped
+	 */
+	public Precedence(PlaceSets everywhere, PlaceCues everywhereCues, List<Zone> zones, SetLibrary library) {
 		if (zones.size() > MAX_ZONES) {
 			throw new IllegalArgumentException(zones.size() + " zones is more than the maximum " + MAX_ZONES);
 		}
+		if (!everywhereCues.isComplete()) {
+			throw new IllegalArgumentException("Everywhere's cue settings must all be set: " + everywhereCues);
+		}
+		this.everywhereCues = everywhereCues;
 		this.everywhere = EntryResolver.forPlace(everywhere, library, null);
 		this.zones = zones.toArray(new Zone[0]);
 		this.zoneResolvers = new EntryResolver[this.zones.length];
@@ -234,6 +250,11 @@ public final class Precedence {
 	/** Everywhere's resolver, its attached sets flattened in order, for the sound trace (FR-14). */
 	public EntryResolver everywhere() {
 		return everywhere;
+	}
+
+	/** Everywhere's cue settings, all set (FR-7). */
+	public PlaceCues everywhereCues() {
+		return everywhereCues;
 	}
 
 	/** Zones in list order, for the sound trace. */

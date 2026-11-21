@@ -9,6 +9,8 @@ import java.util.Set;
 
 import soundsculptor.core.SoundRange;
 import soundsculptor.core.cue.CueRules;
+import soundsculptor.core.cue.CueResolution;
+import soundsculptor.core.cue.CueResolver;
 import soundsculptor.core.cue.CueSettings;
 import soundsculptor.core.limit.RepeatLimiter;
 import soundsculptor.core.recent.PlayStatus;
@@ -59,7 +61,10 @@ public final class SoundStartDecider {
 	/** Everywhere's limiter keys: by set ID, then by entry (an entry is unique within its set). */
 	private Map<String, Map<SetEntry, String>> everywhereKeys = Map.of();
 	private Map<Zone, Map<String, Map<SetEntry, String>>> zoneKeys = Map.of();
-	private CueSettings cueSettings = CueSettings.DEFAULT;
+	/** The cue settings where the player stands ({@link #cues}), and the snapshot and list they were worked out for. */
+	private CueResolution cues = CueResolution.DEFAULT;
+	private Precedence cuesFor;
+	private long cuesVersion;
 	private boolean boostSupported = true;
 
 	/** @param lastPlays where each sound's last heard play is recorded for its trace */
@@ -128,9 +133,25 @@ public final class SoundStartDecider {
 		return bySet;
 	}
 
-	/** The cue settings from the Settings page (FR-7.2, FR-7.7). */
-	public void setCueSettings(CueSettings settings) {
-		this.cueSettings = settings;
+	/**
+	 * The cue settings where the player stands now (FR-7, decided 2026-11-21): each from the smallest zone there that sets
+	 * it, or Everywhere ({@link CueResolver}). Worked out again only when the profile snapshot or the list of zones the
+	 * player stands in changed, so a sound start or a frame just reads it; allocates only then.
+	 */
+	public CueResolution cues() {
+		Precedence p = precedence;
+		if (p == null) {
+			return CueResolution.DEFAULT;
+		}
+		if (p != cuesFor || where.version() != cuesVersion || where.precedence() != p) {
+			if (where.precedence() != p) {
+				where.updateNowhere(p);
+			}
+			cues = CueResolver.resolve(p, where);
+			cuesFor = p;
+			cuesVersion = where.version();
+		}
+		return cues;
 	}
 
 	/** False when boost is off or the audio device ignores a raised gain cap: volumes then stop at 100% (section 7.2). */
@@ -206,7 +227,10 @@ public final class SoundStartDecider {
 			out.status = PlayStatus.MUTED;
 			out.factor = 0;
 			out.cancel = !in.looping;
-			out.cue = CueRules.shouldCue(in.hasSubtitle, volume, d.loudnessRule() != null, d.cueOn(), audible, cueSettings);
+			// FR-7.2, FR-7.7: "Show muted-sound cues" and "Cue sounds without subtitles" as they are where the player stands
+			// as the sound starts (FR-8.8 timing).
+			CueSettings settings = cues().settings();
+			out.cue = CueRules.shouldCue(in.hasSubtitle, volume, d.loudnessRule() != null, d.cueOn(), audible, settings);
 			out.cueUsesSoundId = out.cue && !in.hasSubtitle;
 		} else {
 			float capped = Math.min(volume, boostSupported ? 200F : 100F);

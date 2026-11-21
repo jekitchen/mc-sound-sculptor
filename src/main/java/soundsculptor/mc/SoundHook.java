@@ -13,7 +13,6 @@ import soundsculptor.core.zones.Precedence;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
-import soundsculptor.core.settings.AppSettings;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +76,6 @@ public final class SoundHook {
 	private static Precedence deciderProfile;
 	/** The world or server the repeat-limit counters count for. */
 	private static String deciderKey = "";
-	private static AppSettings deciderSettings;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
 	private static final TimingWindow SOUND_TIMING = new TimingWindow();
@@ -234,12 +232,7 @@ public final class SoundHook {
 			DECIDER.setProfile(precedence);
 			deciderProfile = precedence;
 		}
-		// The cue settings (FR-7.2, FR-7.7) change only when the player changes a setting: a new settings record.
-		AppSettings app = AppSettingsManager.get();
-		if (app != deciderSettings) {
-			DECIDER.setCueSettings(app.cueSettings(ProfileManager.profile().settings().cueDefault()));
-			deciderSettings = app;
-		}
+		// The cue settings (FR-7) belong to the places: the decider works them out from where the player stands.
 		LocalPlayer player = minecraft.player;
 		if (player == null) {
 			DECIDER.locateNowhere();
@@ -264,6 +257,18 @@ public final class SoundHook {
 		WhereYouAre where = DECIDER.where();
 		return new soundsculptor.core.trace.Standing(true, ProfileManager.key(), WorldSession.dimension(minecraft), where.x(),
 				where.y(), where.z());
+	}
+
+	/**
+	 * The cue settings where the player stands now, and the place that decides each (FR-7): from the smallest zone there
+	 * that sets it, or Everywhere. Everywhere's defaults outside a world. Worked out again only when the profile or the
+	 * zones the player stands in change, so the cue box can read it every frame. Render thread only.
+	 */
+	public static soundsculptor.core.cue.CueResolution cuesNow() {
+		if (!sync(Minecraft.getInstance())) {
+			return soundsculptor.core.cue.CueResolution.DEFAULT;
+		}
+		return DECIDER.cues();
 	}
 
 	/** Where the player is, for {@link #precedence()} (FR-8.4). Render thread only. */
