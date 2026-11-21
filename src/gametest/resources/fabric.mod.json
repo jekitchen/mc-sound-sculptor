@@ -41,6 +41,8 @@
 			"soundsculptor.gametest.SetEditorClientGameTest",
 			"soundsculptor.gametest.PlaceSetsClientGameTest",
 			"soundsculptor.gametest.PrecedenceSetsClientGameTest",
+			"soundsculptor.gametest.PrecedenceMatrixClientGameTest",
+			"soundsculptor.gametest.CompatSmokeClientGameTest",
 			"soundsculptor.gametest.PickerClientGameTest",
 			"soundsculptor.gametest.ModPageScreenshotsClientGameTest"
 		]

@@ -127,3 +127,43 @@ jobs:
           path: |
             build/run/clientGameTest/screenshots/
             build/run/clientGameTest/logs/
+
+  # Compatibility smoke test (PRD 8.1, 11.5): the game with Sodium, Iris and Sound Physics Remastered installed (pinned in
+  # build.gradle), running only CompatSmokeClientGameTest: the screen opens, a mute, a cue and a zone outline work, and
+  # the log has no errors from Sound Sculptor. Iris runs without a shader pack; packs are checked by hand (RELEASING.md).
+  compat-gametest:
+    runs-on: ubuntu-24.04
+    name: compatibility smoke test (Sodium, Iris, Sound Physics Remastered)
+    timeout-minutes: 20
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      # libegl1 and libegl-mesa0: the game's OpenGL context comes through EGL here (see below).
+      - name: install virtual display and software graphics drivers
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers libegl1 libegl-mesa0
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      # Same cache as the other jobs: saved from main, read everywhere else.
+      - name: setup gradle with caching
+        uses: gradle/actions/setup-gradle@v6
+      # Sodium and Iris need OpenGL. Under Xvfb the game's window library finds no GLX visual for its OpenGL context, so
+      # vanilla falls back to Vulkan there (the other game-test jobs); EGL gives Mesa's llvmpipe OpenGL 4.5 instead. With
+      # -Pcompat=true Loom does not start its own Xvfb (8-bit color), and the game runs on this 24-bit display.
+      - name: run the compatibility smoke test
+        env:
+          ALSOFT_DRIVERS: 'null'
+          SDL_VIDEO_FORCE_EGL: '1'
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24 +extension GLX' ./gradlew runClientGameTest -Pcompat=true
+      - name: capture screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gametest-compat
+          path: |
+            build/run/clientGameTest/screenshots/
+            build/run/clientGameTest/logs/

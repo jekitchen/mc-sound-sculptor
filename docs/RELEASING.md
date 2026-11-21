@@ -5,14 +5,25 @@ both sites; the steps below prepare everything so that part is uploading files a
 
 ## 1. Before the release
 
-1. `main` is green in CI on every supported Minecraft version (build and client game tests).
+1. `main` is green in CI on every supported Minecraft version (build, client game tests and the compatibility smoke
+   test).
 2. The manual checks of the release checklist ([PRD 11.5](PRD.md)) are done for each Minecraft version. The rest of
-   11.5 (layout at every GUI scale, narration, Mod Menu present and absent, keyboard tasks) is automated.
-   - Grayscale screenshot check: statuses and zone outlines are still readable in grayscale.
-   - Sodium; Iris with one popular shader pack; Sound Physics Remastered. Note any problem on the mod page.
+   11.5 (layout at every GUI scale, narration, Mod Menu present and absent, keyboard tasks) is automated, and so is the
+   zone precedence matrix (PRD 11.4, `PrecedenceMatrixClientGameTest`). CI's compatibility smoke test loads Sodium,
+   Iris without a shader pack and Sound Physics Remastered, at the versions pinned in `build.gradle`; it checks the
+   screen, a mute, a cue and a zone outline. The checks below are what it cannot see. Use the newest builds of the
+   mods that load together on the Minecraft version, and note the versions you used. Note any problem on the mod page
+   ([MOD_PAGE.md](MOD_PAGE.md), Compatibility).
+   - Grayscale screenshot check: statuses, zone outlines and cues are still readable in grayscale.
+   - Sodium and Iris with one popular shader pack (for example Complementary Reimagined): zone outlines and their name
+     labels show, also through blocks, and the cue box shows above the subtitles. If the outlines vanish under the
+     pack, note it on the mod page.
+   - Sodium on its own, at its newest build: zone outlines show while you walk around.
+   - Sound Physics Remastered: a muted villager is silent and shows its cue; a villager at 50% is quieter; with a
+     repeat limit of 1 per 1 s, a crowd of villagers is heard at most once a second.
    - Boost with Sound Physics Remastered (FR-5.5): walk away from a villager set to 200%, then to 100%. At 200% it is
      never heard farther away than at 100%, reverb and echoes included. Repeat in a cave.
-   - A vanilla server and singleplayer, with nothing installed on the server; Realms if available.
+   - A vanilla server and singleplayer, with nothing installed on the server.
    - Noisy-farm stress test in game (PRD 11.2) with FPS from F3, and the 30-minute soak:
      `./gradlew runClientGameTest -Psoak=1800`.
 3. `mod_version` in [`gradle.properties`](../gradle.properties) is the version to release (e.g. `0.1.0-alpha`).
