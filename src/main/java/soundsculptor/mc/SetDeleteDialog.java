@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.screens.Screen;
@@ -52,14 +53,14 @@ public final class SetDeleteDialog {
 	public static Component message(List<String> placesHere, List<String> otherProfiles, boolean othersCounted) {
 		List<Component> lines = new ArrayList<>();
 		if (!placesHere.isEmpty()) {
-			lines.add(Component.translatable("soundsculptor.sets.delete.here", String.join(", ", placesHere)));
+			lines.add(Component.translatable("soundsculptor.sets.delete.here", Texts.list(placesHere)));
 		} else if (!othersCounted) {
 			lines.add(Component.translatable("soundsculptor.sets.delete.not_here"));
 		}
 		if (!othersCounted) {
 			lines.add(Component.translatable("soundsculptor.sets.delete.counting"));
 		} else if (!otherProfiles.isEmpty()) {
-			lines.add(Component.translatable("soundsculptor.sets.delete.others", String.join(", ", otherProfiles)));
+			lines.add(Component.translatable("soundsculptor.sets.delete.others", Texts.list(otherProfiles)));
 		}
 		if (lines.isEmpty()) {
 			return Component.translatable("soundsculptor.sets.delete.unattached");

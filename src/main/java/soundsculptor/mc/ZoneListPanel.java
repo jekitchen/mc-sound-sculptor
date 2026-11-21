@@ -87,8 +87,8 @@ public final class ZoneListPanel {
 		for (Zone zone : zones) {
 			List<SummaryPart> parts = ZoneSummary.parts(zone, key, dimension, feet);
 			String where = parts.get(parts.size() - 1).text(TRANSLATOR);
-			String place = zone.enabled() ? where
-					: Component.translatable("soundsculptor.summary.rule.disabled").getString() + ", " + where;
+			// A zone that is off says so with where it is, in one sentence pattern: "Off, 12 blocks away".
+			String place = zone.enabled() ? where : Component.translatable("soundsculptor.zones.place_off", where).getString();
 			summaries.add(parts);
 			places.add(place);
 			placeWidth = Math.max(placeWidth, SculptList.Row.Column.widthFor(Component.literal(place)));

@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import soundsculptor.core.boost.BoostWarning;
 import soundsculptor.core.editor.FieldError;
 import soundsculptor.core.browser.LikeThis;
@@ -271,7 +272,7 @@ public final class EntryEditorScreen extends SculptScreen {
 				new SliderModel(SetEntry.MIN_VOLUME, BoostWarning.sliderMax(true), 5, 1, BoostWarning.WARNING_ABOVE, initialVolume),
 				value -> draft.text(Field.VOLUME).isBlank()
 						? Component.translatable("soundsculptor.rule_editor.volume.not_set")
-						: Component.literal((int) value + "%"),
+						: Texts.percent((int) value),
 				Component.translatable(BoostWarning.WARNING_KEY),
 				value -> {
 					// Only the player's slider moves set a level; resting the slider for "Unchanged" must not.
@@ -440,7 +441,7 @@ public final class EntryEditorScreen extends SculptScreen {
 			for (SetEntry winner : winners) {
 				patterns.add(winner.pattern().text());
 			}
-			overridden = Component.translatable("soundsculptor.rule_editor.overridden", String.join(", ", patterns));
+			overridden = Component.translatable("soundsculptor.rule_editor.overridden", Texts.list(patterns));
 		}
 	}
 

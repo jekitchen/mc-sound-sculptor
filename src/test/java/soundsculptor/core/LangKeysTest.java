@@ -110,7 +110,9 @@ class LangKeysTest {
 		assertEquals(seen.size(), lang.size(), "every entry should be on its own line");
 		List<String> empty = new ArrayList<>();
 		for (Map.Entry<String, JsonElement> e : lang.entrySet()) {
-			if (!e.getValue().isJsonPrimitive() || e.getValue().getAsString().isBlank()) {
+			// A separator may be only a space (the one between sentences), but never empty.
+			boolean separator = e.getKey().endsWith("separator") && e.getValue().isJsonPrimitive() && !e.getValue().getAsString().isEmpty();
+			if (!e.getValue().isJsonPrimitive() || (e.getValue().getAsString().isBlank() && !separator)) {
 				empty.add(e.getKey());
 			}
 		}

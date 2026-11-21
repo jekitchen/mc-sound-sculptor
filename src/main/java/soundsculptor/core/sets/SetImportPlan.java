@@ -60,7 +60,6 @@ public record SetImportPlan(List<SoundSet> fileSets, Map<String, Status> statusB
 	public static final String NAME_TAKEN = "soundsculptor.import.name_taken";
 	/** "Choose a new name for the Sound Set \"%s\" to import it." */
 	public static final String NAME_MISSING = "soundsculptor.import.name_missing";
-	private static final String IMPORTED_SUFFIX = " (imported)";
 
 	public SetImportPlan {
 		fileSets = List.copyOf(fileSets);
@@ -137,7 +136,7 @@ public record SetImportPlan(List<SoundSet> fileSets, Map<String, Status> statusB
 	 */
 	public String suggestedName(String fileSetId, SetLibrary lib, Map<String, String> chosen) {
 		SoundSet set = fileSet(fileSetId);
-		return lib.uniqueName(set.name().strip(), null, IMPORTED_SUFFIX, takenNames(match(fileSets, lib), chosen, fileSetId));
+		return lib.uniqueName(set.name().strip(), null, SetNames.forms()::imported, takenNames(match(fileSets, lib), chosen, fileSetId));
 	}
 
 	/** A suggested name for every name clash, each avoiding the ones before it (file order). */

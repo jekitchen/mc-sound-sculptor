@@ -54,6 +54,23 @@ public final class SoundSculptorClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		// PRD 9.3: the names a set gets when its name is taken ("Farm (copy)") come from the language file.
+		soundsculptor.core.sets.SetNames.use(new soundsculptor.core.sets.SetNames.Forms() {
+			@Override
+			public String copy(String name) {
+				return net.minecraft.network.chat.Component.translatable("soundsculptor.sets.name.copy", name).getString();
+			}
+
+			@Override
+			public String imported(String name) {
+				return net.minecraft.network.chat.Component.translatable("soundsculptor.sets.name.imported", name).getString();
+			}
+
+			@Override
+			public String numbered(String name, int n) {
+				return net.minecraft.network.chat.Component.translatable("soundsculptor.sets.name.numbered", name, n).getString();
+			}
+		});
 		// The (name, key, category) constructor exists in 26.2 and 26.3; InputConstants.Type was renamed in 26.3.
 		openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 				"key.soundsculptor.open", DEFAULT_OPEN_KEY, KEY_CATEGORY));

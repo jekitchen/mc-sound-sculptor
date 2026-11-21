@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import soundsculptor.core.diag.DiagnosticsReport;
 import soundsculptor.core.diag.MemoryEstimate;
 import soundsculptor.core.diag.TimingWindow;
@@ -270,9 +271,9 @@ public final class SoundSculptorScreen extends SculptScreen {
 				SoundSculptorScreen::cueColorName, SoundSculptorSettings.cueColor(), SoundSculptorSettings::setCueColor),
 				Component.translatable("soundsculptor.settings.cue_color.tip"));
 		Component scale = Component.translatable("soundsculptor.settings.cue_scale");
-		cueScaleSlider = Tooltips.describe(new SculptSlider(sliderWidth(scale, Component.literal(AppSettings.MAX_CUE_SCALE + "%")), scale,
+		cueScaleSlider = Tooltips.describe(new SculptSlider(sliderWidth(scale, Texts.percent(AppSettings.MAX_CUE_SCALE)), scale,
 				new SliderModel(AppSettings.MIN_CUE_SCALE, AppSettings.MAX_CUE_SCALE, 10, 1, Double.NaN, settings.cueTextScale()),
-				value -> Component.literal((int) value + "%"), null,
+				value -> Texts.percent((int) value), null,
 				value -> AppSettingsManager.update(s -> s.withCueTextScale((int) value))),
 				Component.translatable("soundsculptor.settings.cue_scale.tip"));
 		cueOffsetXSlider = offsetSlider("soundsculptor.settings.cue_offset_x", settings.cueOffsetX(),

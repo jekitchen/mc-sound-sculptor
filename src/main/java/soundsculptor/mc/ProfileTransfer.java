@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import soundsculptor.SoundSculptorClient;
 import soundsculptor.core.Message;
 import soundsculptor.core.profile.ExportCodec;
@@ -208,26 +209,27 @@ public final class ProfileTransfer {
 
 	/** What the import will do, in the dialog's words. */
 	public static Component planMessage(ImportPlan plan, int warnings) {
-		MutableComponent message = Component.translatable("soundsculptor.transfer.import.replace",
-				ProfileListPanel.setsOnEverywhere(plan.setCount()));
+		// Whole sentences, each its own entry in the language file, one after another.
+		List<Component> sentences = new java.util.ArrayList<>();
+		sentences.add(Component.translatable("soundsculptor.transfer.import.replace", ProfileListPanel.setsOnEverywhere(plan.setCount())));
 		if (plan.setsAdded() > 0) {
-			message.append(" ").append(plan.setsAdded() == 1 ? Component.translatable("soundsculptor.transfer.import.sets_added.one")
+			sentences.add(plan.setsAdded() == 1 ? Component.translatable("soundsculptor.transfer.import.sets_added.one")
 					: Component.translatable("soundsculptor.transfer.import.sets_added", plan.setsAdded()));
 		}
 		Message missing = plan.missingNote();
 		if (missing != null) {
-			message.append(" ").append(Component.translatable("soundsculptor.transfer.import.note", ProfileManager.text(missing)));
+			sentences.add(Component.translatable("soundsculptor.transfer.import.note", ProfileManager.text(missing)));
 		}
 		if (plan.fixedImported() > 0) {
-			message.append(" ").append(ProfileListPanel.plural("soundsculptor.transfer.import.fixed", plan.fixedImported()));
+			sentences.add(ProfileListPanel.plural("soundsculptor.transfer.import.fixed", plan.fixedImported()));
 		}
 		if (plan.fixedSkipped() > 0) {
-			message.append(" ").append(ProfileListPanel.plural("soundsculptor.transfer.import.skipped", plan.fixedSkipped()));
+			sentences.add(ProfileListPanel.plural("soundsculptor.transfer.import.skipped", plan.fixedSkipped()));
 		}
 		if (warnings > 0) {
-			message.append(" ").append(ProfileListPanel.plural("soundsculptor.transfer.import.ignored", warnings));
+			sentences.add(ProfileListPanel.plural("soundsculptor.transfer.import.ignored", warnings));
 		}
-		return message;
+		return Texts.sentences(sentences);
 	}
 
 	/**

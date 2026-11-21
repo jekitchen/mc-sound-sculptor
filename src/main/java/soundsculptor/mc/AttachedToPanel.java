@@ -1,5 +1,6 @@
 package soundsculptor.mc;
 
+import soundsculptor.mc.ui.Texts;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -100,7 +101,7 @@ public final class AttachedToPanel {
 			List<String> names = otherWorldNames(usage);
 			text = Component.translatable(names.isEmpty() ? "soundsculptor.attached.others.none"
 					: names.size() == 1 ? "soundsculptor.attached.others.one" : "soundsculptor.attached.others", names.size());
-			tip = names.isEmpty() ? text : Component.translatable("soundsculptor.attached.others.names", String.join(", ", names));
+			tip = names.isEmpty() ? text : Component.translatable("soundsculptor.attached.others.names", Texts.list(names));
 		}
 		othersButton.setMessage(text);
 		othersButton.setTooltip(Tooltip.create(tip));
@@ -122,7 +123,7 @@ public final class AttachedToPanel {
 		SetUsage usage = SetUsageIndex.current();
 		List<String> names = usage == null ? List.of() : otherWorldNames(usage);
 		host.showToast(names.isEmpty() ? othersButton.getMessage()
-				: Component.translatable("soundsculptor.attached.others.names", String.join(", ", names)), null);
+				: Component.translatable("soundsculptor.attached.others.names", Texts.list(names)), null);
 	}
 
 	// ---- Staged Attach and Detach ----

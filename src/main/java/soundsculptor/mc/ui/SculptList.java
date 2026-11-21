@@ -425,7 +425,7 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 					parts.add(column.hint().get().getString());
 				}
 			}
-			return Component.literal(String.join(", ", parts));
+			return Component.literal(Texts.list(parts));
 		}
 
 		/** The visible text of every column, for tests and diagnostics. */

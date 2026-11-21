@@ -1,6 +1,7 @@
 package soundsculptor.core.sets;
 
 import java.util.List;
+import java.util.Set;
 
 import soundsculptor.core.Message;
 import soundsculptor.core.profile.Profile;
@@ -13,7 +14,6 @@ import soundsculptor.core.profile.ProfileOps;
  * a matching {@code can...} method returns the problem to show ({@code null} when the operation can go ahead).
  */
 public final class LibraryOps {
-	private static final String COPY_SUFFIX = " (copy)";
 	/** The place is a zone this profile no longer has. */
 	static final String ZONE_GONE = "soundsculptor.place_sets.zone_gone";
 
@@ -91,7 +91,7 @@ public final class LibraryOps {
 			return NewSet.refused(ws, problem);
 		}
 		SetLibrary lib = ws.library();
-		SoundSet copy = new SoundSet(lib.newId(), lib.uniqueName(source.name(), null, COPY_SUFFIX), source.entries());
+		SoundSet copy = new SoundSet(lib.newId(), lib.uniqueName(source.name(), null, SetNames.forms()::copy, Set.of()), source.entries());
 		return NewSet.added(new Workspace(ws.profile(), lib.put(copy)), copy.id());
 	}
 
