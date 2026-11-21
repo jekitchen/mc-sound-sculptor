@@ -53,7 +53,7 @@ public final class EntrySummary {
 
 	/** "At most 3 per 1 s", with "per source" as its own phrase so the word order can change. */
 	public static SummaryPart limitPart(Limit limit) {
-		String seconds = Numbers.plain(limit.windowMs() / 1000.0, 2);
+		String seconds = Numbers.plain(limit.windowMs() / 1000.0, 3);
 		return SummaryPart.of(limit.perSource() ? LIMIT_PER_SOURCE : LIMIT, Integer.toString(limit.count()), seconds);
 	}
 

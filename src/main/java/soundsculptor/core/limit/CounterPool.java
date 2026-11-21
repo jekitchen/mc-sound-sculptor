@@ -8,8 +8,10 @@ import soundsculptor.core.diag.MemoryEstimate;
  * {@code long} key (the block, or 0 for a shared counter).
  *
  * <p>When a per-source rule already has its {@link RepeatLimiter#MAX_SOURCES_PER_RULE} positions, its own least
- * recently used one is forgotten (FR-6.5). Otherwise, when the pool is full, the least recently used counter of any
- * rule is forgotten. A forgotten counter just starts afresh next time.
+ * recently used one is forgotten (FR-6.5). When the whole pool is full, the rule holding the most counters gives one up
+ * (its least recently used); a rule that holds the most itself recycles its own. So one busy rule never pushes out
+ * another rule's positions; only when more rules are busy than the pool holds do they end up sharing it evenly. A
+ * forgotten counter just starts afresh next time.
  *
  * <p>An open-addressing hash table over packed arrays, so lookups never box a key, and counters are reused, so steady
  * state allocates nothing even when positions keep changing. Entries {@code 0..size-1} are in use; removing one moves
@@ -74,7 +76,7 @@ final class CounterPool {
 		if (owner.entries >= ownerCap) {
 			remove(leastRecentlyUsedOf(owner));
 		} else if (size == capacity) {
-			remove(leastRecentlyUsed());
+			remove(evictionFor(owner));
 		}
 		int entry = size++;
 		if (windows[entry] == null) {
@@ -127,14 +129,26 @@ final class CounterPool {
 		return bytes;
 	}
 
-	private int leastRecentlyUsed() {
-		int best = 0;
-		for (int i = 1; i < size; i++) {
-			if (lastUsed[i] < lastUsed[best]) {
-				best = i;
+	/**
+	 * The counter to forget when the pool is full and {@code owner} needs a new one: the least recently used counter of
+	 * the owner holding the most counters. When that is {@code owner} itself (or a tie with it), its own least recently
+	 * used one, so a busy rule recycles its own positions and never pushes out another rule's. One walk of the pool.
+	 */
+	private int evictionFor(Owner owner) {
+		int most = 0;
+		int largest = -1;
+		int own = -1;
+		for (int i = 0; i < size; i++) {
+			int held = owners[i].entries;
+			if (held > most || held == most && lastUsed[i] < lastUsed[largest]) {
+				most = held;
+				largest = i;
+			}
+			if (owners[i] == owner && (own < 0 || lastUsed[i] < lastUsed[own])) {
+				own = i;
 			}
 		}
-		return best;
+		return own >= 0 && owner.entries >= most ? own : largest;
 	}
 
 	private int leastRecentlyUsedOf(Owner owner) {

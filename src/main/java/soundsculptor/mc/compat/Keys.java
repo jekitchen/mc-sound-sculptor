@@ -26,6 +26,8 @@ public final class Keys {
 	public static final int Z = key("KEY_Z");
 	public static final int SEMICOLON = key("KEY_SEMICOLON");
 	public static final int F10 = key("KEY_F10");
+	public static final int ENTER = key("KEY_RETURN");
+	public static final int NUMPAD_ENTER = key("KEY_NUMPADENTER");
 
 	private Keys() {
 	}

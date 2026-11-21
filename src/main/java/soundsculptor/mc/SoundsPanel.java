@@ -138,8 +138,10 @@ public final class SoundsPanel {
 	/** The Level pop-up, while it is open. */
 	public SculptSlider levelSlider;
 	public SculptTextField levelField;
-	/** The Level and cue pop-up's Cue toggle, while it is open (FR-7). */
+	/** The pop-up's Cue toggle, while it is open (FR-7). */
 	public SculptToggle levelCue;
+	/** The pop-up's repeat limit row, while it is open (FR-6, FR-1.5). */
+	public LimitControls levelLimit;
 	/** How many times a refresh ran (it may find nothing to do), for tests of the refresh rate. */
 	public int refreshCount;
 	/** How many rows were built, for tests that a refresh rebuilds only what changed. */
@@ -640,7 +642,7 @@ public final class SoundsPanel {
 			}
 			row = latest;
 			category = latest.category() == null ? "?" : categoryName(latest.category()).getString();
-			status = mark != null ? mark : statusText(latest.status()).getString();
+			status = mark != null ? mark : statusText(latest.status(), latest.dropped()).getString();
 			band = Component.translatable(latest.band().translationKey()).getString();
 			plays = null;
 		}
@@ -723,7 +725,8 @@ public final class SoundsPanel {
 	 */
 	private static void recentColumns(List<SculptList.Row.Column> columns, String zoneName, LiveRecent live, Widths widths) {
 		columns.add(new SculptList.Row.Column(live::category, widths.category(), 0));
-		columns.add(new SculptList.Row.Column(live::status, widths.status(), 0));
+		// The status may give way in a narrow row ("⏸ Limited ×510" is wider than the others), so the name stays readable.
+		columns.add(new SculptList.Row.Column(live::status, widths.status(), 0, true));
 		columns.add(new SculptList.Row.Column(live::id, 0, 1));
 		if (zoneName != null) {
 			Component zone = Component.translatable("soundsculptor.sounds.zone", zoneName);
@@ -757,6 +760,17 @@ public final class SoundsPanel {
 	}
 
 	/**
+	 * The status, with the dropped count when a repeat limit dropped plays: "⏸ Limited ×12" (FR-6.8). The count is over
+	 * the same 3 minutes as the play count, which counts only the plays that started.
+	 */
+	private static Component statusText(PlayStatus status, int dropped) {
+		if (status == PlayStatus.LIMITED && dropped > 0) {
+			return Component.translatable("soundsculptor.sounds.status_line.limited_count", Component.translatable(status.translationKey()), dropped);
+		}
+		return statusText(status);
+	}
+
+	/**
 	 * The fixed row columns' widths, each fitting every text the column can show, so rows line up and nothing is cut;
 	 * and the Like this… button's.
 	 */
@@ -778,6 +792,7 @@ public final class SoundsPanel {
 		for (PlayStatus status : PlayStatus.values()) {
 			statuses.add(statusText(status));
 		}
+		statuses.add(statusText(PlayStatus.LIMITED, PLAYS_MEASURED));
 		List<Component> bands = new ArrayList<>();
 		for (DistanceBand band : DistanceBand.values()) {
 			bands.add(Component.translatable(band.translationKey()));
@@ -883,7 +898,7 @@ public final class SoundsPanel {
 	}
 
 	/**
-	 * Cue on/off (FR-1.5, FR-7), in the Level and cue pop-up: turns the sound's cue at the place "Apply to" chose on or
+	 * Cue on/off (FR-1.5, FR-7), in the Level, cue and limit pop-up: turns the sound's cue at the place "Apply to" chose on or
 	 * off, whichever set decides it now, through its single-sound entry in that place's Quick changes; saved at once and
 	 * undone with the pop-up's other changes. Clearing the entry's own Cue is preferred when that alone does it, so Mute,
 	 * Cue off and Unmute leave no entry behind. The pop-up's toggle then shows the actual state again.
@@ -907,10 +922,11 @@ public final class SoundsPanel {
 	}
 
 	/**
-	 * Level and cue… (FR-1.5): a slider and a number field for the sound's level in the Quick changes of the place
-	 * "Apply to" chose, and its Cue on/off (FR-7, {@link #toggleCue}), showing whether the sound shows a cue there when
-	 * muted. Changes apply as they are made; closing the pop-up offers one Undo for everything changed in it. An empty
-	 * field clears the level. Values are checked like the entry editor's (FR-12.7).
+	 * Level, cue and limit… (FR-1.5): a slider and a number field for the sound's level in the Quick changes of the place
+	 * "Apply to" chose, its repeat limit (FR-6, {@link #applyLimit}) and its Cue on/off (FR-7, {@link #toggleCue}). Cue
+	 * and Limit show the sound's actual state at the place, whichever set decides it. Changes apply as they are made;
+	 * closing the pop-up offers one Undo for everything changed in it. An empty field clears the level. Values are
+	 * checked like the entry editor's (FR-12.7).
 	 */
 	public void openLevel(String soundId) {
 		host.closeOverlay();
@@ -919,10 +935,41 @@ public final class SoundsPanel {
 		levelBefore = ProfileManager.workspace();
 		SetEntry entry = QuickActions.quickEntry(levelBefore, levelTarget.place(), soundId);
 		LevelPopup popup = LevelPopup.open(host, entry == null ? SetEntry.of("new", soundId) : entry, this::applyLevel, this::finishLevel,
-				QuickActions.isCueOn(levelBefore, levelTarget.place(), soundId), this::toggleCue);
+				QuickActions.isCueOn(levelBefore, levelTarget.place(), soundId), this::toggleCue,
+				QuickActions.limitAt(levelBefore, levelTarget.place(), soundId), this::applyLimit);
 		levelSlider = popup.slider;
 		levelField = popup.field;
 		levelCue = popup.cue;
+		levelLimit = popup.limit;
+	}
+
+	/**
+	 * Sets the sound's repeat limit from the pop-up in the place's Quick changes, or clears it ({@code null}); saved at
+	 * once, without its own toast. Quick changes is pinned first, so its limit always wins at the place (FR-4.10). An
+	 * entry cannot say "no limit", so turning it off while another set there still limits the sound shows that set's limit
+	 * again and says so.
+	 */
+	public void applyLimit(soundsculptor.core.sets.Limit limit) {
+		if (levelSound == null) {
+			return;
+		}
+		PlaceRef where = levelTarget.place();
+		String soundId = levelSound;
+		EntryEdit edit = limit == null ? EntryEdit.ClearLimit.INSTANCE
+				: new EntryEdit.SetLimit(limit.count(), limit.windowMs(), limit.perSource());
+		QuickActionResult result = QuickActions.apply(ProfileManager.workspace(), where, soundId, edit);
+		if (!result.ok()) {
+			host.showToast(ProfileManager.component(result.error()), null);
+			return;
+		}
+		if (result.changed()) {
+			ProfileManager.change(current -> QuickActions.apply(current, where, soundId, edit).after());
+		}
+		soundsculptor.core.sets.Limit still = limit == null ? QuickActions.limitAt(ProfileManager.workspace(), where, soundId) : null;
+		if (still != null && levelLimit != null) {
+			levelLimit.show(still);
+			host.showToast(Component.translatable("soundsculptor.sounds.limit.still", soundName(soundId)), null);
+		}
 	}
 
 	/** Sets the level from the pop-up, or clears it ({@code null}); saved at once, without its own toast. */
@@ -954,6 +1001,7 @@ public final class SoundsPanel {
 		levelSlider = null;
 		levelField = null;
 		levelCue = null;
+		levelLimit = null;
 		if (soundId == null) {
 			return;
 		}
@@ -966,13 +1014,17 @@ public final class SoundsPanel {
 		focusRowButton(soundId, BUTTON_LEVEL);
 	}
 
-	/** What the Level and cue pop-up's Undo toast says: the level, the cue, or both changed. */
+	/** What the pop-up's Undo toast says: the level, the cue, the limit, or that several of them changed. */
 	private static String levelToastKey(Workspace before, Workspace after, PlaceRef where, String soundId) {
 		SetEntry was = QuickActions.quickEntry(before, where, soundId);
 		SetEntry now = QuickActions.quickEntry(after, where, soundId);
 		boolean levelChanged = !java.util.Objects.equals(was == null ? null : was.volume(), now == null ? null : now.volume());
+		boolean limitChanged = !java.util.Objects.equals(was == null ? null : was.limit(), now == null ? null : now.limit());
 		boolean cueOn = QuickActions.isCueOn(after, where, soundId);
 		boolean cueChanged = QuickActions.isCueOn(before, where, soundId) != cueOn;
+		if (limitChanged) {
+			return levelChanged || cueChanged ? "soundsculptor.sounds.toast.settings" : "soundsculptor.sounds.toast.limit";
+		}
 		if (levelChanged && cueChanged) {
 			return "soundsculptor.sounds.toast.level_cue";
 		}

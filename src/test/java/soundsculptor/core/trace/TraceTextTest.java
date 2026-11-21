@@ -157,11 +157,20 @@ class TraceTextTest {
 		assertTrue(text.endsWith(String.join("\n",
 				"Result",
 				"  Volume 0%",
-				"  At most 3 per 1 s, per source",
-				"  Last play was dropped by the repeat limit",
+				"  Repeat limit: at most 3 per 1 s, per source",
+				"  Last play was Limited: dropped by the repeat limit",
 				"  Cue on",
 				"  A cue was shown",
 				"")), text);
+	}
+
+	@Test
+	void aSharedLimitSaysSoAndAnAllowedPlaySaysItWasAllowed() {
+		SetEntry rule = SetEntry.of("l", AMBIENT).withLimit(new Limit(3, 250, false));
+		String text = text(precedence(List.of(rule), List.of()), playAt(0, 100, false, false), false);
+		assertTrue(text.contains("\n  Repeat limit: at most 3 per 0.25 s, shared\n  Last play was allowed\n"), text);
+		assertTrue(text.contains(AMBIENT + ": At most 3 per 0.25 s\n"), "the entry line shows its limit:\n" + text);
+		assertTrue(text.contains("Decides limit ("), "and that it decides the limit:\n" + text);
 	}
 
 	@Test

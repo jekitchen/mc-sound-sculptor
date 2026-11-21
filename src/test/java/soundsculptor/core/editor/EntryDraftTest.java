@@ -80,13 +80,14 @@ class EntryDraftTest {
 	}
 
 	@Test
-	void limitIsSetByItsCountAndNeedsAWindow() {
+	void limitIsSetByItsToggleAndNeedsAWindow() {
 		EntryDraft d = draft("minecraft:entity.villager.ambient");
 		d.set(Field.LIMIT_WINDOW, "nonsense");
-		assertTrue(d.canSave(), "with no count there is no limit, so the window is not checked");
-		assertNull(d.build().limit());
-
 		d.set(Field.LIMIT_COUNT, "3");
+		assertTrue(d.canSave(), "with the limit off, its fields are not checked");
+		assertNull(d.build().limit(), "typing a count does not turn the limit on");
+
+		d.setLimitOn(true);
 		assertEquals(FieldError.NOT_A_NUMBER, d.error(Field.LIMIT_WINDOW).translationKey());
 		d.set(Field.LIMIT_WINDOW, "");
 		assertEquals(FieldError.REQUIRED, d.error(Field.LIMIT_WINDOW).translationKey());
@@ -96,15 +97,70 @@ class EntryDraftTest {
 	}
 
 	@Test
+	void anEmptyCountIsAnErrorNotOff() {
+		// Review of #129: deleting the count to type another must not turn the limit off (or save anything).
+		EntryDraft d = draft("*");
+		d.setLimitOn(true);
+		d.set(Field.LIMIT_COUNT, "");
+		assertTrue(d.hasLimit(), "only the toggle turns the limit off");
+		assertEquals(FieldError.REQUIRED, d.error(Field.LIMIT_COUNT).translationKey());
+		assertFalse(d.limitValid());
+		assertFalse(d.canSave());
+		d.set(Field.LIMIT_COUNT, "5");
+		assertEquals(new Limit(5, 1000, false), d.limit());
+	}
+
+	@Test
 	void limitRangesComeFromFr6() {
 		EntryDraft d = draft("*");
+		d.setLimitOn(true);
 		d.set(Field.LIMIT_COUNT, "0");
 		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("1", "100")), d.error(Field.LIMIT_COUNT));
 		d.set(Field.LIMIT_COUNT, "5");
-		d.set(Field.LIMIT_WINDOW, "20");
-		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("50", "10000")), d.error(Field.LIMIT_WINDOW));
+		d.set(Field.LIMIT_WINDOW, "0.02");
+		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("0.05", "10")), d.error(Field.LIMIT_WINDOW), "FR-6.1: 50 ms to 10 s, typed in seconds");
 		d.set(Field.LIMIT_WINDOW, "99999999999999999999");
 		assertEquals(FieldError.OUT_OF_RANGE, d.error(Field.LIMIT_WINDOW).translationKey());
+		d.set(Field.LIMIT_WINDOW, "10.001");
+		assertEquals(FieldError.OUT_OF_RANGE, d.error(Field.LIMIT_WINDOW).translationKey(), "10 s is the most");
+		d.set(Field.LIMIT_COUNT, "101");
+		assertEquals(FieldError.OUT_OF_RANGE, d.error(Field.LIMIT_COUNT).translationKey(), "100 plays is the most");
+		d.set(Field.LIMIT_COUNT, "2.5");
+		assertEquals(FieldError.NOT_WHOLE_NUMBER, d.error(Field.LIMIT_COUNT).translationKey());
+	}
+
+	@Test
+	void theWindowIsTypedInSecondsAndSavedInMilliseconds() {
+		EntryDraft d = draft("*");
+		d.setLimitOn(true);
+		for (String[] typed : new String[][] {{"0.05", "50"}, {"0.25", "250"}, {"1", "1000"}, {"1.5", "1500"}, {"10", "10000"},
+				{"0.1234", "123"}, {".5", "500"}}) {
+			d.set(Field.LIMIT_WINDOW, typed[0]);
+			assertEquals(Integer.parseInt(typed[1]), d.build().limit().windowMs(), typed[0]);
+		}
+		assertEquals("0.25", EntryDraft.of(SetEntry.of("r", "*").withLimit(new Limit(3, 250, false)), BOOST).text(Field.LIMIT_WINDOW));
+		assertEquals("0.05", EntryDraft.of(SetEntry.of("r", "*").withLimit(new Limit(3, 50, false)), BOOST).text(Field.LIMIT_WINDOW));
+		assertEquals("10", EntryDraft.of(SetEntry.of("r", "*").withLimit(new Limit(3, 10_000, false)), BOOST).text(Field.LIMIT_WINDOW));
+	}
+
+	@Test
+	void theLimitIsOffByDefaultAndTurnsOnWithThreePerSecond() {
+		EntryDraft d = draft("minecraft:entity.villager.ambient");
+		assertFalse(d.hasLimit(), "FR-6: off by default");
+		assertTrue(d.isLimitDefault());
+		d.setLimitOn(true);
+		assertEquals(new Limit(3, 1000, false), d.build().limit(), "3 per 1 s, shared, unless changed");
+		d.set(Field.LIMIT_COUNT, "7");
+		d.set(Field.LIMIT_WINDOW, "2");
+		d.setPerSource(true);
+		d.setLimitOn(false);
+		assertNull(d.build().limit());
+		d.setLimitOn(true);
+		assertEquals(new Limit(7, 2000, true), d.build().limit(), "turning it back on brings back what was typed");
+		assertFalse(d.isLimitDefault());
+		d.resetLimit();
+		assertTrue(d.isLimitDefault());
+		assertNull(d.build().limit());
 	}
 
 	@Test
@@ -156,7 +212,7 @@ class EntryDraftTest {
 		assertTrue(d.isDirty());
 		d.set(Field.VOLUME, "50");
 		assertFalse(d.isDirty());
-		d.set(Field.LIMIT_WINDOW, "2000");
+		d.set(Field.LIMIT_WINDOW, "2");
 		assertFalse(d.isDirty(), "the window does nothing without a count");
 		d.set(Field.TARGET, "*VILLAGER*");
 		assertFalse(d.isDirty(), "same pattern after lowercasing");
@@ -172,7 +228,7 @@ class EntryDraftTest {
 		d.set(Field.TARGET, "*pig*");
 		d.resetToDefault(Field.TARGET);
 		assertEquals("*:*cow*", d.text(Field.TARGET));
-		for (Field f : List.of(Field.MUTE, Field.VOLUME, Field.LIMIT_COUNT, Field.LIMIT_WINDOW, Field.PER_SOURCE, Field.CUE)) {
+		for (Field f : List.of(Field.MUTE, Field.VOLUME, Field.LIMIT_ON, Field.LIMIT_COUNT, Field.LIMIT_WINDOW, Field.PER_SOURCE, Field.CUE)) {
 			assertFalse(d.isDefault(f), f.name());
 			d.resetToDefault(f);
 			assertTrue(d.isDefault(f), f.name());
@@ -182,7 +238,7 @@ class EntryDraftTest {
 		assertNull(reset.volume());
 		assertNull(reset.limit());
 		assertNull(reset.cue());
-		assertEquals("1000", d.text(Field.LIMIT_WINDOW));
+		assertEquals("1", d.text(Field.LIMIT_WINDOW), "the window is shown in seconds");
 		assertFalse(d.perSource());
 	}
 

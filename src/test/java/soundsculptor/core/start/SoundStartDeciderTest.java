@@ -418,6 +418,63 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
+	void oneLibrarySetAttachedToTwoZonesCountsInEachOnItsOwn() {
+		// FR-6 AC: one set limiting villagers to 2/s, attached to two zones far apart: each pen plays up to 2 per second.
+		SoundSet pens = new SoundSet("set-pens", "Pens", List.of(villagers("e1").withLimit(TWO_PER_SECOND)));
+		Zone a = new Zone("a", "Pen A", true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(20, 20, 20), PlaceSets.EMPTY.attach(pens.id()));
+		Zone b = new Zone("b", "Pen B", true, WORLD, OVERWORLD, new Point(500, 0, 0), new Shape.Box(20, 20, 20), PlaceSets.EMPTY.attach(pens.id()));
+		decider.setProfile(new Precedence(PlaceSets.EMPTY, List.of(a, b), new SetLibrary(List.of(pens))));
+		int inA = 0;
+		int inB = 0;
+		for (int i = 0; i < 5; i++) {
+			inA += start(villagerAt(0), 1_000 + i).status() == PlayStatus.PLAYING ? 1 : 0;
+			inB += start(villagerAt(500), 1_000 + i).status() == PlayStatus.PLAYING ? 1 : 0;
+		}
+		assertEquals(2, inA);
+		assertEquals(2, inB);
+		assertEquals(PlayStatus.PLAYING, start(villagerAt(0), 2_000).status(), "each window slides on its own");
+	}
+
+	@Test
+	void p4bQuieterAndLimitedTogether() {
+		// Matrix P4b: A sets villagers to 40%, B limits them to 2/s, the player stands in both: at most 2 per second,
+		// each at 40%.
+		Zone a = cube("a", 2, 10, villagers("ra").withVolume(40));
+		Zone b = cube("b", 6, 12, villagers("rb").withLimit(TWO_PER_SECOND));
+		profile(List.of(), a, b);
+		int played = 0;
+		for (int i = 0; i < 10; i++) {
+			SoundStartResult r = start(villagerAt(0), 1_000 + i * 10);
+			if (r.status() != PlayStatus.LIMITED) {
+				played++;
+				assertEquals(0.4F, r.factor(), 1e-6, "each allowed play at 40%");
+				assertSame(a, r.zone(), "loudness from A");
+			} else {
+				assertSame(b, r.zone(), "the drop from B");
+			}
+		}
+		assertEquals(2, played);
+	}
+
+	@Test
+	void aLimitedLoopNeverStartsAndOutOfRangePlaysDoNotCount() {
+		// FR-6.6: a looping sound counts once, at its start; a dropped loop does not start at all (the caller never
+		// re-decides a limit while a sound plays). A sound out of vanilla range is not heard, so it uses up nothing.
+		profile(List.of(villagers("g1").withLimit(new Limit(1, 10_000, false))));
+		SoundStart far = villagerAt(0);
+		far.distanceSq = 40 * 40;
+		assertFalse(start(far, 1_000).audible());
+		SoundStart loop = villagerAt(0);
+		loop.looping = true;
+		assertEquals(PlayStatus.PLAYING, start(loop, 1_001).status(), "the first loop starts");
+		SoundStart second = villagerAt(0);
+		second.looping = true;
+		SoundStartResult dropped = start(second, 3_000);
+		assertEquals(PlayStatus.LIMITED, dropped.status());
+		assertTrue(dropped.cancel(), "a dropped loop is not started silently: it would never be counted again");
+	}
+
+	@Test
 	void countersSurviveASaveThatKeepsTheRule() {
 		SetEntry g1 = villagers("g1").withLimit(new Limit(1, 1000, false));
 		profile(List.of(g1));

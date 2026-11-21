@@ -73,6 +73,8 @@ public final class SoundHook {
 	private static final SoundStart START = new SoundStart();
 	private static final SoundStartResult RESULT = new SoundStartResult();
 	private static Precedence deciderProfile;
+	/** The world or server the repeat-limit counters count for. */
+	private static String deciderKey = "";
 	private static AppSettings deciderSettings;
 	private static float lastAppliedFactor = 1.0F;
 	private static float lastStartFactor = 1.0F;
@@ -215,6 +217,13 @@ public final class SoundHook {
 	static boolean sync(Minecraft minecraft) {
 		if (!ProfileManager.isLoaded()) {
 			return false;
+		}
+		String key = ProfileManager.key();
+		if (!java.util.Objects.equals(key, deciderKey)) {
+			// Another world or server: its places count afresh (FR-6.4). An Everywhere entry of a library set has the same
+			// counter key in every world, so without this a few plays could carry over from the world just left.
+			DECIDER.limiter().clear();
+			deciderKey = key;
 		}
 		Precedence precedence = ProfileManager.precedence();
 		if (precedence != deciderProfile) {

@@ -30,10 +30,30 @@ public class SculptTextField extends EditBox {
 	private Consumer<String> onChange = value -> { };
 	private Component error;
 	private boolean edited;
+	/** Runs on Enter and when focus leaves the field; {@code null} when the field has no commit step. */
+	private Runnable onCommit;
+	/** How wide the error message may be drawn; the field's own width unless the row leaves room beside it. */
+	private java.util.function.IntSupplier errorX = this::getX;
+	private java.util.function.IntSupplier errorWidth = this::getWidth;
+	/** Whether the message is drawn now (the outline always is), so two neighbours' messages never overlap. */
+	private java.util.function.BooleanSupplier messageShown = () -> true;
 
 	public SculptTextField(Font font, int width, Component label) {
 		super(font, 0, 0, width, Theme.WIDGET_HEIGHT, label);
 		super.setResponder(this::changed);
+	}
+
+	/**
+	 * Lets the error message of a narrow field start at {@code x} and run {@code width} pixels, while it is drawn
+	 * ({@code shown}): for a short number field on a row with room beside it, so "Type a number from 1 to 100" is not
+	 * cut to "Type…". Layouts must leave that room free under the row.
+	 */
+	public SculptTextField errorMessage(java.util.function.IntSupplier x, java.util.function.IntSupplier width,
+			java.util.function.BooleanSupplier shown) {
+		this.errorX = x;
+		this.errorWidth = width;
+		this.messageShown = shown;
+		return this;
 	}
 
 	public SculptTextField placeholder(Component placeholder) {
@@ -69,7 +89,7 @@ public class SculptTextField extends EditBox {
 
 	/** Whether the error message is currently shown (the field is invalid and the player has edited it). */
 	public boolean isErrorShown() {
-		return error != null && edited;
+		return error != null && edited && active;
 	}
 
 	/** Shows the error even if the player has not edited the field yet (e.g. when Save is pressed). */
@@ -93,7 +113,34 @@ public class SculptTextField extends EditBox {
 		String before = getValue();
 		boolean handled = super.keyPressed(event);
 		markEditedIfChanged(before);
+		if (onCommit != null && (event.key() == soundsculptor.mc.compat.Keys.ENTER || event.key() == soundsculptor.mc.compat.Keys.NUMPAD_ENTER)) {
+			onCommit.run();
+			return true;
+		}
 		return handled;
+	}
+
+	/**
+	 * Runs {@code action} when the player is done with the value: Enter, or focus leaving the field. For a value that
+	 * should not take effect on every keystroke (typing 10 would first apply 1); returns this field.
+	 */
+	public SculptTextField onCommit(Runnable action) {
+		this.onCommit = action;
+		return this;
+	}
+
+	@Override
+	public void setFocused(boolean focused) {
+		boolean was = isFocused();
+		super.setFocused(focused);
+		if (was && !focused && onCommit != null) {
+			onCommit.run();
+		}
+	}
+
+	/** Checks the value again, e.g. after something it depends on changed; a new error is not announced. */
+	public void revalidate() {
+		validate(false);
 	}
 
 	private void markEditedIfChanged(String before) {
@@ -139,7 +186,9 @@ public class SculptTextField extends EditBox {
 				Draw.focusRing(g, getX(), getY(), getWidth(), getHeight());
 			}
 			Font font = Minecraft.getInstance().font;
-			Draw.truncatedText(g, font, error.getString(), getX(), getBottom() + 2, getWidth(), Theme.ERROR);
+			if (messageShown.getAsBoolean()) {
+				Draw.truncatedText(g, font, error.getString(), errorX.getAsInt(), getBottom() + 2, errorWidth.getAsInt(), Theme.ERROR);
+			}
 		}
 	}
 }

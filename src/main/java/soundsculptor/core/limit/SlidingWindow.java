@@ -50,4 +50,18 @@ final class SlidingWindow {
 		}
 		return false;
 	}
+
+	/**
+	 * Allowed plays that started in the {@code windowMs} up to and including {@code nowMs}, for the Diagnostics readout;
+	 * never more than {@code count}. Walks at most {@code count} times and allocates nothing.
+	 */
+	int inWindow(long nowMs) {
+		int n = 0;
+		for (int i = 0; i < size; i++) {
+			if (nowMs - times[(head + i) % count] < windowMs) {
+				n++;
+			}
+		}
+		return n;
+	}
 }

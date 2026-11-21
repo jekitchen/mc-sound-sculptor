@@ -1,7 +1,10 @@
 package soundsculptor.core.limit;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -17,9 +20,11 @@ import soundsculptor.core.sets.Limit;
  * has its own counters, which only count sounds that rule decided (FR-6.7). Time is real time, not game ticks, so lag
  * does not change the cap.
  *
- * <p><b>Memory caps (PRD 9.1).</b> A per-source rule keeps up to {@value #MAX_SOURCES_PER_RULE} positions (FR-6.5).
- * All rules together keep at most {@value #MAX_COUNTERS} counters, shared and per-source alike, in one
- * {@link CounterPool}; when it is full, the least recently used counter of any rule is forgotten. At most
+ * <p><b>Memory caps (PRD 9.1).</b> A per-source rule keeps up to {@value #MAX_SOURCES_PER_RULE} positions in each
+ * place (FR-6.5; a rule ID names its place), forgetting its own least recently used one. All rules together keep at
+ *  most {@value #MAX_COUNTERS} counters in one {@link CounterPool}, sized to the 8 MB budget with room to spare: at the highest count,
+ * three per-source rules filled to 1,024 positions each. When it is full, the rule holding the most counters gives one up,
+ * so a busy rule recycles its own positions and never pushes out another's (decided 2026-11-21). At most
  * {@value #MAX_RULES} rules are remembered, least recently used forgotten first. Forgetting only means that counter
  * starts afresh, so in the worst case a few more sounds play than the limit allows, never fewer.
  *
@@ -29,8 +34,8 @@ import soundsculptor.core.sets.Limit;
 public final class RepeatLimiter {
 	/** Per-source positions remembered per rule (FR-6.5). */
 	public static final int MAX_SOURCES_PER_RULE = 1024;
-	/** Counters remembered across all rules together: about 1.7 MB when every one counts 100 plays. */
-	public static final int MAX_COUNTERS = 2048;
+	/** Counters remembered across all rules together: the limiter is at most about 3.4 MB when every one counts 100 plays. */
+	public static final int MAX_COUNTERS = 3072;
 	/** Rules whose counters and dropped counts are remembered. */
 	public static final int MAX_RULES = 4096;
 
@@ -53,17 +58,89 @@ public final class RepeatLimiter {
 		}
 		counters.lastUsed = ++tick;
 		if (!limit.equals(counters.limit)) {
+			// An edited limit starts afresh: its old counts and busiest window belong to the old limit.
 			counters.limit = limit;
+			counters.peak = 0;
 			pool.removeOwner(counters);
 		}
 		SlidingWindow window = limit.perSource()
 				? pool.get(counters, blockKey(x, y, z), limit.count(), limit.windowMs(), MAX_SOURCES_PER_RULE)
 				: pool.get(counters, 0, limit.count(), limit.windowMs(), 1);
 		boolean allowed = window.tryStart(nowMs);
-		if (!allowed) {
+		if (allowed) {
+			counters.allowed++;
+			if (counters.peak < limit.count()) {
+				// Once a counter has been full, the peak cannot rise any more, so the walk is skipped from then on.
+				counters.peak = Math.max(counters.peak, window.inWindow(nowMs));
+			}
+		} else {
 			counters.dropped++;
 		}
 		return allowed;
+	}
+
+	/**
+	 * Every counter and every rule's numbers forgotten, e.g. when the player joins another world or server: its places
+	 * have their own counters (FR-6.4), and a limit must not carry plays over from a world the player left.
+	 */
+	public void clear() {
+		for (RuleCounters c : rules.values()) {
+			c.removed = true;
+		}
+		pool.removeMarked();
+		rules.clear();
+	}
+
+	/**
+	 * What the limits did since they were last cleared, for Settings › Diagnostics (FR-6 AC: "never more than 3 starting
+	 * in any one second"). Walks every rule: call it on demand, not per sound.
+	 */
+	public Stats stats() {
+		long allowed = 0;
+		long dropped = 0;
+		List<RuleCounters> used = new ArrayList<>();
+		for (RuleCounters c : rules.values()) {
+			allowed += c.allowed;
+			dropped += c.dropped;
+			if (c.limit != null && c.peak > 0) {
+				used.add(c);
+			}
+		}
+		// Fullest first: how close each limit came to its count, then the higher count, then the most recently used.
+		used.sort(Comparator.comparingDouble((RuleCounters c) -> -(double) c.peak / c.limit.count())
+				.thenComparingInt(c -> -c.peak).thenComparingLong(c -> -c.lastUsed));
+		List<Fullest> fullest = new ArrayList<>();
+		for (int i = 0; i < Math.min(FULLEST_SHOWN, used.size()); i++) {
+			fullest.add(new Fullest(used.get(i).peak, used.get(i).limit));
+		}
+		return new Stats(allowed, dropped, fullest);
+	}
+
+	/** How many limits {@link #stats} names, fullest first. */
+	public static final int FULLEST_SHOWN = 3;
+
+	/**
+	 * What the repeat limits did (Diagnostics).
+	 *
+	 * @param allowed plays a limit let through
+	 * @param dropped plays a limit dropped
+	 * @param fullest up to {@value #FULLEST_SHOWN} limits that came closest to their count, fullest first
+	 */
+	public record Stats(long allowed, long dropped, List<Fullest> fullest) {
+		public static final Stats NONE = new Stats(0, 0, List.of());
+
+		public Stats {
+			fullest = List.copyOf(fullest);
+		}
+	}
+
+	/**
+	 * One limit's busiest window.
+	 *
+	 * @param most  the most plays one of its counters let start within the window; never more than {@code limit.count()}
+	 * @param limit the limit it was counted against
+	 */
+	public record Fullest(int most, Limit limit) {
 	}
 
 	/** A new rule's counters, forgetting the least recently used rule first if {@value #MAX_RULES} are remembered. */
@@ -146,12 +223,15 @@ public final class RepeatLimiter {
 	}
 
 	private static final class RuleCounters extends CounterPool.Owner {
-		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 3 * 8 + 4 + 1);
+		static final long BYTES = MemoryEstimate.object(2 * MemoryEstimate.REFERENCE + 4 * 8 + 2 * 4 + 1);
 
 		final String ruleId;
 		Limit limit;
+		long allowed;
 		long dropped;
 		long lastUsed;
+		/** The most plays one of this rule's counters let start within the window, under its current limit. */
+		int peak;
 
 		RuleCounters(String ruleId, long serial) {
 			super(serial);

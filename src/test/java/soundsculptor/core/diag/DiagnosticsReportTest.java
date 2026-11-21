@@ -46,6 +46,21 @@ class DiagnosticsReportTest {
 	}
 
 	@Test
+	void repeatLimitsShowPlayedDroppedAndTheBusiestWindow() {
+		// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
+		DiagnosticsReport.Data none = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0);
+		assertTrue(DiagnosticsReport.format(none).contains("Repeat limits: none used yet"), DiagnosticsReport.format(none));
+		DiagnosticsReport.Data used = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0, -1,
+				new soundsculptor.core.limit.RepeatLimiter.Stats(90, 510, java.util.List.of(
+						new soundsculptor.core.limit.RepeatLimiter.Fullest(3, new soundsculptor.core.sets.Limit(3, 1000, false)),
+						new soundsculptor.core.limit.RepeatLimiter.Fullest(1, new soundsculptor.core.sets.Limit(2, 500, true)))));
+		assertTrue(DiagnosticsReport.format(used).contains("Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s); 1 (limit 2 per 0.5 s)"),
+				DiagnosticsReport.format(used));
+	}
+
+	@Test
 	void memoryIsNotApplicableWhenNotMeasured() {
 		DiagnosticsReport.Data data = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0);

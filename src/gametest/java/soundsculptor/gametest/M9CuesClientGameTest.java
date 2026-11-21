@@ -270,7 +270,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		check(!play(context, EXPLODE, 10, 0), "still muted");
 		check(shown(context).isEmpty(), "with Cue off the explosion shows nothing");
 
-		// Sounds tab: the row's Level and cue… pop-up has Cue, showing the actual state; it turns the cue back on, and
+		// Sounds tab: the row's Level, cue and limit… pop-up has Cue, showing the actual state; it turns the cue back on, and
 		// closing the pop-up offers Undo.
 		openMain(context);
 		context.runOnClient(mc -> {
@@ -280,7 +280,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(1);
 		String levelLabel = context.computeOnClient(mc -> rowButton(main(mc).sounds().list, EXPLODE, SoundsPanel.BUTTON_LEVEL).getMessage().getString());
-		check(levelLabel.equals("Level and cue…"), "the row's button names the cue too, was " + levelLabel);
+		check(levelLabel.equals("Level, cue and limit…"), "the row's button names the cue too, was " + levelLabel);
 		context.runOnClient(mc -> main(mc).sounds().openLevel(EXPLODE));
 		context.waitTicks(1);
 		check(context.computeOnClient(mc -> main(mc).sounds().levelCue != null && !main(mc).sounds().levelCue.value()),

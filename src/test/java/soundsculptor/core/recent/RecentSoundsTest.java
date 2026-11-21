@@ -89,6 +89,33 @@ class RecentSoundsTest {
 	}
 
 	@Test
+	void droppedPlaysAreCountedApartFromPlays() {
+		// FR-6.8 and the FR-6 AC: 20 villagers limited to 3 per second show about 90 played and the rest Limited.
+		for (long t = 0; t < 30_000; t += 50) {
+			boolean allowed = t % 1000 < 150;
+			log.record(VILLAGER, "neutral", true, 3.0, true, allowed ? PlayStatus.PLAYING : PlayStatus.LIMITED, null, 10_000 + t);
+		}
+		RecentRow row = rows(40_000).get(0);
+		assertEquals(90, row.count(), "plays that started");
+		assertEquals(510, row.dropped(), "plays the limit dropped");
+		assertEquals(PlayStatus.LIMITED, row.status());
+	}
+
+	@Test
+	void aRowStaysLimitedForTenSecondsAfterADrop() {
+		// A limited stream reads Limited rather than flickering with each allowed play.
+		log.record(VILLAGER, "neutral", true, 3.0, true, PlayStatus.LIMITED, null, 1_000);
+		log.record(VILLAGER, "neutral", true, 3.0, true, PlayStatus.PLAYING, null, 1_100);
+		assertEquals(PlayStatus.LIMITED, rows(1_100).get(0).status());
+		assertEquals(PlayStatus.LIMITED, rows(10_999).get(0).status());
+		assertEquals(PlayStatus.PLAYING, rows(11_000).get(0).status(), "10 s after the last drop the latest play's status shows");
+		assertEquals(1, rows(11_000).get(0).dropped(), "the dropped count stays for the 3 minutes");
+		assertEquals(0, rows(200_000).size());
+		heard(COW, 1_000);
+		assertEquals(0, rows(1_000).stream().filter(r -> r.id().equals(COW)).findFirst().orElseThrow().dropped());
+	}
+
+	@Test
 	void musicUiAndVoiceSoundsAreRecordedLikeAnyOther() {
 		// Every sound is in scope (section 5, decided 2026-11-14).
 		log.record("minecraft:music.game", "music", false, 0, true, PlayStatus.PLAYING, null, 1000);
