@@ -150,10 +150,12 @@ jobs:
       # Same cache as the other jobs: saved from main, read everywhere else.
       - name: setup gradle with caching
         uses: gradle/actions/setup-gradle@v6
+      # Sodium and Iris need OpenGL, which needs a 24-bit screen; Loom's own xvfb-run has an 8-bit one, so with
+      # -Pcompat=true Loom does not start one and the game runs on this display instead.
       - name: run the compatibility smoke test
         env:
           ALSOFT_DRIVERS: 'null'
-        run: ./gradlew runClientGameTest -Pcompat=true
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' ./gradlew runClientGameTest -Pcompat=true
       - name: capture screenshots and logs
         if: always()
         uses: actions/upload-artifact@v7

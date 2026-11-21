@@ -426,8 +426,9 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 					m.getSoundManager().isActive(rolling.instance())));
 		});
 		standAt(context, 12, 0);
-		Tick entered = ticks.stream().filter(Tick::inA).findFirst().orElse(null);
-		check(entered != null, "a tick with the feet in A was recorded: " + ticks);
+		List<Tick> walkingIn = context.computeOnClient(mc -> List.copyOf(ticks));
+		Tick entered = walkingIn.stream().filter(Tick::inA).findFirst().orElse(null);
+		check(entered != null, "a tick with the feet in A was recorded: " + walkingIn);
 		check(entered.gain() == 0.0F && entered.active(), "silent, and still playing, on the tick the feet entered A: " + entered);
 
 		// A second minecart that starts while you are in A starts silently, so it can come back (FR-8.8).
@@ -436,9 +437,10 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 		check(second.started(), "a muted loop still starts, silently");
 		expectDecided(second, TraceProperty.LOUDNESS, "A", "p12-a", "m");
 
-		int inside = ticks.size();
+		int inside = context.computeOnClient(mc -> ticks.size());
 		standAt(context, 0, 0);
-		Tick left = ticks.subList(inside, ticks.size()).stream().filter(t -> !t.inA()).findFirst().orElse(null);
+		List<Tick> walkingOut = context.computeOnClient(mc -> List.copyOf(ticks.subList(inside, ticks.size())));
+		Tick left = walkingOut.stream().filter(t -> !t.inA()).findFirst().orElse(null);
 		check(left != null, "a tick with the feet out of A was recorded");
 		check(Math.abs(left.gain() - before) < 1e-4 && left.active(), "audible again on the tick the feet left A: " + left + ", before " + before);
 		context.runOnClient(mc -> probe = null);

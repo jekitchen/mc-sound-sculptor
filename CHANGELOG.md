@@ -56,6 +56,18 @@ Work toward 1.0, after the alpha. Not released yet.
   at 100%, and the level controls say so.
 - "Why does it sound like this?" says "Above 100%: boost applied." or, when boost is off, that it plays at 100%.
 
+### Tests and compatibility
+- **Zone precedence matrix:** every case of PRD 11.4 (P1 to P20) runs as one client game test,
+  `PrecedenceMatrixClientGameTest`. Each case checks the level, mute and repeat limit, the zone named for the sound and
+  the deciding place, set and entry in "Why does it sound like this?", and prints a `MATRIX` line.
+- **Compatibility smoke test:** `./gradlew runClientGameTest -Pcompat=true` starts the game with Sodium, Iris (no
+  shader pack) and Sound Physics Remastered, pinned to their 26.3 builds. It opens the screen, mutes a sound from the
+  Sounds tab, checks its cue and a zone outline in a screenshot, and fails on any error from Sound Sculptor in the log.
+  CI runs it on every push.
+- `-Pgametests=<name>,<name>` runs only the named client game tests.
+- `./gradlew build` checks that the jar stays under 1 MB and holds only Sound Sculptor's own files.
+- The mod's description in `fabric.mod.json` now says it can boost and rate-limit sounds too.
+
 ## 0.1.0-alpha (unreleased)
 
 First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.
