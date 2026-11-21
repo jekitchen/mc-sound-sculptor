@@ -435,8 +435,9 @@ public final class SoundSculptorScreen extends SculptScreen {
 			Supplier<Component> line = lines.get(i);
 			rows.add(new SculptList.Row(i, List.of(new SculptList.Row.Column(() -> line.get().getString(), 0)), List.of()));
 		}
-		diagnosticsList.setRows(rows);
+		// Placed first, so the rows are laid out where the list is.
 		body.fill(diagnosticsList);
+		diagnosticsList.setRows(rows);
 	}
 
 	/** The Diagnostics page's lines as shown now (tests). */

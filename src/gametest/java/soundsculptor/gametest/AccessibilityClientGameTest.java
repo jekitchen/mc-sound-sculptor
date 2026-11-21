@@ -455,7 +455,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		checkReducedMotion(context);
 
 		// A-3: every screen at every window size and GUI scale.
-		List<String> english = layoutProblems(context);
+		List<String> english = layoutProblems(context, "english");
 		System.out.println("A11Y layout (English): " + english.size() + " problems" + (english.isEmpty() ? "" : "\n  " + String.join("\n  ", english)));
 		check(english.isEmpty(), english.size() + " layout problems in English, first: " + (english.isEmpty() ? "" : english.get(0)));
 
@@ -463,7 +463,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> Language.inject(new PseudoLanguage(Language.getInstance())));
 		List<String> pseudo;
 		try {
-			pseudo = layoutProblems(context);
+			pseudo = layoutProblems(context, "pseudo");
 		} finally {
 			context.runOnClient(mc -> Language.inject(((PseudoLanguage) Language.getInstance()).english));
 		}
@@ -474,7 +474,15 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	}
 
 	/** Every screen, tab and settings page, at every window size and GUI scale. */
-	private static List<String> layoutProblems(ClientGameTestContext context) {
+	/** The list screens whose rows change at narrow widths, saved as screenshots at the smallest size for a visual check. */
+	private static final java.util.Set<Screens> ROW_SCREENSHOTS = java.util.EnumSet.of(Screens.SOUNDS_RECENT, Screens.SOUNDS_ALL,
+			Screens.PICKER_RECENT, Screens.PICKER_ALL, Screens.ZONES, Screens.PROFILES, Screens.PLACE_SETS_EVERYWHERE,
+			Screens.SETTINGS_DIAGNOSTICS);
+
+	/**
+	 * @param language "english" or "pseudo", for the screenshots of {@link #ROW_SCREENSHOTS} at 854 × 480, GUI scale 2
+	 */
+	private static List<String> layoutProblems(ClientGameTestContext context, String language) {
 		List<String> problems = new ArrayList<>();
 		int originalScale = context.computeOnClient(mc -> mc.options.guiScale().get());
 		for (int[] window : WINDOWS) {
@@ -496,6 +504,10 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 						}
 						return check(mc, mc.gui.screen(), where + " " + screen.name());
 					}));
+					if (window[0] == 854 && scale == 2 && ROW_SCREENSHOTS.contains(screen)) {
+						context.waitTicks(1);
+						context.takeScreenshot("a11y-rows-" + language + "-" + screen.name().toLowerCase(java.util.Locale.ROOT));
+					}
 				}
 				problems.addAll(cueBoxProblems(context, where));
 			}
