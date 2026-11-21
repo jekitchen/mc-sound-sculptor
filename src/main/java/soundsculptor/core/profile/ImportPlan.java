@@ -132,7 +132,9 @@ public record ImportPlan(Profile result, SetLibrary library, SetImportPlan sets,
 			}
 		}
 		Profile result = new Profile(current.name(), source.settings(), source.everywhere(), zones, colors,
-				current.lastJoined(), current.boostConfirmed(), source.everywhereCues());
+				current.lastJoined(), current.boostConfirmed(),
+				// Everywhere's cue settings come with its sets, unless the file is older than them (FR-7, 2026-11-21).
+				file.everywhereCuesSaved() ? source.everywhereCues() : current.everywhereCues());
 		return new ImportPlan(result, applied.library(), setPlan, source.everywhere().attached().size(), fixedIn, skipped,
 				applied.library().size() - lib.size(), setPlan.missingRefs(), null);
 	}

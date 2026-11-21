@@ -1,6 +1,7 @@
 package soundsculptor.core.profile;
 
 import soundsculptor.core.Message;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.outline.OutlineMode;
 import soundsculptor.core.outline.ZoneColors;
 import soundsculptor.core.sets.Attachment;
@@ -56,13 +57,19 @@ public final class ProfileCodec {
 			"zones", "lastJoined", "boostConfirmed");
 	/**
 	 * {@code edge} in the settings, and {@code mode} and {@code edge} on a zone, were retired with Outside mode and fade
-	 * edges (owner decision 2026-11-14): still accepted without a warning, and ignored.
+	 * edges (owner decision 2026-11-14): still accepted without a warning, and ignored. {@code cueDefault} in the settings
+	 * moved to Everywhere's cue settings as {@code newMutesGetCue} (2026-11-21): still read, once, to fill that in for a
+	 * file saved before, and no longer written.
 	 */
 	private static final Set<String> SETTINGS_FIELDS = Set.of("showDistance", "cueDefault", "outlines", "edge");
-	private static final Set<String> PLACE_FIELDS = Set.of("sets", "quickChanges");
+	private static final Set<String> PLACE_FIELDS = Set.of("sets", "quickChanges", "cues");
+	/** A place's cue settings (FR-7, decided 2026-11-21); a setting left out is Unchanged (a zone) or its default. */
+	private static final Set<String> CUE_FIELDS = Set.of("showCues", "cuesWithoutSubtitles", "newMutesGetCue", "color", "textScale",
+			"boxOffset");
+	private static final Set<String> OFFSET_FIELDS = Set.of("x", "y");
 	private static final Set<String> ATTACHMENT_FIELDS = Set.of("set", "enabled");
 	private static final Set<String> ZONE_FIELDS = Set.of("id", "name", "enabled", "color", "anchor", "shape", "mode", "edge",
-			"sets", "quickChanges");
+			"sets", "quickChanges", "cues");
 	private static final Set<String> ANCHOR_FIELDS = Set.of("type", "x", "y", "z", "dimension", "worldKey");
 	private static final Map<String, Set<String>> SHAPE_FIELDS = Map.of(
 			"box", Set.of("type", "width", "height", "depth"));
@@ -70,10 +77,20 @@ public final class ProfileCodec {
 	private ProfileCodec() {
 	}
 
-	/** A profile read from a file, and the unknown fields that were ignored. */
-	public record Read(Profile profile, List<Message> warnings) {
+	/**
+	 * A profile read from a file, and the unknown fields and unusable cue settings that were ignored.
+	 *
+	 * @param everywhereCuesSaved whether the file holds Everywhere's cue settings; a file saved before they moved from
+	 *                            the app-wide settings does not (decided 2026-11-21), and gets them from there once
+	 */
+	public record Read(Profile profile, List<Message> warnings, boolean everywhereCuesSaved) {
 		public Read {
 			warnings = List.copyOf(warnings);
+		}
+
+		/** A read of a file that holds Everywhere's cue settings. */
+		public Read(Profile profile, List<Message> warnings) {
+			this(profile, warnings, true);
 		}
 	}
 
@@ -106,6 +123,7 @@ public final class ProfileCodec {
 		root.add("settings", settingsToJson(profile.settings()));
 		JsonObject everywhere = new JsonObject();
 		placeToJson(everywhere, profile.everywhere());
+		everywhere.add("cues", cuesToJson(profile.everywhereCues()));
 		root.add("everywhere", everywhere);
 		JsonArray zones = new JsonArray();
 		for (Zone zone : profile.zones()) {
@@ -123,7 +141,6 @@ public final class ProfileCodec {
 	private static JsonObject settingsToJson(ProfileSettings s) {
 		JsonObject json = new JsonObject();
 		json.addProperty("showDistance", s.showDistance());
-		json.addProperty("cueDefault", s.cueDefault());
 		json.addProperty("outlines", s.outlines().name().toLowerCase(Locale.ROOT));
 		return json;
 	}
@@ -172,6 +189,39 @@ public final class ProfileCodec {
 		}
 		json.add("shape", shape);
 		placeToJson(json, zone.sets());
+		if (!zone.cues().isUnchanged()) {
+			json.add("cues", cuesToJson(zone.cues()));
+		}
+		return json;
+	}
+
+	/**
+	 * A place's cue settings (FR-7): only those it sets, so a zone's Unchanged ones are left out. Everywhere sets every
+	 * one, so all are written for it.
+	 */
+	private static JsonObject cuesToJson(PlaceCues cues) {
+		JsonObject json = new JsonObject();
+		if (cues.showCues() != null) {
+			json.addProperty("showCues", cues.showCues());
+		}
+		if (cues.withoutSubtitles() != null) {
+			json.addProperty("cuesWithoutSubtitles", cues.withoutSubtitles());
+		}
+		if (cues.newMutesGetCue() != null) {
+			json.addProperty("newMutesGetCue", cues.newMutesGetCue());
+		}
+		if (cues.color() != null) {
+			json.addProperty("color", ZoneColors.format(cues.color()));
+		}
+		if (cues.textScale() != null) {
+			json.addProperty("textScale", cues.textScale());
+		}
+		if (cues.boxOffset() != null) {
+			JsonObject offset = new JsonObject();
+			offset.addProperty("x", cues.boxOffset().x());
+			offset.addProperty("y", cues.boxOffset().y());
+			json.add("boxOffset", offset);
+		}
 		return json;
 	}
 
@@ -234,12 +284,28 @@ public final class ProfileCodec {
 		String name = top.has("name") ? top.string("name") : "Default";
 		Instant lastJoined = top.has("lastJoined") ? top.instant("lastJoined") : null;
 		boolean boostConfirmed = top.has("boostConfirmed") && top.bool("boostConfirmed");
-		ProfileSettings settings = top.has("settings")
-				? readSettings(top.object("settings", Message.of(ProfileText.PLACE_SETTINGS), SETTINGS_FIELDS))
-				: ProfileSettings.DEFAULTS;
-		PlaceSets everywhere = top.has("everywhere")
-				? readPlace(top.object("everywhere", Message.of(ProfileText.PLACE_EVERYWHERE), PLACE_FIELDS), warnings)
-				: PlaceSets.EMPTY;
+		ProfileSettings settings = ProfileSettings.DEFAULTS;
+		Boolean oldCueDefault = null;
+		if (top.has("settings")) {
+			Fields s = top.object("settings", Message.of(ProfileText.PLACE_SETTINGS), SETTINGS_FIELDS);
+			settings = readSettings(s);
+			oldCueDefault = s.optionalBool("cueDefault");
+		}
+		PlaceSets everywhere = PlaceSets.EMPTY;
+		PlaceCues everywhereCues = null;
+		if (top.has("everywhere")) {
+			Fields e = top.object("everywhere", Message.of(ProfileText.PLACE_EVERYWHERE), PLACE_FIELDS);
+			everywhere = readPlace(e, warnings);
+			everywhereCues = readCues(e);
+		}
+		boolean cuesSaved = everywhereCues != null;
+		if (everywhereCues == null) {
+			// Saved before cue settings moved to the places (2026-11-21): the profile's "New mutes get Cue" moves here; the
+			// rest were app-wide, and the caller fills them in (Read.everywhereCuesSaved).
+			everywhereCues = oldCueDefault == null ? PlaceCues.EVERYWHERE_DEFAULTS
+					: PlaceCues.EVERYWHERE_DEFAULTS.withNewMutesGetCue(oldCueDefault);
+		}
+		everywhereCues = everywhereCues.orElse(PlaceCues.EVERYWHERE_DEFAULTS);
 		JsonArray zoneArray = top.has("zones") ? top.array("zones") : new JsonArray();
 		if (zoneArray.size() > Precedence.MAX_ZONES) {
 			throw ProfileText.problem(ProfileText.TOO_MANY_ZONES, zoneArray.size(), Precedence.MAX_ZONES);
@@ -259,7 +325,8 @@ public final class ProfileCodec {
 			}
 			zones.add(zone);
 		}
-		return new Read(new Profile(name, settings, everywhere, zones, colors, lastJoined, boostConfirmed), warnings);
+		return new Read(new Profile(name, settings, everywhere, zones, colors, lastJoined, boostConfirmed, everywhereCues), warnings,
+				cuesSaved);
 	}
 
 	/**
@@ -322,14 +389,11 @@ public final class ProfileCodec {
 		return new PlaceSets(attached, quick);
 	}
 
-	/** Profile settings; a missing value takes its default. */
+	/** Profile settings; a missing value takes its default. The old {@code cueDefault} is read by the caller. */
 	private static ProfileSettings readSettings(Fields s) throws ProfileFormatException {
 		ProfileSettings settings = ProfileSettings.DEFAULTS;
 		if (s.has("showDistance")) {
 			settings = settings.withShowDistance(s.bool("showDistance"));
-		}
-		if (s.has("cueDefault")) {
-			settings = settings.withCueDefault(s.bool("cueDefault"));
 		}
 		if (s.has("outlines")) {
 			String mode = s.choice("outlines", "outlines", "always", "editing", "never");
@@ -353,7 +417,31 @@ public final class ProfileCodec {
 		String worldKey = a.string("worldKey");
 		Shape shape = readShape(z);
 		PlaceSets sets = readPlace(z, warnings);
-		return new Zone(id, name, enabled, worldKey, dimension, anchor, shape, sets);
+		PlaceCues cues = readCues(z);
+		return new Zone(id, name, enabled, worldKey, dimension, anchor, shape, sets, cues == null ? PlaceCues.UNCHANGED : cues);
+	}
+
+	/**
+	 * A place's {@code cues}, or {@code null} if it has none. Read forgivingly, as they are only preferences (like the
+	 * app-wide settings file): a value that cannot be used is left Unchanged with a warning, so it never stops the
+	 * profile from loading, and an unknown field is ignored with a warning.
+	 */
+	private static PlaceCues readCues(Fields p) {
+		if (!p.has("cues")) {
+			return null;
+		}
+		JsonElement raw = p.json.get("cues");
+		if (!raw.isJsonObject()) {
+			p.ignore("cues", Message.of(ProfileText.NOT_OBJECT, describe(raw)));
+			return PlaceCues.UNCHANGED;
+		}
+		Fields c = new Fields(raw.getAsJsonObject(), Message.of(ProfileText.PLACE_CUES, p.where()), p.warnings, CUE_FIELDS);
+		return PlaceCues.UNCHANGED.withShowCues(c.optionalBool("showCues"))
+				.withWithoutSubtitles(c.optionalBool("cuesWithoutSubtitles"))
+				.withNewMutesGetCue(c.optionalBool("newMutesGetCue"))
+				.withColor(c.optionalColor("color"))
+				.withTextScale(c.optionalWhole("textScale", PlaceCues.MIN_TEXT_SCALE, PlaceCues.MAX_TEXT_SCALE))
+				.withBoxOffset(c.optionalOffset("boxOffset"));
 	}
 
 	private static Shape readShape(Fields z) throws ProfileFormatException {
@@ -571,6 +659,101 @@ public final class ProfileCodec {
 				throw ProfileText.problem(ProfileText.ITEM_NOT_OBJECT, itemWhere, describe(value));
 			}
 			return new Fields(value.getAsJsonObject(), itemWhere, warnings, known);
+		}
+
+		// ---- Forgiving reads, for cue settings: a value that cannot be used is ignored with a warning ----
+
+		/** Adds "Place, field f: what, so it was ignored." to the warnings. */
+		void ignore(String field, Message what) {
+			if (warnings != null) {
+				warnings.add(Message.of(ProfileText.IGNORED, where == null ? Message.of(ProfileText.PLACE_SETTINGS) : where, field, what));
+			}
+		}
+
+		/** True or false, or {@code null} if the field is missing or not true or false (then with a warning). */
+		Boolean optionalBool(String field) {
+			if (!has(field)) {
+				return null;
+			}
+			JsonElement value = json.get(field);
+			if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
+				return value.getAsBoolean();
+			}
+			ignore(field, Message.of(ProfileText.NOT_BOOLEAN, describe(value)));
+			return null;
+		}
+
+		/** A color like {@code "#A9BCD0"}, or {@code null} if missing or not a color (then with a warning). */
+		Integer optionalColor(String field) {
+			if (!has(field)) {
+				return null;
+			}
+			JsonElement value = json.get(field);
+			if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+				ZoneColors.Parsed parsed = ZoneColors.parseHex(value.getAsString());
+				if (parsed.error() == null) {
+					return parsed.rgb();
+				}
+			}
+			ignore(field, Message.of(ProfileText.NOT_COLOR, describe(value)));
+			return null;
+		}
+
+		/** A whole number from {@code min} to {@code max}, or {@code null} if missing or not one (then with a warning). */
+		Integer optionalWhole(String field, int min, int max) {
+			if (!has(field)) {
+				return null;
+			}
+			JsonElement value = json.get(field);
+			Message problem = wholeProblem(value, min, max);
+			if (problem == null) {
+				return value.getAsInt();
+			}
+			ignore(field, problem);
+			return null;
+		}
+
+		/** Why {@code value} is not a whole number from {@code min} to {@code max}, or {@code null} if it is. */
+		private static Message wholeProblem(JsonElement value, int min, int max) {
+			if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber() || !Double.isFinite(value.getAsDouble())) {
+				return Message.of(ProfileText.NOT_NUMBER, describe(value));
+			}
+			double number = value.getAsDouble();
+			if (number != Math.rint(number)) {
+				return Message.of(ProfileText.NOT_WHOLE, describe(value));
+			}
+			if (number > max) {
+				return Message.of(ProfileText.ABOVE_MAX, format(number), max);
+			}
+			if (number < min) {
+				return Message.of(ProfileText.BELOW_MIN, format(number), min);
+			}
+			return null;
+		}
+
+		/**
+		 * The cue box position, {@code {"x": -20, "y": 10}}: both parts, each a whole number within
+		 * ±{@value PlaceCues#MAX_OFFSET}, or {@code null} if missing or unusable (then with a warning).
+		 */
+		PlaceCues.Offset optionalOffset(String field) {
+			if (!has(field)) {
+				return null;
+			}
+			JsonElement value = json.get(field);
+			if (!value.isJsonObject()) {
+				ignore(field, Message.of(ProfileText.NOT_OBJECT, describe(value)));
+				return null;
+			}
+			Fields o = new Fields(value.getAsJsonObject(), Message.of(ProfileText.FIELD_IN, where, field), warnings, OFFSET_FIELDS);
+			Integer x = o.optionalWhole("x", -PlaceCues.MAX_OFFSET, PlaceCues.MAX_OFFSET);
+			Integer y = o.optionalWhole("y", -PlaceCues.MAX_OFFSET, PlaceCues.MAX_OFFSET);
+			if (x == null || y == null) {
+				if (!o.has("x") || !o.has("y")) {
+					ignore(field, Message.of(ProfileText.OFFSET_PART_MISSING));
+				}
+				return null;
+			}
+			return new PlaceCues.Offset(x, y);
 		}
 	}
 }

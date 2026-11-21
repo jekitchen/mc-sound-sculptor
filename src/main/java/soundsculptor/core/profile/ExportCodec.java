@@ -44,11 +44,19 @@ public final class ExportCodec {
 	/**
 	 * A checked export file: the profile as it is in the file, the library sets it carries in file order, and the unknown
 	 * fields that were ignored. What the sets do to the library is worked out by {@link ImportPlan}.
+	 *
+	 * @param everywhereCuesSaved whether the file holds Everywhere's cue settings; one exported before they moved to the
+	 *                            places does not, so importing it keeps this profile's
 	 */
-	public record Read(Profile profile, List<SoundSet> sets, List<Message> warnings) {
+	public record Read(Profile profile, List<SoundSet> sets, List<Message> warnings, boolean everywhereCuesSaved) {
 		public Read {
 			sets = List.copyOf(sets);
 			warnings = List.copyOf(warnings);
+		}
+
+		/** A file that holds Everywhere's cue settings. */
+		public Read(Profile profile, List<SoundSet> sets, List<Message> warnings) {
+			this(profile, sets, warnings, true);
 		}
 	}
 
@@ -117,7 +125,7 @@ public final class ExportCodec {
 		ProfileCodec.Read profile = ProfileCodec.read(root, version -> { });
 		List<Message> all = new ArrayList<>(profile.warnings());
 		all.addAll(warnings);
-		return new Read(profile.profile(), sets, all);
+		return new Read(profile.profile(), sets, all, profile.everywhereCuesSaved());
 	}
 
 	private static List<SoundSet> readSets(JsonElement value, List<Message> warnings) throws ProfileFormatException {

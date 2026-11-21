@@ -2,6 +2,7 @@ package soundsculptor.gametest;
 
 import soundsculptor.SoundSculptorClient;
 import soundsculptor.core.cue.CueDirection;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.quick.QuickActions;
 import soundsculptor.core.sets.Limit;
@@ -201,12 +202,12 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "Cue off: no vanilla subtitle");
 		check(shown(context).isEmpty(), "Cue off: no cue");
 		setExplosionCue(context, true);
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withShowCues(false)));
+		everywhere(context, c -> c.withShowCues(false));
 		play(context, EXPLODE, 10, 0);
 		check(context.computeOnClient(mc -> vanillaRows(mc)) == 0, "master switch off: no vanilla subtitle");
 		check(shown(context).isEmpty(), "master switch off: no cue");
 		context.runOnClient(mc -> {
-			AppSettingsManager.update(s -> s.withShowCues(true));
+			ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withShowCues(true)));
 			mc.options.showSubtitles().set(false);
 		});
 	}
@@ -235,22 +236,22 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		clear(context);
 		play(context, EXPLODE, 10, 0);
 		CueOverlay.Shown normal = shown(context).get(0);
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueTextScale(200)));
+		everywhere(context, c -> c.withTextScale(200));
 		context.waitTicks(FRAMES);
 		CueOverlay.Shown big = shown(context).get(0);
 		check(big.height() == 2 * normal.height() && Math.abs(big.width() - 2 * normal.width()) <= 1, "200% doubles the box: " + normal + " → " + big);
 		check(Math.abs(big.x() + big.width() - (normal.x() + normal.width())) <= 2, "it grows to the left from the same right edge");
 		context.takeScreenshot("m9-cue-scaled");
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueTextScale(100).withCueOffset(-100, -50)));
+		everywhere(context, c -> c.withTextScale(100).withBoxOffset(new PlaceCues.Offset(-100, -50)));
 		context.waitTicks(FRAMES);
 		CueOverlay.Shown moved = shown(context).get(0);
 		check(Math.abs(moved.x() - (normal.x() - 100)) <= 1 && Math.abs(moved.y() - (normal.y() - 50)) <= 1, "the offset moves it: " + normal + " → " + moved);
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueOffset(AppSettings.MAX_CUE_OFFSET, AppSettings.MAX_CUE_OFFSET)));
+		everywhere(context, c -> c.withBoxOffset(new PlaceCues.Offset(PlaceCues.MAX_OFFSET, PlaceCues.MAX_OFFSET)));
 		context.waitTicks(FRAMES);
 		CueOverlay.Shown edge = shown(context).get(0);
 		check(edge.x() + edge.width() <= guiWidth && edge.y() + edge.height() <= guiHeight && edge.x() >= 0 && edge.y() >= 0,
 				"a large offset keeps it on screen: " + edge);
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCueOffset(0, 0)));
+		everywhere(context, c -> c.withBoxOffset(PlaceCues.Offset.ZERO));
 	}
 
 	/** FR-7 AC 2: Cue off on the entry shows nothing; on again from the Sounds tab and from the trace. */
@@ -349,23 +350,14 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 	private static void checkMasterSwitch(ClientGameTestContext context) {
 		for (boolean subtitles : new boolean[] {false, true}) {
 			context.runOnClient(mc -> mc.options.showSubtitles().set(subtitles));
-			// Settings › General: the toggle.
-			openMain(context);
-			context.runOnClient(mc -> {
-				main(mc).selectTab(SoundSculptorScreen.TAB_SETTINGS);
-				main(mc).setSettingsPage(SoundSculptorScreen.SettingsPage.GENERAL);
-			});
-			context.waitTicks(1);
-			check(context.computeOnClient(mc -> main(mc).showCuesToggle.value()), "Show muted-sound cues is on");
-			context.runOnClient(mc -> main(mc).showCuesToggle.onPress(null));
-			check(!context.computeOnClient(mc -> AppSettingsManager.get().showCues()), "the toggle turned the master switch off");
-			closeScreen(context);
+			check(context.computeOnClient(mc -> ProfileManager.profile().everywhereCues().showCues()), "Show muted-sound cues is on");
+			everywhere(context, c -> c.withShowCues(false));
 			clear(context);
 			play(context, EXPLODE, 10, 0);
 			check(shown(context).isEmpty(), "with the master switch off a muted explosion with Cue on shows nothing (Subtitles " + subtitles + ")");
-			// The hotkey's action turns it back on.
+			// The hotkey's action turns it back on, in Everywhere: no zone here sets it.
 			context.runOnClient(CueOverlay::toggleShowCues);
-			check(context.computeOnClient(mc -> AppSettingsManager.get().showCues()), "the hotkey turned the master switch on");
+			check(context.computeOnClient(mc -> ProfileManager.profile().everywhereCues().showCues()), "the hotkey turned the master switch on");
 			play(context, EXPLODE, 10, 0);
 			check(shown(context).size() == 1, "with the master switch on the cue returns (Subtitles " + subtitles + ")");
 		}
@@ -415,16 +407,16 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		clear(context);
 		play(context, silent, 4, 0);
 		check(shown(context).isEmpty(), "a sound without a subtitle shows no cue by default (" + silent + ")");
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCuesWithoutSubtitles(true)));
+		everywhere(context, c -> c.withWithoutSubtitles(true));
 		play(context, silent, 4, 0);
 		List<CueOverlay.Shown> lines = shown(context);
 		check(lines.size() == 1 && lines.get(0).text().equals(silent), "with the setting on, its cue shows the ID, was " + lines);
-		context.runOnClient(mc -> AppSettingsManager.update(s -> s.withCuesWithoutSubtitles(false)));
+		everywhere(context, c -> c.withWithoutSubtitles(false));
 	}
 
 	/** FR-7.6: "New mutes get Cue" sets the Cue of a quick Mute and of Mute in the entry editor. */
 	private static void checkCueDefault(ClientGameTestContext context) {
-		context.runOnClient(mc -> ProfileManager.update(p -> p.withSettings(p.settings().withCueDefault(false))));
+		everywhere(context, c -> c.withNewMutesGetCue(false));
 		mute(context, COW);
 		check(context.computeOnClient(mc -> Boolean.FALSE.equals(QuickActions.quickEntry(ProfileManager.workspace(), EVERYWHERE, COW).cue())),
 				"with the default off a quick Mute has Cue off");
@@ -433,7 +425,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 		context.waitForScreen(EntryEditorScreen.class);
 		context.runOnClient(mc -> editor(mc).setMute(EntryEditorScreen.MuteChoice.MUTE));
 		check(context.computeOnClient(mc -> editor(mc).cueDropdown.value() == EntryEditorScreen.CueChoice.OFF), "Mute in the editor takes the default: Off");
-		context.runOnClient(mc -> ProfileManager.update(p -> p.withSettings(p.settings().withCueDefault(true))));
+		everywhere(context, c -> c.withNewMutesGetCue(true));
 		closeScreen(context);
 		openMain(context);
 		context.runOnClient(mc -> mc.gui.setScreen(EntryEditorScreen.forSound(main(mc), EVERYWHERE, "minecraft:entity.pig.ambient")));
@@ -451,8 +443,8 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
-	 * Settings › General has the switches (PRD 6.1 "cue defaults"); Settings › Accessibility has the cue's color, text
-	 * size and position. Screenshots for the layout.
+	 * Settings › General and Accessibility no longer have the cue settings (decided 2026-11-21): each says they are set
+	 * per zone. Screenshots for the layout.
 	 */
 	private static void checkSettingsPage(ClientGameTestContext context) {
 		openMain(context);
@@ -461,28 +453,28 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 			main(mc).setSettingsPage(SoundSculptorScreen.SettingsPage.GENERAL);
 		});
 		context.waitTicks(1);
-		check(context.computeOnClient(mc -> main(mc).showCuesToggle != null && main(mc).cuesWithoutSubtitlesToggle != null
-				&& main(mc).cueDefaultToggle != null), "the General page has the cue switches");
+		check(context.computeOnClient(mc -> labels(main(mc)).stream().anyMatch(t -> t.startsWith("Cue settings are set per zone"))),
+				"the General page says where the cue settings are");
 		context.takeScreenshot("m9-settings-general");
-		context.runOnClient(mc -> main(mc).cueDefaultToggle.onPress(null));
-		check(!context.computeOnClient(mc -> ProfileManager.profile().settings().cueDefault()), "the toggle sets the profile's Cue default");
-		context.runOnClient(mc -> main(mc).cueDefaultToggle.onPress(null));
-
 		context.runOnClient(mc -> main(mc).setSettingsPage(SoundSculptorScreen.SettingsPage.ACCESSIBILITY));
 		context.waitTicks(1);
-		check(context.computeOnClient(mc -> main(mc).cueColorDropdown.getMessage().getString()).equals("Cue color: Light blue-gray"),
-				"the color has a name");
-		check(context.computeOnClient(mc -> main(mc).cueScaleSlider.getMessage().getString()).equals("Cue text size: 100%"),
-				"the text size reads 100%, was " + context.computeOnClient(mc -> main(mc).cueScaleSlider.getMessage().getString()));
+		check(context.computeOnClient(mc -> labels(main(mc)).stream().anyMatch(t -> t.startsWith("Cue settings are set per zone"))),
+				"the Accessibility page says it too");
 		context.takeScreenshot("m9-settings-accessibility");
-		// The keyboard moves the box: Right on the left/right slider adds 5 px; the reset button puts it back.
-		context.runOnClient(mc -> main(mc).setFocused(main(mc).cueOffsetXSlider));
-		context.getInput().pressKey(InputConstants.KEY_RIGHT);
-		context.waitTicks(1);
-		check(context.computeOnClient(mc -> AppSettingsManager.get().cueOffsetX()) == 5, "Right moves the cue box 5 px");
-		context.runOnClient(mc -> main(mc).cueOffsetReset.onPress(null));
-		check(context.computeOnClient(mc -> AppSettingsManager.get().cueOffsetX()) == 0, "reset puts it back");
 		closeScreen(context);
+	}
+
+	/** Changes Everywhere's cue settings, as its Cues pop-up does. */
+	private static void everywhere(ClientGameTestContext context, java.util.function.UnaryOperator<PlaceCues> change) {
+		context.runOnClient(mc -> ProfileManager.update(p -> p.withEverywhereCues(change.apply(p.everywhereCues()))));
+	}
+
+	private static List<String> labels(SoundSculptorScreen screen) {
+		List<String> texts = new java.util.ArrayList<>();
+		for (soundsculptor.mc.ui.SculptScreen.Body.Label label : screen.body().labels()) {
+			texts.add(label.text().get().getString());
+		}
+		return texts;
 	}
 
 	// ---- Helpers ----
@@ -490,7 +482,7 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 	/** A quick Mute at Everywhere, as the Sounds tab's button makes it (Cue from the profile's default). */
 	private static void mute(ClientGameTestContext context, String soundId) {
 		context.runOnClient(mc -> ProfileManager.change(ws -> QuickActions.apply(ws, EVERYWHERE, soundId,
-				new EntryEdit.MuteWithCue(ws.profile().settings().cueDefault())).after()));
+				new EntryEdit.MuteWithCue(soundsculptor.mc.SoundSculptorSettings.newMutesGetCue())).after()));
 	}
 
 	private static SoundInstance instance(String id, double x, double y, double z) {

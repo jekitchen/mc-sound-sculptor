@@ -34,8 +34,18 @@ public final class ProfileStore {
 		return directory;
 	}
 
-	/** The outcome of loading: the profile to use, and, if the file was unusable, why and where it was moved. */
-	public record LoadResult(Profile profile, Message problem, Path brokenCopy) {
+	/**
+	 * The outcome of loading: the profile to use, and, if the file was unusable, why and where it was moved.
+	 *
+	 * @param everywhereCuesSaved whether the file held Everywhere's cue settings; false for a new or broken profile and
+	 *                            for a file saved before they moved to the places (FR-7, decided 2026-11-21)
+	 */
+	public record LoadResult(Profile profile, Message problem, Path brokenCopy, boolean everywhereCuesSaved) {
+		/** A loaded profile whose cue settings are its own. */
+		public LoadResult(Profile profile, Message problem, Path brokenCopy) {
+			this(profile, problem, brokenCopy, true);
+		}
+
 		public boolean failed() {
 			return problem != null;
 		}
@@ -101,7 +111,7 @@ public final class ProfileStore {
 	public LoadResult load(String key, String defaultName) {
 		Path file = fileFor(key);
 		if (!Files.exists(file)) {
-			return new LoadResult(Profile.empty(defaultName), null, null);
+			return new LoadResult(Profile.empty(defaultName), null, null, false);
 		}
 		Message problem;
 		try {
@@ -110,8 +120,8 @@ public final class ProfileStore {
 			} else {
 				// An older file is saved as <name>.v<n>.bak before it is migrated (PRD 7.6).
 				String text = Files.readString(file, StandardCharsets.UTF_8);
-				return new LoadResult(ProfileCodec.read(text, version -> ProfileMigrations.backup(file, version)).profile(),
-						null, null);
+				ProfileCodec.Read read = ProfileCodec.read(text, version -> ProfileMigrations.backup(file, version));
+				return new LoadResult(read.profile(), null, null, read.everywhereCuesSaved());
 			}
 		} catch (ProfileFormatException e) {
 			problem = e.problem();
@@ -124,7 +134,7 @@ public final class ProfileStore {
 		} catch (IOException e) {
 			broken = null;
 		}
-		return new LoadResult(Profile.empty(defaultName), problem, broken);
+		return new LoadResult(Profile.empty(defaultName), problem, broken, false);
 	}
 
 	/**

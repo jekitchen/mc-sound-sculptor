@@ -137,7 +137,14 @@ public final class ProfileManager {
 		ProfileStore.LoadResult result = pending != null ? new ProfileStore.LoadResult(pending, null, null)
 				: store.load(worldKey, displayName);
 		SetLibrary library = current.library();
-		ProfilePrune.Pruned pruned = ProfilePrune.dropMissingSetsIfComplete(result.profile(), library, libraryComplete,
+		Profile loaded = result.profile();
+		soundsculptor.core.cue.PlaceCues appWide = AppSettingsManager.get().legacyCues();
+		if (!result.everywhereCuesSaved() && appWide != null) {
+			// FR-7, decided 2026-11-21: cue settings were app-wide before. Everywhere of a profile that has none of its own
+			// yet (saved before, or new) starts from them, so the player's color, size and position carry over.
+			loaded = loaded.withEverywhereCues(loaded.everywhereCues().seededFrom(appWide));
+		}
+		ProfilePrune.Pruned pruned = ProfilePrune.dropMissingSetsIfComplete(loaded, library, libraryComplete,
 				Map.copyOf(deletedNames));
 		current = snapshot(worldKey, pruned.profile(), library);
 		if (result.failed()) {

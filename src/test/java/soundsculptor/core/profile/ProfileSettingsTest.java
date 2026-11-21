@@ -12,16 +12,15 @@ import soundsculptor.core.outline.OutlineMode;
 
 import org.junit.jupiter.api.Test;
 
-/** PRD FR-11: profile settings (cue default, outline mode, show distance); FR-12.6 reset to default. */
+/** PRD FR-11: profile settings (outline mode, show distance); FR-12.6 reset to default. */
 class ProfileSettingsTest {
-	private static final ProfileSettings CHANGED = ProfileSettings.DEFAULTS.withShowDistance(false).withCueDefault(false)
+	private static final ProfileSettings CHANGED = ProfileSettings.DEFAULTS.withShowDistance(false)
 			.withOutlines(OutlineMode.ALWAYS);
 
 	@Test
 	void defaultsMatchThePrd() {
 		ProfileSettings d = ProfileSettings.DEFAULTS;
 		assertTrue(d.showDistance(), "FR-1.4: distance band on");
-		assertTrue(d.cueDefault(), "FR-7.6: new mute rules have Cue on");
 		assertEquals(OutlineMode.EDITING, d.outlines(), "FR-10.1: only while editing");
 	}
 
@@ -34,7 +33,7 @@ class ProfileSettingsTest {
 
 	@Test
 	void withersChangeOneValue() {
-		assertEquals(new ProfileSettings(false, false, OutlineMode.ALWAYS), CHANGED);
+		assertEquals(new ProfileSettings(false, OutlineMode.ALWAYS), CHANGED);
 	}
 
 	@Test
@@ -60,7 +59,6 @@ class ProfileSettingsTest {
 	@Test
 	void resetPutsBackOneValueAndLeavesTheOthers() {
 		assertEquals(CHANGED.withShowDistance(true), CHANGED.reset(ProfileSetting.SHOW_DISTANCE));
-		assertEquals(CHANGED.withCueDefault(true), CHANGED.reset(ProfileSetting.CUE_DEFAULT));
 		assertEquals(CHANGED.withOutlines(OutlineMode.EDITING), CHANGED.reset(ProfileSetting.OUTLINES));
 	}
 

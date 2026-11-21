@@ -1,15 +1,23 @@
 package soundsculptor.core.settings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import soundsculptor.core.cue.PlaceCues;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The app-wide settings file: human-readable JSON that never loses good values because of one bad one. */
+/**
+ * The app-wide settings file: human-readable JSON that never loses good values because of one bad one. Files from
+ * before 2026-11-21 hold the app-wide cue settings; they still read without a problem, as {@link AppSettings#legacyCues}.
+ */
 class AppSettingsCodecTest {
 	private static final AppSettings D = AppSettings.DEFAULTS;
+	/** What the app-wide cue settings defaulted to. */
+	private static final PlaceCues OLD_DEFAULTS = PlaceCues.EVERYWHERE_DEFAULTS.withNewMutesGetCue(null);
 
 	private static AppSettingsCodec.Read read(String json) throws AppSettingsFormatException {
 		return AppSettingsCodec.read(json);
@@ -25,38 +33,54 @@ class AppSettingsCodecTest {
 		assertEquals("""
 				{
 				  "schemaVersion": 1,
-				  "showCues": true,
-				  "cuesWithoutSubtitles": false,
-				  "cueColor": "%s",
-				  "cueTextScale": 100,
-				  "cueOffsetX": 0,
-				  "cueOffsetY": 0,
 				  "outlinesThroughBlocks": true,
 				  "reducedMotion": false,
 				  "lastTab": "sounds"
 				}
-				""".formatted(soundsculptor.core.ui.Palette.formatHex(AppSettings.DEFAULT_CUE_COLOR)), AppSettingsCodec.toJson(D));
+				""", AppSettingsCodec.toJson(D));
 	}
 
 	@Test
 	void roundTrip() throws AppSettingsFormatException {
-		AppSettings s = D.withShowCues(false).withCuesWithoutSubtitles(true).withCueColor(0xABCDEF).withCueTextScale(175)
-				.withCueOffset(-12, 40).withOutlinesThroughBlocks(false).withReducedMotion(true).withLastTab("zones");
+		AppSettings s = D.withOutlinesThroughBlocks(false).withReducedMotion(true).withLastTab("zones");
 		AppSettingsCodec.Read read = read(AppSettingsCodec.toJson(s));
 		assertEquals(s, read.settings());
 		assertEquals(List.of(), read.problems());
 	}
 
 	@Test
-	void theCueSwitchesAreSavedAndReadBack() throws AppSettingsFormatException {
-		// FR-7.7 master switch off, FR-7.2 cue sounds without subtitles on.
-		String json = AppSettingsCodec.toJson(D.withShowCues(false).withCuesWithoutSubtitles(true));
-		assertTrue(json.contains("\"showCues\": false"), json);
-		assertTrue(json.contains("\"cuesWithoutSubtitles\": true"), json);
-		AppSettings back = read(json).settings();
-		assertEquals(false, back.showCues());
-		assertEquals(true, back.cuesWithoutSubtitles());
-		assertEquals(D.withShowCues(false), read("{\"schemaVersion\": 1, \"showCues\": false}").settings());
+	void anOldFilesCueSettingsAreReadWithoutAProblem() throws AppSettingsFormatException {
+		AppSettingsCodec.Read read = read("""
+				{"schemaVersion": 1, "showCues": false, "cuesWithoutSubtitles": true, "cueColor": "#F0E442",
+				 "cueTextScale": 150, "cueOffsetX": -20, "cueOffsetY": 30, "reducedMotion": true}""");
+		assertEquals(List.of(), read.problems());
+		assertTrue(read.settings().reducedMotion());
+		assertEquals(new PlaceCues(false, true, null, 0xF0E442, 150, new PlaceCues.Offset(-20, 30)), read.settings().legacyCues());
+	}
+
+	@Test
+	void anOldFileWithSomeCueSettingsGetsTheOldDefaultsForTheRest() throws AppSettingsFormatException {
+		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"cueTextScale\": 180}");
+		assertEquals(OLD_DEFAULTS.withTextScale(180), read.settings().legacyCues());
+		assertEquals(List.of(), read.problems());
+	}
+
+	@Test
+	void theOldFieldsAreNotWrittenAgainButTheirValuesAreKeptForProfilesNotLoadedYet() throws AppSettingsFormatException {
+		AppSettings old = read("{\"schemaVersion\": 1, \"showCues\": false, \"cueColor\": \"#123456\"}").settings();
+		String json = AppSettingsCodec.toJson(old);
+		assertFalse(json.contains("\n  \"showCues\""), "no old top-level field: " + json);
+		assertTrue(json.contains("\"legacyCues\""), json);
+		AppSettingsCodec.Read again = read(json);
+		assertEquals(List.of(), again.problems());
+		assertEquals(old, again.settings());
+		assertEquals(0x123456, again.settings().legacyCues().color(), "a custom color from an edited file is kept");
+	}
+
+	@Test
+	void aNewFileHasNoOldCueSettings() throws AppSettingsFormatException {
+		assertNull(read("{\"schemaVersion\": 1, \"reducedMotion\": true}").settings().legacyCues());
+		assertFalse(AppSettingsCodec.toJson(D).contains("legacyCues"));
 	}
 
 	@Test
@@ -69,23 +93,6 @@ class AppSettingsCodecTest {
 		assertEquals(D.withReducedMotion(true), read.settings());
 		assertEquals(List.of(), read.problems());
 		assertEquals(D, read.settings().reset(AppSetting.REDUCED_MOTION));
-	}
-
-	@Test
-	void everyCueColorPresetRoundTripsAsItself() throws AppSettingsFormatException {
-		for (soundsculptor.core.ui.Palette.Swatch swatch : soundsculptor.core.cue.CueColors.PRESETS) {
-			AppSettingsCodec.Read read = read(AppSettingsCodec.toJson(D.withCueColor(swatch.rgb())));
-			assertEquals(List.of(), read.problems());
-			assertEquals(swatch, soundsculptor.core.cue.CueColors.preset(read.settings().cueColor()), swatch.id());
-		}
-	}
-
-	@Test
-	void aCustomCueColorFromAnEditedFileIsKept() throws AppSettingsFormatException {
-		// Settings offers only the presets, but a color typed into the file is kept, not reset to the default.
-		AppSettings read = read("{\"schemaVersion\": 1, \"cueColor\": \"#123456\"}").settings();
-		assertEquals(0x123456, read.cueColor());
-		assertEquals(null, soundsculptor.core.cue.CueColors.preset(read.cueColor()));
 	}
 
 	@Test
@@ -103,50 +110,33 @@ class AppSettingsCodecTest {
 	}
 
 	@Test
-	void aWrongTypeUsesTheDefaultForThatValueOnly() throws AppSettingsFormatException {
+	void aWrongOldCueValueUsesItsOldDefault() throws AppSettingsFormatException {
 		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"showCues\": \"no\", \"cueTextScale\": 150}");
-		assertEquals(D.withCueTextScale(150), read.settings());
+		assertEquals(OLD_DEFAULTS.withTextScale(150), read.settings().legacyCues());
 		assertEquals("showCues: \"no\" is not true or false, so the default is used.", only(read));
-	}
-
-	@Test
-	void numbersMustBeWholeNumbers() throws AppSettingsFormatException {
 		assertEquals("cueTextScale: 1.5 is not a whole number, so the default is used.",
 				only(read("{\"schemaVersion\": 1, \"cueTextScale\": 1.5}")));
 		assertEquals("cueOffsetX: \"left\" is not a whole number, so the default is used.",
 				only(read("{\"schemaVersion\": 1, \"cueOffsetX\": \"left\"}")));
-		assertEquals("cueTextScale: true is not a whole number, so the default is used.",
-				only(read("{\"schemaVersion\": 1, \"cueTextScale\": true}")));
+		assertEquals("cueColor: \"#GG0000\" is not a color like #E69F00, so the default is used.",
+				only(read("{\"schemaVersion\": 1, \"cueColor\": \"#GG0000\"}")));
 	}
 
 	@Test
-	void outOfRangeNumbersAreClampedWithAProblem() throws AppSettingsFormatException {
+	void oldCueNumbersOutOfRangeAreClampedWithAProblem() throws AppSettingsFormatException {
 		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"cueTextScale\": 300}");
-		assertEquals(200, read.settings().cueTextScale());
+		assertEquals(200, read.settings().legacyCues().textScale());
 		assertEquals("cueTextScale: 300 is above the maximum 200, so 200 is used.", only(read));
-		read = read("{\"schemaVersion\": 1, \"cueOffsetY\": -99999}");
-		assertEquals(-AppSettings.MAX_CUE_OFFSET, read.settings().cueOffsetY());
-		assertEquals("cueOffsetY: -99999 is below the minimum -" + AppSettings.MAX_CUE_OFFSET + ", so -"
-				+ AppSettings.MAX_CUE_OFFSET + " is used.", only(read));
-		assertEquals(D, read("{\"schemaVersion\": 1, \"cueTextScale\": 100}").settings());
-	}
-
-	@Test
-	void hugeNumbersDoNotOverflow() throws AppSettingsFormatException {
-		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"cueOffsetX\": 99999999999999}");
-		assertEquals(AppSettings.MAX_CUE_OFFSET, read.settings().cueOffsetX());
+		read = read("{\"schemaVersion\": 1, \"cueOffsetY\": -99999999999999}");
+		assertEquals(-PlaceCues.MAX_OFFSET, read.settings().legacyCues().boxOffset().y());
 		assertEquals(1, read.problems().size());
 	}
 
 	@Test
-	void colorsAreHexText() throws AppSettingsFormatException {
-		assertEquals(0xABCDEF, read("{\"schemaVersion\": 1, \"cueColor\": \"#abcdef\"}").settings().cueColor());
-		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"cueColor\": \"#GG0000\"}");
-		assertEquals(D, read.settings());
-		assertEquals("cueColor: \"#GG0000\" is not a color like #E69F00, so the default is used.", only(read));
-		read = read("{\"schemaVersion\": 1, \"cueColor\": 255}");
-		assertEquals(D, read.settings());
-		assertEquals("cueColor: 255 is not a color like #E69F00, so the default is used.", only(read));
+	void aLegacyCuesValueThatIsNotAnObjectIsIgnored() throws AppSettingsFormatException {
+		AppSettingsCodec.Read read = read("{\"schemaVersion\": 1, \"legacyCues\": 3}");
+		assertNull(read.settings().legacyCues());
+		assertEquals("legacyCues: 3 is not an object, so it was ignored.", only(read));
 	}
 
 	@Test
@@ -193,8 +183,8 @@ class AppSettingsCodecTest {
 	@Test
 	void everyProblemIsReportedAtOnce() throws AppSettingsFormatException {
 		AppSettingsCodec.Read read = read(
-				"{\"schemaVersion\": 1, \"showCues\": 1, \"cueTextScale\": 0, \"cueColor\": \"x\", \"what\": 1}");
-		assertEquals(D, read.settings());
+				"{\"schemaVersion\": 1, \"reducedMotion\": 1, \"cueTextScale\": 0, \"cueColor\": \"x\", \"what\": 1}");
+		assertEquals(D.withLegacyCues(OLD_DEFAULTS.withTextScale(PlaceCues.MIN_TEXT_SCALE)), read.settings());
 		assertEquals(4, read.problems().size());
 	}
 

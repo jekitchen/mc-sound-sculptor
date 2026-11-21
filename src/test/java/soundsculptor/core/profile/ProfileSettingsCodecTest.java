@@ -39,8 +39,8 @@ class ProfileSettingsCodecTest {
 	@Test
 	void everySettingRoundTrips() throws ProfileFormatException {
 		for (ProfileSettings s : List.of(ProfileSettings.DEFAULTS,
-				new ProfileSettings(false, false, OutlineMode.ALWAYS),
-				new ProfileSettings(true, false, OutlineMode.NEVER))) {
+				new ProfileSettings(false, OutlineMode.ALWAYS),
+				new ProfileSettings(true, OutlineMode.NEVER))) {
 			Profile p = Profile.empty("A").withSettings(s);
 			assertEquals(p, read(ProfileCodec.toJson(p)));
 		}
@@ -49,9 +49,9 @@ class ProfileSettingsCodecTest {
 	@Test
 	void settingsUseTheNamesFromTheFileSketch() {
 		JsonObject s = written(Profile.empty("A").withSettings(
-				new ProfileSettings(false, false, OutlineMode.ALWAYS))).getAsJsonObject("settings");
+				new ProfileSettings(false, OutlineMode.ALWAYS))).getAsJsonObject("settings");
 		assertFalse(s.get("showDistance").getAsBoolean());
-		assertFalse(s.get("cueDefault").getAsBoolean());
+		assertFalse(s.has("cueDefault"), "New mutes get Cue moved to Everywhere's cue settings on 2026-11-21");
 		assertEquals("always", s.get("outlines").getAsString());
 		assertFalse(s.has("edge"), "fade edges were removed on 2026-11-14");
 	}
@@ -75,8 +75,15 @@ class ProfileSettingsCodecTest {
 	void badSettingsNameTheFieldInPlainWords() {
 		assertEquals("Settings, field outlines: \"sometimes\" is not one of: always, editing, never.",
 				problem("{\"schemaVersion\": 3, \"settings\": {\"outlines\": \"sometimes\"}}"));
-		assertEquals("Settings, field cueDefault: \"yes\" is not true or false.",
-				problem("{\"schemaVersion\": 3, \"settings\": {\"cueDefault\": \"yes\"}}"));
+	}
+
+	@Test
+	void theOldCueDefaultIsReadForgivinglyNow() throws ProfileFormatException {
+		// It only fills in Everywhere's "New mutes get Cue" once (2026-11-21), so a bad value no longer stops the profile.
+		ProfileCodec.Read read = ProfileCodec.read("{\"schemaVersion\": 3, \"settings\": {\"cueDefault\": \"yes\"}}", version -> { });
+		assertEquals(true, read.profile().everywhereCues().newMutesGetCue());
+		assertEquals(List.of("Settings, field cueDefault: \"yes\" is not true or false, so it was ignored."),
+				read.warnings().stream().map(m -> m.text(EN)).toList());
 	}
 
 	@Test

@@ -38,7 +38,7 @@ import soundsculptor.mc.CueOverlay;
 import soundsculptor.mc.AppSettingsManager;
 import soundsculptor.mc.ui.UiSettings;
 import soundsculptor.core.sets.Limit;
-import soundsculptor.core.settings.AppSettings;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.gametest.compat.KeyEventCompat;
 import soundsculptor.mc.TraceScreen;
 import soundsculptor.mc.ZoneEditorScreen;
@@ -96,7 +96,7 @@ import net.minecraft.world.phys.Vec3;
  *   <li>Every screen and pop-up of the layout check (the cue box's settings, the Level, cue and limit pop-up, the boost
  *   question, the entry editor with a limit and a boost, and Settings › Accessibility among them): every control has a
  *   label (A-4), and Tab reaches every control in reading order with Shift+Tab going back (A-1).</li>
- *   <li>The cue box (FR-7) at 100% and 200% text scale stays inside the window at every window size and GUI scale.</li>
+ *   <li>The cue box (FR-7) at 50%, 100% and 200% text size stays inside the window at every window size and GUI scale.</li>
  *   <li>Reduced motion (A-6): the Settings › Accessibility toggle works by keyboard, is saved, and stops toasts sliding
  *   in.</li>
  *   <li>Pseudo-language (PRD 9.3, 11.5): the same layout check with every Sound Sculptor text about 40% longer; like
@@ -849,15 +849,15 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
-	 * A-3 for the cue box (FR-7): a muted sound with Cue on, at 100% and 200% text scale, keeps its box inside the window
+	 * A-3 for the cue box (FR-7): a muted sound with Cue on, at 50%, 100% and 200% text size, keeps its box inside the window
 	 * at this window size and GUI scale.
 	 */
 	private static List<String> cueBoxProblems(ClientGameTestContext context, String where) {
 		List<String> problems = new ArrayList<>();
 		context.runOnClient(mc -> mc.gui.setScreen(null));
-		for (int scale : new int[] {AppSettings.MIN_CUE_SCALE, AppSettings.MAX_CUE_SCALE}) {
+		for (int scale : new int[] {PlaceCues.MIN_TEXT_SCALE, PlaceCues.DEFAULT_TEXT_SCALE, PlaceCues.MAX_TEXT_SCALE}) {
 			context.runOnClient(mc -> {
-				AppSettingsManager.update(s -> s.withCueTextScale(scale));
+				ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withTextScale(scale)));
 				CueOverlay.clear();
 				Vec3 at = mc.getSoundManager().getListenerTransform().position();
 				mc.getSoundManager().play(new SimpleSoundInstance(Identifier.parse(EXPLODE), SoundSource.NEUTRAL, 1.0F, 1.0F,
@@ -881,7 +881,7 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 			}));
 		}
 		context.runOnClient(mc -> {
-			AppSettingsManager.update(s -> s.withCueTextScale(AppSettings.MIN_CUE_SCALE));
+			ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withTextScale(PlaceCues.DEFAULT_TEXT_SCALE)));
 			CueOverlay.clear();
 		});
 		return problems;

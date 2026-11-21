@@ -1,21 +1,15 @@
 package soundsculptor.mc;
 
-import soundsculptor.mc.ui.Texts;
 import soundsculptor.core.diag.DiagnosticsReport;
 import soundsculptor.core.diag.MemoryEstimate;
 import soundsculptor.core.diag.TimingWindow;
-import soundsculptor.core.cue.CueColors;
 import soundsculptor.core.outline.OutlineMode;
-import soundsculptor.core.settings.AppSetting;
 import soundsculptor.core.settings.AppSettings;
-import soundsculptor.core.ui.SliderModel;
-import soundsculptor.core.ui.Palette;
 import soundsculptor.mc.ui.SculptButton;
 import soundsculptor.mc.ui.SculptTabButton;
 import soundsculptor.mc.ui.SculptDropdown;
 import soundsculptor.mc.ui.SculptList;
 import soundsculptor.mc.ui.SculptScreen;
-import soundsculptor.mc.ui.SculptSlider;
 import soundsculptor.mc.ui.SculptTextField;
 import soundsculptor.mc.ui.Theme;
 import soundsculptor.mc.ui.SculptToggle;
@@ -30,7 +24,6 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 
 /**
  * The main Sound Sculptor screen (FR-12.1). Header: active profile and the Bypass toggle (FR-13.1). Tabs: Sounds (the
@@ -50,8 +43,6 @@ public final class SoundSculptorScreen extends SculptScreen {
 	private static final int PAGE_TAB_PADDING = 16;
 	/** The least width of the Settings › Zones controls; they grow to fit a longer label. */
 	private static final int OUTLINE_MODE_WIDTH = 240;
-	/** The least width of the Settings › Accessibility sliders. */
-	private static final int ACCESSIBILITY_SLIDER_WIDTH = 200;
 
 	// Remembered while the game runs, like the last used tab.
 	private static SettingsPage settingsPage = SettingsPage.GENERAL;
@@ -72,17 +63,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 	/** The Diagnostics page's readout, one read-only row per line; {@code null} on other pages. */
 	public SculptList diagnosticsList;
 	public SculptDropdown<OutlineMode> outlineModeDropdown;
-	// Settings › General, FR-7.
-	public SculptToggle showCuesToggle;
-	public SculptToggle cuesWithoutSubtitlesToggle;
-	/** {@code null} outside a world: the Cue default belongs to the world's profile. */
-	public SculptToggle cueDefaultToggle;
-	// Settings › Accessibility, A-7 and section 8.1.
-	public SculptDropdown<Integer> cueColorDropdown;
-	public SculptSlider cueScaleSlider;
-	public SculptSlider cueOffsetXSlider;
-	public SculptSlider cueOffsetYSlider;
-	public SculptButton cueOffsetReset;
+	/** Settings › General and Accessibility: "Everywhere's cues…", which opens Everywhere's Cues pop-up (FR-7). */
+	public SculptButton cuesButton;
 	public SculptToggle reducedMotionToggle;
 	public SculptToggle throughBlocksToggle;
 	private DiagnosticsReport.Data diagnostics;
@@ -228,101 +210,41 @@ public final class SoundSculptorScreen extends SculptScreen {
 			return;
 		}
 		body.label(() -> Component.translatable("soundsculptor.settings.bypass_hint", bypassKeyName()));
-		// FR-7: the cue settings (PRD 6.1 "cue defaults"). The master switch and cues without subtitles are app-wide; "New
-		// mutes get Cue" and Show distance belong to the world's profile. The controls flow onto as many lines as they
-		// need. The cue's look (color, text scale, position) is on the Accessibility page.
-		Component showCues = Component.translatable("soundsculptor.settings.show_cues");
-		showCuesToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(showCues), showCues, SoundSculptorSettings.showCues(),
-				SoundSculptorSettings::setShowCues), Component.translatable("soundsculptor.settings.show_cues.tip", keyName(soundsculptor.SoundSculptorClient.cuesKey)));
-		Component withoutSubtitles = Component.translatable("soundsculptor.settings.cues_without_subtitles");
-		cuesWithoutSubtitlesToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(withoutSubtitles), withoutSubtitles,
-				SoundSculptorSettings.cuesWithoutSubtitles(), SoundSculptorSettings::setCuesWithoutSubtitles),
-				Component.translatable("soundsculptor.settings.cues_without_subtitles.tip"));
+		// FR-7 (decided 2026-11-21): the cue settings belong to the places, Everywhere and each zone, so this page only
+		// says where they are and opens Everywhere's.
+		cueSettingsNote(body);
 		if (!ProfileManager.isLoaded()) {
-			cueDefaultToggle = null;
-			body.flow(showCuesToggle, cuesWithoutSubtitlesToggle);
 			body.label(() -> Component.translatable("soundsculptor.settings.no_world"));
 			return;
 		}
-		Component cueDefault = Component.translatable("soundsculptor.settings.cue_default");
-		cueDefaultToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(cueDefault), cueDefault, SoundSculptorSettings.cueDefault(),
-				SoundSculptorSettings::setCueDefault), Component.translatable("soundsculptor.settings.cue_default.tip"));
 		Component distance = Component.translatable("soundsculptor.settings.show_distance");
 		SculptToggle showDistance = Tooltips.describe(new SculptToggle(Math.max(160, SculptToggle.widthFor(distance)), distance,
 				SoundSculptorSettings.showDistance(), SoundSculptorSettings::setShowDistance),
 				Component.translatable("soundsculptor.settings.show_distance.tip"));
-		body.flow(showCuesToggle, cuesWithoutSubtitlesToggle, cueDefaultToggle, showDistance);
+		body.flow(showDistance);
 	}
 
 	/**
-	 * Settings → Accessibility (PRD 6.1, A-6, A-7, section 8.1): the cue text color, the cue text scale (100% to 200%),
-	 * the cue box position (moves it away from subtitle and HUD mods) and Reduced motion. All app-wide; each change shows
-	 * on the next frame.
+	 * Settings → Accessibility (PRD 6.1, A-6, A-7): where the cue's color, text size and position are now (each place's
+	 * Cues pop-up), and Reduced motion, which is app-wide.
 	 */
 	private void buildAccessibilitySettings(Body body) {
 		AppSettings settings = AppSettingsManager.get();
-		Component color = Component.translatable("soundsculptor.settings.cue_color");
-		List<Integer> colors = CueColors.choices(SoundSculptorSettings.cueColor());
-		List<Component> colorNames = new ArrayList<>();
-		for (int rgb : colors) {
-			colorNames.add(cueColorName(rgb));
-		}
-		cueColorDropdown = Tooltips.describe(new SculptDropdown<>(SculptDropdown.widthFor(color, colorNames), color, colors,
-				SoundSculptorScreen::cueColorName, SoundSculptorSettings.cueColor(), SoundSculptorSettings::setCueColor),
-				Component.translatable("soundsculptor.settings.cue_color.tip"));
-		Component scale = Component.translatable("soundsculptor.settings.cue_scale");
-		cueScaleSlider = Tooltips.describe(new SculptSlider(sliderWidth(scale, Texts.percent(AppSettings.MAX_CUE_SCALE)), scale,
-				new SliderModel(AppSettings.MIN_CUE_SCALE, AppSettings.MAX_CUE_SCALE, 10, 1, Double.NaN, settings.cueTextScale()),
-				value -> Texts.percent((int) value), null,
-				value -> AppSettingsManager.update(s -> s.withCueTextScale((int) value))),
-				Component.translatable("soundsculptor.settings.cue_scale.tip"));
-		cueOffsetXSlider = offsetSlider("soundsculptor.settings.cue_offset_x", settings.cueOffsetX(),
-				value -> AppSettingsManager.update(s -> s.withCueOffset(value, s.cueOffsetY())));
-		cueOffsetYSlider = offsetSlider("soundsculptor.settings.cue_offset_y", settings.cueOffsetY(),
-				value -> AppSettingsManager.update(s -> s.withCueOffset(s.cueOffsetX(), value)));
-		cueOffsetReset = SculptButton.icon(Identifier.fromNamespaceAndPath("soundsculptor", "icon/reset"),
-				Component.translatable("soundsculptor.settings.cue_offset.reset"), () -> {
-					AppSettingsManager.update(s -> s.reset(AppSetting.CUE_OFFSET));
-					rebuildWidgets();
-					setInitialFocus(cueOffsetReset);
-				});
+		cueSettingsNote(body);
 		// A-6: the only motion Sound Sculptor has is a toast sliding in; its lists scroll and update without animation.
 		Component motion = Component.translatable("soundsculptor.settings.reduced_motion");
 		reducedMotionToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(motion), motion, settings.reducedMotion(),
 				value -> AppSettingsManager.update(s -> s.withReducedMotion(value))),
 				Component.translatable("soundsculptor.settings.reduced_motion.tip"));
-		body.flow(cueColorDropdown, cueScaleSlider);
-		body.flow(cueOffsetXSlider, cueOffsetYSlider, cueOffsetReset);
 		body.flow(reducedMotionToggle);
 	}
 
-	/** A slider wide enough for "Label: value" with its widest value, and at least {@value #ACCESSIBILITY_SLIDER_WIDTH} px. */
-	private static int sliderWidth(Component label, Component widestValue) {
-		net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
-		return Math.max(ACCESSIBILITY_SLIDER_WIDTH, font.width(Component.translatable("soundsculptor.ui.slider", label, widestValue)) + 16);
-	}
-
-	/** A cue box offset slider in GUI pixels, 5 at a time (1 with Shift); positive is right or down. */
-	private static SculptSlider offsetSlider(String key, int initial, java.util.function.IntConsumer apply) {
-		Component label = Component.translatable(key);
-		int width = sliderWidth(label, Component.translatable("soundsculptor.settings.cue_offset.value", -AppSettings.MAX_CUE_OFFSET));
-		return Tooltips.describe(new SculptSlider(width, label,
-				new SliderModel(-AppSettings.MAX_CUE_OFFSET, AppSettings.MAX_CUE_OFFSET, 5, 1, Double.NaN, initial),
-				value -> Component.translatable("soundsculptor.settings.cue_offset.value", (int) value), null,
-				value -> apply.accept((int) value)), Component.translatable(key + ".tip"));
-	}
-
-	/** A cue color's name ("Light blue-gray"), or "Custom (#123456)" for a color set outside the game. */
-	private static Component cueColorName(int rgb) {
-		Palette.Swatch preset = CueColors.preset(rgb);
-		if (preset != null) {
-			return Component.translatable("soundsculptor.color." + preset.id());
-		}
-		// A color Settings no longer offers, chosen before it was withdrawn: its name, marked low contrast.
-		Palette.Swatch withdrawn = CueColors.withdrawn(rgb);
-		return withdrawn != null
-				? Component.translatable("soundsculptor.settings.cue_color.low_contrast", Component.translatable("soundsculptor.color." + withdrawn.id()))
-				: Component.translatable("soundsculptor.settings.cue_color.custom", Palette.formatHex(rgb));
+	/**
+	 * "Cue settings are set per zone, with Everywhere as the base." (FR-7, decided 2026-11-21), wrapped to the page's
+	 * width.
+	 */
+	private void cueSettingsNote(Body body) {
+		body.wrappedLabel(() -> Component.translatable("soundsculptor.settings.cues_moved"));
 	}
 
 	/** A hotkey's key, or "not set (Options → Controls)". */

@@ -403,7 +403,7 @@ public final class TraceScreen extends SculptScreen {
 	}
 
 	private static boolean cueDefault() {
-		return ProfileManager.profile().settings().cueDefault();
+		return SoundSculptorSettings.newMutesGetCue();
 	}
 
 	/** The sound's Mute/Unmute at a place, as on the Sounds tab: Unmute right after Mute puts the entry back exactly. */

@@ -904,7 +904,7 @@ public final class SoundsPanel {
 		Workspace ws = ProfileManager.workspace();
 		String worldKey = ProfileManager.key();
 		// Through the memory, so Unmute right after Mute puts the entry back exactly as it was.
-		EntryEdit edit = ProfileManager.mutes().toggleMute(worldKey, ws, where, soundId, ws.profile().settings().cueDefault());
+		EntryEdit edit = ProfileManager.mutes().toggleMute(worldKey, ws, where, soundId, SoundSculptorSettings.newMutesGetCue());
 		QuickActionResult result = QuickActions.apply(ws, where, soundId, edit);
 		if (!result.ok()) {
 			host.showToast(ProfileManager.component(result.error()), null);
