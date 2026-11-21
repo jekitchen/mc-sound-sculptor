@@ -273,7 +273,8 @@ public final class PlaceSetsClientGameTest implements FabricClientGameTest {
 			SculptList.Row first = context.computeOnClient(mc -> main(mc).zonesPanel().list.children().get(0));
 			check(first.key().equals(PlaceRef.EVERYWHERE), "Everywhere is the first row");
 			check(first.swatch() == -1, "Everywhere has no color");
-			check(labels(first).equals(List.of("Sound Sets")), "Everywhere's only control is Sound Sets, was " + labels(first));
+			// FR-8.10, FR-8.6a (2026-11-21): Everywhere has no shape, edit or delete controls, only its Sound Sets and Cues….
+			check(labels(first).equals(List.of("Sound Sets", "Cues…")), "Everywhere's controls are Sound Sets and Cues…, was " + labels(first));
 			check(first.columnTexts().get(0).equals("Everywhere") && first.columnTexts().contains("1 Sound Set"),
 					"Everywhere's row, was " + first.columnTexts());
 			check(context.computeOnClient(mc -> main(mc).zonesPanel().list.findRow(ZoneListPanel.NO_ZONES_ROW)) == null,
