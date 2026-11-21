@@ -80,13 +80,14 @@ class EntryDraftTest {
 	}
 
 	@Test
-	void limitIsSetByItsCountAndNeedsAWindow() {
+	void limitIsSetByItsToggleAndNeedsAWindow() {
 		EntryDraft d = draft("minecraft:entity.villager.ambient");
 		d.set(Field.LIMIT_WINDOW, "nonsense");
-		assertTrue(d.canSave(), "with no count there is no limit, so the window is not checked");
-		assertNull(d.build().limit());
-
 		d.set(Field.LIMIT_COUNT, "3");
+		assertTrue(d.canSave(), "with the limit off, its fields are not checked");
+		assertNull(d.build().limit(), "typing a count does not turn the limit on");
+
+		d.setLimitOn(true);
 		assertEquals(FieldError.NOT_A_NUMBER, d.error(Field.LIMIT_WINDOW).translationKey());
 		d.set(Field.LIMIT_WINDOW, "");
 		assertEquals(FieldError.REQUIRED, d.error(Field.LIMIT_WINDOW).translationKey());
@@ -96,8 +97,23 @@ class EntryDraftTest {
 	}
 
 	@Test
+	void anEmptyCountIsAnErrorNotOff() {
+		// Review of #129: deleting the count to type another must not turn the limit off (or save anything).
+		EntryDraft d = draft("*");
+		d.setLimitOn(true);
+		d.set(Field.LIMIT_COUNT, "");
+		assertTrue(d.hasLimit(), "only the toggle turns the limit off");
+		assertEquals(FieldError.REQUIRED, d.error(Field.LIMIT_COUNT).translationKey());
+		assertFalse(d.limitValid());
+		assertFalse(d.canSave());
+		d.set(Field.LIMIT_COUNT, "5");
+		assertEquals(new Limit(5, 1000, false), d.limit());
+	}
+
+	@Test
 	void limitRangesComeFromFr6() {
 		EntryDraft d = draft("*");
+		d.setLimitOn(true);
 		d.set(Field.LIMIT_COUNT, "0");
 		assertEquals(new FieldError(FieldError.OUT_OF_RANGE, List.of("1", "100")), d.error(Field.LIMIT_COUNT));
 		d.set(Field.LIMIT_COUNT, "5");
@@ -116,7 +132,7 @@ class EntryDraftTest {
 	@Test
 	void theWindowIsTypedInSecondsAndSavedInMilliseconds() {
 		EntryDraft d = draft("*");
-		d.set(Field.LIMIT_COUNT, "3");
+		d.setLimitOn(true);
 		for (String[] typed : new String[][] {{"0.05", "50"}, {"0.25", "250"}, {"1", "1000"}, {"1.5", "1500"}, {"10", "10000"},
 				{"0.1234", "123"}, {".5", "500"}}) {
 			d.set(Field.LIMIT_WINDOW, typed[0]);
@@ -212,7 +228,7 @@ class EntryDraftTest {
 		d.set(Field.TARGET, "*pig*");
 		d.resetToDefault(Field.TARGET);
 		assertEquals("*:*cow*", d.text(Field.TARGET));
-		for (Field f : List.of(Field.MUTE, Field.VOLUME, Field.LIMIT_COUNT, Field.LIMIT_WINDOW, Field.PER_SOURCE, Field.CUE)) {
+		for (Field f : List.of(Field.MUTE, Field.VOLUME, Field.LIMIT_ON, Field.LIMIT_COUNT, Field.LIMIT_WINDOW, Field.PER_SOURCE, Field.CUE)) {
 			assertFalse(d.isDefault(f), f.name());
 			d.resetToDefault(f);
 			assertTrue(d.isDefault(f), f.name());

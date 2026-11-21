@@ -17,15 +17,17 @@ import soundsculptor.core.sets.Limit;
 import org.junit.jupiter.api.Test;
 
 /**
- * PRD 9.1 ("Memory used by recent log, linker and limiters: under 8 MB"): the limiter's caps across all rules
- * together. Each rule still keeps up to 1,024 positions (FR-6.5); all rules together keep at most
- * {@link RepeatLimiter#MAX_COUNTERS} counters, and the least recently used counter of any rule is forgotten first. A
- * forgotten counter only starts afresh, the same as FR-6.5's per-rule forgetting.
+ * PRD 9.1 ("Memory used by recent log, linker and limiters: under 8 MB") and FR-6.5: the limiter's caps across all rules
+ * together. Each per-source rule keeps up to 1,024 positions of its own, forgetting its own least recently used one; all
+ * rules together keep at most {@link RepeatLimiter#MAX_COUNTERS} counters. When those are full, the rule holding the
+ * most gives one up, so a busy rule recycles its own and never pushes out another rule's. A forgotten counter only
+ * starts afresh, the same as FR-6.5's per-rule forgetting.
  */
 class RepeatLimiterCapsTest {
 	/** One play per long window: a start is dropped exactly when its counter is still remembered. */
 	private static final Limit ONCE_PER_SOURCE = new Limit(1, 10_000, true);
 	private static final Limit ONCE_SHARED = new Limit(1, 10_000, false);
+	private static final int FULL = RepeatLimiter.MAX_SOURCES_PER_RULE;
 
 	private final RepeatLimiter limiter = new RepeatLimiter();
 
@@ -34,33 +36,58 @@ class RepeatLimiterCapsTest {
 	}
 
 	@Test
-	void allRulesTogetherKeepAtMostMaxCounters() {
+	void threeFullPerSourceRulesFitAndAFourthSharesEvenly() {
+		long t = 0;
 		for (String rule : List.of("a", "b", "c")) {
-			for (int i = 0; i < RepeatLimiter.MAX_SOURCES_PER_RULE; i++) {
-				start(rule, ONCE_PER_SOURCE, i, 0);
+			for (int i = 0; i < FULL; i++) {
+				start(rule, ONCE_PER_SOURCE, i, t++);
 			}
 		}
+		assertEquals(3 * FULL, RepeatLimiter.MAX_COUNTERS, "the pool holds three full per-source rules");
 		assertEquals(RepeatLimiter.MAX_COUNTERS, limiter.counterCount());
-		int sources = limiter.sourceCount("a") + limiter.sourceCount("b") + limiter.sourceCount("c");
-		assertEquals(RepeatLimiter.MAX_COUNTERS, sources);
+		for (int i = 0; i < FULL; i++) {
+			start("d", ONCE_PER_SOURCE, i, t++);
+		}
+		assertEquals(RepeatLimiter.MAX_COUNTERS, limiter.counterCount());
+		int[] counts = {limiter.sourceCount("a"), limiter.sourceCount("b"), limiter.sourceCount("c"), limiter.sourceCount("d")};
+		for (int count : counts) {
+			assertEquals(RepeatLimiter.MAX_COUNTERS / 4, count, "more busy rules than the pool holds share it evenly");
+		}
 	}
 
 	@Test
-	void whenFullTheLeastRecentlyUsedCounterOfAnyRuleIsForgotten() {
+	void aBusyPerSourceRuleNeverPushesOutAnotherRulesPositions() {
+		// Review of #129, FR-6.5: each rule keeps its own 1,024 positions in its place.
 		long t = 0;
-		for (int i = 0; i < RepeatLimiter.MAX_SOURCES_PER_RULE; i++) {
-			start("a", ONCE_PER_SOURCE, i, t++);
+		for (int i = 0; i < FULL; i++) {
+			start("quiet", ONCE_PER_SOURCE, i, t++);
 		}
-		for (int i = 0; i < RepeatLimiter.MAX_SOURCES_PER_RULE; i++) {
-			start("b", ONCE_PER_SOURCE, i, t++);
+		start("shared", ONCE_SHARED, 0, t++);
+		for (int i = 0; i < 20 * FULL; i++) {
+			start("busy", ONCE_PER_SOURCE, 100_000 + i, 0);
 		}
-		assertEquals(RepeatLimiter.MAX_COUNTERS, limiter.counterCount(), "two full rules fill the shared counters");
-		assertTrue(start("c", ONCE_PER_SOURCE, 0, t++), "a third rule's first position");
-		assertEquals(RepeatLimiter.MAX_SOURCES_PER_RULE - 1, limiter.sourceCount("a"), "rule a lost its oldest position");
-		assertTrue(start("a", ONCE_PER_SOURCE, 0, t++), "a's position 0 was forgotten, so it starts afresh");
-		assertFalse(start("b", ONCE_PER_SOURCE, 0, t++), "b's position 0 is still remembered");
+		assertEquals(FULL, limiter.sourceCount("busy"), "the busy rule keeps its own 1,024");
+		assertEquals(FULL, limiter.sourceCount("quiet"));
+		for (int i = 0; i < FULL; i++) {
+			assertFalse(start("quiet", ONCE_PER_SOURCE, i, 0), "the quiet rule still remembers position " + i);
+		}
+		assertFalse(start("shared", ONCE_SHARED, 0, 0), "and a shared counter is kept too");
 	}
 
+	@Test
+	void whenFullTheRuleHoldingTheMostGivesUpItsLeastRecentlyUsed() {
+		long t = 0;
+		for (String rule : List.of("a", "b", "c")) {
+			for (int i = 0; i < FULL; i++) {
+				start(rule, ONCE_PER_SOURCE, i, t++);
+			}
+		}
+		assertTrue(start("d", ONCE_PER_SOURCE, 0, t++), "a fourth rule's first position");
+		assertEquals(FULL - 1, limiter.sourceCount("a"), "a, b and c hold the most; a's oldest position is the oldest of them");
+		assertTrue(start("a", ONCE_PER_SOURCE, 0, t++), "a's position 0 was forgotten, so it starts afresh");
+		assertEquals(FULL - 1, limiter.sourceCount("b"), "a holds fewer now, so b (oldest of b and c) gave one up");
+		assertFalse(start("c", ONCE_PER_SOURCE, 0, t++), "c's position 0 is still remembered");
+	}
 	@Test
 	void sharedCountersUseTheSameCounters() {
 		for (int r = 0; r <= RepeatLimiter.MAX_COUNTERS; r++) {
@@ -107,55 +134,62 @@ class RepeatLimiterCapsTest {
 	}
 
 	/**
-	 * Random plays of three per-source rules against a simple reference: per-rule LRU at 1,024, then global LRU at
-	 * {@link RepeatLimiter#MAX_COUNTERS}. Checks the hash table never loses or keeps a counter it should not, including
+	 * Random plays of four per-source rules against a simple reference: per-rule LRU at 1,024, then, when all
+	 * {@link RepeatLimiter#MAX_COUNTERS} are in use, the least recently used of the rule holding the most (the playing
+	 * rule's own when it holds the most). Checks the hash table never loses or keeps a counter it should not, including
 	 * the moves that keep counters packed.
 	 */
 	@Test
-	void matchesAReferenceLruUnderRandomChurn() {
+	void matchesAReferenceUnderRandomChurn() {
 		Map<String, Boolean> reference = new LinkedHashMap<>(16, 0.75F, true);
+		Map<String, Integer> counts = new java.util.HashMap<>();
 		Random random = new Random(9);
-		String[] rules = {"a", "b", "c"};
+		String[] rules = {"a", "b", "c", "d"};
 		for (int step = 0; step < 200_000; step++) {
 			String rule = rules[random.nextInt(rules.length)];
-			int x = random.nextInt(1600);
+			int x = random.nextInt(1400);
 			String key = rule + "@" + x;
 			boolean expected = !reference.containsKey(key);
 			if (expected) {
-				evictForNew(reference, rule);
+				evictForNew(reference, counts, rule);
+				counts.merge(rule, 1, Integer::sum);
 			}
 			reference.put(key, Boolean.TRUE);
 			assertEquals(expected, start(rule, ONCE_PER_SOURCE, x, 0), "step " + step);
 		}
 		assertEquals(reference.size(), limiter.counterCount());
 		for (String rule : rules) {
-			assertEquals(countOf(reference, rule), limiter.sourceCount(rule), rule);
+			assertEquals(counts.getOrDefault(rule, 0), limiter.sourceCount(rule), rule);
 		}
 	}
 
-	private static void evictForNew(Map<String, Boolean> reference, String rule) {
-		if (countOf(reference, rule) >= RepeatLimiter.MAX_SOURCES_PER_RULE) {
-			String eldest = null;
-			for (String key : reference.keySet()) {
-				if (key.startsWith(rule + "@")) {
-					eldest = key;
-					break;
+	private static void evictForNew(Map<String, Boolean> reference, Map<String, Integer> counts, String rule) {
+		int own = counts.getOrDefault(rule, 0);
+		String from;
+		if (own >= RepeatLimiter.MAX_SOURCES_PER_RULE) {
+			from = rule;
+		} else if (reference.size() >= RepeatLimiter.MAX_COUNTERS) {
+			int most = counts.values().stream().max(Integer::compare).orElse(0);
+			from = own > 0 && own >= most ? rule : null;
+			if (from == null) {
+				for (String key : reference.keySet()) {
+					String owner = key.substring(0, key.indexOf('@'));
+					if (counts.getOrDefault(owner, 0) == most) {
+						from = owner;
+						break;
+					}
 				}
 			}
-			reference.remove(eldest);
-		} else if (reference.size() >= RepeatLimiter.MAX_COUNTERS) {
-			reference.remove(reference.keySet().iterator().next());
+		} else {
+			return;
 		}
-	}
-
-	private static int countOf(Map<String, Boolean> reference, String rule) {
-		int n = 0;
 		for (String key : reference.keySet()) {
-			if (key.startsWith(rule + "@")) {
-				n++;
+			if (key.startsWith(from + "@")) {
+				reference.remove(key);
+				counts.merge(from, -1, Integer::sum);
+				return;
 			}
 		}
-		return n;
 	}
 
 	@Test

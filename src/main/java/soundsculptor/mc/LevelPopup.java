@@ -65,7 +65,8 @@ public final class LevelPopup {
 	 * @param cueOn      the Cue toggle's state when it opens
 	 * @param toggleCue  turns the cue on or off and sets the toggle to the state that results; {@code null} for no toggle
 	 * @param shownLimit the limit the row starts from (the sound's actual limit at the place); unused without a row
-	 * @param applyLimit called with each valid limit, or {@code null} when it is turned off; {@code null} for no row
+	 * @param applyLimit called with each complete, valid limit, or {@code null} when it is turned off; {@code null} for no
+	 *                   row
 	 */
 	public static LevelPopup open(SculptScreen host, SetEntry entry, Consumer<Integer> apply, Runnable onClosed, boolean cueOn,
 			Runnable toggleCue, Limit shownLimit, Consumer<Limit> applyLimit) {
@@ -133,7 +134,13 @@ public final class LevelPopup {
 			widgets.add(cue);
 		}
 		widgets.add(done);
-		host.openOverlay(x, y, panelWidth, panelHeight, widgets, slider, onClosed);
+		// Closing (Done, Esc, a click outside) completes a count or window still being typed before the caller finishes up.
+		host.openOverlay(x, y, panelWidth, panelHeight, widgets, slider, () -> {
+			if (limit != null) {
+				limit.commit();
+			}
+			onClosed.run();
+		});
 		return new LevelPopup(slider, field, cue, limit);
 	}
 

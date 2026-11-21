@@ -28,16 +28,19 @@ Work toward 1.0, after the alpha. Not released yet.
 - **Repeat limits:** an entry can cap how often its sounds start, from 1 to 100 plays per 0.05 to 10 seconds, for
   example "3 per 1 s" for villager mumbles. Plays over the limit are dropped. The count is shared by every matching
   sound, or with **Per source** kept per block, so each villager can still be heard. Each place counts on its own, also
-  for a set attached in several places. A looping sound counts once, when it starts, and is never cut off.
+  for a set attached in several places. A looping sound counts once, when it starts, and is never cut off. Each
+  per-source entry remembers up to 1,024 positions, and a busy entry never pushes out another's.
 - **Limit in the entry editor:** a new row under Level: Limit (Off by default), the count, "per", the window in seconds
   and Per source, with a reset button. Cue moved beside Level to make room.
 - **Limited on the Sounds tab:** a row whose plays were dropped shows "⏸ Limited ×12" (the dropped count over the last 3
   minutes; the play count counts only plays that started). Its **Level, cue and limit…** pop-up (was Level and cue…)
-  shows the sound's limit at the place and changes it in Quick changes.
+  shows the sound's limit at the place and changes it in Quick changes. A typed count or window takes effect on Enter,
+  when you leave the field or when the pop-up closes; an empty or wrong value shows its error and changes nothing.
 - **Limit in "Why does it sound like this?":** the result says "Repeat limit: at most 3 per 1 s, shared" and whether
   the last play was Limited. Each entry line's Level… panel has the entry's limit too.
-- **Settings › Diagnostics:** "Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)", also in
-  Copy report. Limits count afresh when you join another world or server.
+- **Settings › Diagnostics:** "Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)", for the
+  three limits that came closest to their count, also in Copy report. Limits count afresh when you join another world
+  or server.
 
 ## 0.1.0-alpha (unreleased)
 

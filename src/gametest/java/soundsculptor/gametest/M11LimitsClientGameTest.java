@@ -160,7 +160,7 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 				"the list shows 90 played and 510 Limited, was " + row);
 		DiagnosticsReport.Data data = context.computeOnClient(mc -> Diagnostics.data());
 		check(data.limits().allowed() == 90 && data.limits().dropped() == 510, "Diagnostics counts 90 played and 510 dropped: " + data.limits());
-		check(data.limits().busiest() == 3 && new Limit(3, 1000, false).equals(data.limits().busiestLimit()),
+		check(data.limits().fullest().equals(List.of(new soundsculptor.core.limit.RepeatLimiter.Fullest(3, new Limit(3, 1000, false)))),
 				"Diagnostics: at most 3 in one window, of 3 per 1 s: " + data.limits());
 
 		// The readout on Settings › Diagnostics.
@@ -235,22 +235,12 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 					&& !limit.perSourceToggle.value();
 		}), "the pop-up shows Limit On, 3 per 1 s, shared");
 		context.takeScreenshot("m11-sounds-popup");
-		context.runOnClient(mc -> main(mc).sounds().levelLimit.countField.setValue("4"));
-		check(new Limit(4, 1000, false).equals(quickLimit(context, VILLAGER)), "typing 4 changes Quick changes at once");
-		context.runOnClient(mc -> main(mc).sounds().levelLimit.windowField.setValue("20"));
-		check(context.computeOnClient(mc -> main(mc).sounds().levelLimit.windowField.error().getString()).equals("Type a number from 0.05 to 10"),
-				"a window above 10 s shows an error");
-		check(new Limit(4, 1000, false).equals(quickLimit(context, VILLAGER)), "and changes nothing");
-		context.runOnClient(mc -> main(mc).sounds().levelLimit.windowField.revealError());
-		context.waitTicks(1);
-		context.takeScreenshot("m11-sounds-popup-error");
-		context.runOnClient(mc -> {
-			main(mc).sounds().levelLimit.windowField.setValue("1");
-			main(mc).sounds().levelLimit.countField.setValue("3");
-			main(mc).closeOverlay();
-		});
-		check(new Limit(3, 1000, false).equals(quickLimit(context, VILLAGER)), "back to 3 per 1 s");
+		context.runOnClient(mc -> main(mc).closeOverlay());
+		popupTyping(context);
 		closeScreen(context);
+		// The trace below reads the sound's Quick changes entry: back to 3 per 1 s there, nothing else.
+		context.runOnClient(mc -> ProfileManager.update(p -> Profile.empty(p.name())));
+		setQuickLimit(context, VILLAGER, new Limit(3, 1000, false));
 
 		// The trace (FR-14.2 step 4): the limit and that the last play was Limited.
 		String trace = context.computeOnClient(mc -> new TraceScreen(null, VILLAGER).text());
@@ -283,6 +273,68 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 		});
 		closeScreen(context);
 		setQuickLimit(context, VILLAGER, new Limit(3, 1000, false));
+	}
+
+	/**
+	 * Typing in the pop-up's limit, with a library set limiting villagers to 3 per 1 s at Everywhere (review of #129):
+	 * emptying the count to type another is just an invalid value, never "off", so the set's limit is not put back into
+	 * the field mid-edit; and nothing applies until Enter, so typing 5 never applies anything on the way.
+	 */
+	private static void popupTyping(ClientGameTestContext context) {
+		SoundSet pens = new SoundSet("m11-typing", "Calm villagers", List.of(SetEntry.of("e1", VILLAGER).withLimit(new Limit(3, 1000, false))));
+		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name())
+				.withEverywhere(PlaceSets.EMPTY.attach(pens.id())), ws.library().put(pens))));
+		context.runOnClient(mc -> {
+			main(mc).sounds().openLevel(VILLAGER);
+			LimitControls limit = main(mc).sounds().levelLimit;
+			check(limit.toggle.value() && limit.countField.getValue().equals("3"), "the pop-up shows the set's limit, 3 per 1 s");
+			main(mc).setFocused(limit.countField);
+		});
+		context.getInput().pressKey(InputConstants.KEY_BACKSPACE);
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> {
+			LimitControls limit = main(mc).sounds().levelLimit;
+			return limit.countField.getValue().isEmpty() && limit.toggle.value() && limit.countField.isErrorShown()
+					&& limit.countField.error().getString().equals("Type a value");
+		}), "an empty count stays empty, with its error, and the limit stays on");
+		check(quickLimit(context, VILLAGER) == null, "nothing is saved for an empty count");
+		context.getInput().typeChars("5");
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> main(mc).sounds().levelLimit.countField.getValue()).equals("5"), "the count reads 5, not 35");
+		check(quickLimit(context, VILLAGER) == null, "typing alone saves nothing");
+		context.getInput().pressKey(InputConstants.KEY_RETURN);
+		context.waitTicks(1);
+		check(new Limit(5, 1000, false).equals(quickLimit(context, VILLAGER)), "Enter saves 5 per 1 s to Quick changes");
+		check(context.computeOnClient(mc -> main(mc).hasOverlay()), "Enter in the field keeps the pop-up open");
+
+		// An invalid window shows its error and changes nothing, even on Enter.
+		context.runOnClient(mc -> {
+			LimitControls limit = main(mc).sounds().levelLimit;
+			main(mc).setFocused(limit.windowField);
+			limit.windowField.setValue("20");
+		});
+		context.getInput().pressKey(InputConstants.KEY_RETURN);
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> main(mc).sounds().levelLimit.windowField.error().getString()).equals("Type a number from 0.05 to 10"),
+				"a window above 10 s shows an error");
+		check(new Limit(5, 1000, false).equals(quickLimit(context, VILLAGER)), "and changes nothing");
+		context.takeScreenshot("m11-sounds-popup-error");
+		// A valid window takes effect when focus moves on (Tab to Per source).
+		context.runOnClient(mc -> main(mc).sounds().levelLimit.windowField.setValue("0.5"));
+		context.getInput().pressKey(InputConstants.KEY_TAB);
+		context.waitTicks(1);
+		check(new Limit(5, 500, false).equals(quickLimit(context, VILLAGER)), "leaving the window field saves 5 per 0.5 s");
+
+		// Only the toggle turns it off. Quick changes then sets no limit, but the set still limits villagers here: the
+		// pop-up shows the set's limit again and says so.
+		context.runOnClient(mc -> main(mc).sounds().levelLimit.toggle.onPress(null));
+		context.waitTicks(1);
+		check(quickLimit(context, VILLAGER) == null, "Limit off clears the Quick changes limit");
+		check(context.computeOnClient(mc -> {
+			LimitControls limit = main(mc).sounds().levelLimit;
+			return limit.toggle.value() && limit.countField.getValue().equals("3") && limit.windowField.getValue().equals("1");
+		}), "the set's 3 per 1 s still applies and shows");
+		context.runOnClient(mc -> main(mc).closeOverlay());
 	}
 
 	// ---- FR-6 AC 3: minecarts (FR-6.6) ----
@@ -483,6 +535,20 @@ public final class M11LimitsClientGameTest implements FabricClientGameTest {
 				"a window under 50 ms shows an error");
 		check(!context.computeOnClient(mc -> editor(mc).saveButton.active), "and Save is off");
 		context.takeScreenshot("m11-entry-editor-error");
+		// Limit off: the greyed-out window shows no error and is not read with one; Save is on again (review of #129).
+		context.runOnClient(mc -> editor(mc).limitControls.toggle.onPress(null));
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> {
+			LimitControls l = editor(mc).limitControls;
+			return !l.toggle.value() && !l.windowField.active && !l.windowField.isErrorShown()
+					&& !NarrationCompat.collect(l.windowField::updateNarration).contains("Type a number");
+		}), "turning the limit off clears the window's error");
+		check(context.computeOnClient(mc -> editor(mc).saveButton.active), "with the limit off, Save is on");
+		context.runOnClient(mc -> editor(mc).limitControls.toggle.onPress(null));
+		context.waitTicks(1);
+		check(context.computeOnClient(mc -> editor(mc).limitControls.windowField.isErrorShown()
+				&& editor(mc).limitControls.countField.getValue().equals("3")), "on again: the 0.01 s window shows its error again");
+		check(!context.computeOnClient(mc -> editor(mc).saveButton.active), "and Save is off again");
 		context.runOnClient(mc -> {
 			editor(mc).limitControls.windowField.setValue("0.5");
 			editor(mc).limitControls.countField.setValue("100");

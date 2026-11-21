@@ -82,6 +82,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 	public SculptButton cueOffsetReset;
 	public SculptToggle throughBlocksToggle;
 	private DiagnosticsReport.Data diagnostics;
+	/** Lines the repeat-limit readout had when the Diagnostics page was laid out; 0 on other pages. */
+	private int limitsLinesShown;
 	private int ticks;
 
 	public SoundSculptorScreen() {
@@ -408,6 +410,7 @@ public final class SoundSculptorScreen extends SculptScreen {
 		body.label(() -> Component.translatable("soundsculptor.diag.errors", diagnostics.errors()));
 		// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
 		body.wrappedLabel(() -> limitsText(diagnostics.limits()));
+		limitsLinesShown = limitsLines();
 		body.label(() -> Component.translatable("soundsculptor.diag.memory", MemoryEstimate.megabytes(Diagnostics.memoryBytes()),
 				MemoryEstimate.megabytes(MemoryEstimate.BUDGET_BYTES)));
 		copyReportButton = Tooltips.describe(SculptButton.text(Component.translatable("soundsculptor.diag.copy"), this::copyReport),
@@ -425,12 +428,25 @@ public final class SoundSculptorScreen extends SculptScreen {
 	 * start within its window, against that limit (FR-6).
 	 */
 	private static Component limitsText(soundsculptor.core.limit.RepeatLimiter.Stats s) {
-		if (s.busiestLimit() == null) {
+		if (s.fullest().isEmpty()) {
 			return s.dropped() == 0 ? Component.translatable("soundsculptor.diag.limits.none")
 					: Component.translatable("soundsculptor.diag.limits.counts", s.allowed(), s.dropped());
 		}
-		return Component.translatable("soundsculptor.diag.limits", s.allowed(), s.dropped(), s.busiest(), s.busiestLimit().count(),
-				soundsculptor.core.lists.Numbers.plain(s.busiestLimit().windowMs() / 1000.0, 3));
+		net.minecraft.network.chat.MutableComponent windows = Component.empty();
+		for (soundsculptor.core.limit.RepeatLimiter.Fullest f : s.fullest()) {
+			if (!windows.getSiblings().isEmpty()) {
+				windows.append(Component.translatable("soundsculptor.diag.limits.separator"));
+			}
+			windows.append(Component.translatable("soundsculptor.diag.limits.window", f.most(), f.limit().count(),
+					soundsculptor.core.lists.Numbers.plain(f.limit().windowMs() / 1000.0, 3)));
+		}
+		return Component.translatable("soundsculptor.diag.limits", s.allowed(), s.dropped(), windows);
+	}
+
+	/** Lines the repeat-limit readout needs at the body's width; the page is laid out again when it needs more. */
+	private int limitsLines() {
+		return font.getSplitter().splitLines(limitsText(diagnostics.limits()).getString(), body().width(),
+				net.minecraft.network.chat.Style.EMPTY).size();
 	}
 
 	private static Component timing(String key, TimingWindow.Stats stats) {
@@ -463,6 +479,10 @@ public final class SoundSculptorScreen extends SculptScreen {
 		ticks++;
 		if (currentTab() == TAB_SETTINGS && settingsPage == SettingsPage.DIAGNOSTICS) {
 			diagnostics = Diagnostics.data();
+			if (limitsLinesShown > 0 && limitsLines() > limitsLinesShown) {
+				// More limits now than when the page was laid out: lay it out again so none is cut.
+				rebuildWidgets();
+			}
 		}
 		if (currentTab() == TAB_SETS && setsPanel != null && ticks % SoundsPanel.REFRESH_TICKS == 0) {
 			// The usage index reads other worlds' profiles in the background; show its counts once it has them.

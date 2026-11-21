@@ -1,6 +1,7 @@
 package soundsculptor.mc;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -16,14 +17,19 @@ import soundsculptor.mc.ui.Tooltips;
 
 /**
  * An entry's repeat limit (PRD FR-6.1) as one row of controls: "Limit: On/Off", the count, "per", the window in
- * seconds, "s", and "Per source: On/Off". Used by the entry editor, the Sounds tab's pop-up and the trace's Limit…
- * pop-up, so all three look and behave the same.
+ * seconds, "s", and "Per source: On/Off". Used by the entry editor, the Sounds tab's pop-up and the trace's Level…
+ * panel, so all three look and behave the same.
  *
  * <p>The values live in an {@link EntryDraft}, which checks them like every other editor field (FR-12.7): the count is
- * 1 to 100, the window 0.05 to 10 seconds. The limit is off by default; turning it on starts at 3 per 1 second, shared
- * (or what was typed before it was turned off). Typing a count turns it on, emptying the count turns it off, as an
- * empty Level means "Unchanged". While it is off the window and Per source are greyed out. Every valid change is handed
- * to {@code onChange}: the limit, or {@code null} when it is off; an invalid value shows its error and changes nothing.
+ * 1 to 100, the window 0.05 to 10 seconds. The limit is off by default and only the Limit toggle turns it on or off;
+ * turning it on starts at 3 per 1 second, shared, or brings back what it had. An empty or invalid count or window is
+ * just an invalid value: its error shows and nothing changes. While the limit is off, the count, the window and Per
+ * source are greyed out and show no error.
+ *
+ * <p>A change takes effect ({@code onChange}: the limit, or {@code null} when it is off) when it is complete: a toggle
+ * at once, a typed count or window on Enter, when focus leaves the field, or when the pop-up closes ({@link #commit}).
+ * So typing 10 never applies 1 first, which would also start the counters afresh. The entry editor saves only on Save,
+ * and follows every keystroke through {@link #afterEdit} to keep Save up to date.
  */
 public final class LimitControls {
 	private static final int COUNT_WIDTH = 30;
@@ -31,12 +37,14 @@ public final class LimitControls {
 
 	private final EntryDraft draft;
 	private final Consumer<Limit> onChange;
-	/** While set, field changes come from {@link #show} or {@link #refresh}, not the player: they are not reported. */
+	/** While set, changes come from {@link #show} or {@link #refresh}, not the player: they are not reported. */
 	private boolean quiet;
 	/** Runs after every change the player makes, valid or not (the entry editor updates Save with it). */
 	private Runnable afterEdit = () -> { };
 	/** Where error messages end; 0 for the row's last control. */
 	private int messagesRight;
+	/** The limit last handed to {@code onChange} (or shown), so a commit that changes nothing does nothing. */
+	private Limit committed;
 	public final SculptToggle toggle;
 	public final SculptTextField countField;
 	public final SculptText per;
@@ -46,11 +54,12 @@ public final class LimitControls {
 
 	/**
 	 * @param draft    holds the values; the entry editor passes its own, so Save and the unsaved-changes check see them
-	 * @param onChange called with each valid limit, or {@code null} when the limit is turned off
+	 * @param onChange called with each complete, valid limit, or {@code null} when the limit is turned off
 	 */
 	public LimitControls(EntryDraft draft, Consumer<Limit> onChange) {
 		this.draft = draft;
 		this.onChange = onChange;
+		this.committed = draft.limitValid() ? draft.limit() : null;
 		Minecraft mc = Minecraft.getInstance();
 		Component limitLabel = Component.translatable("soundsculptor.limit");
 		toggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(limitLabel), limitLabel, draft.hasLimit(), this::setOn),
@@ -64,10 +73,8 @@ public final class LimitControls {
 			setText(Field.LIMIT_COUNT, text);
 			return message(draft.error(Field.LIMIT_COUNT));
 		});
-		countField.onChange(text -> {
-			syncState();
-			changed();
-		});
+		countField.onChange(text -> edited());
+		countField.onCommit(this::commit);
 		per = new SculptText(Component.translatable("soundsculptor.limit.per"));
 		windowField = Tooltips.describe(new SculptTextField(mc.font, WINDOW_WIDTH, Component.translatable("soundsculptor.limit.window")),
 				Component.translatable("soundsculptor.limit.window.tip"));
@@ -77,12 +84,14 @@ public final class LimitControls {
 			setText(Field.LIMIT_WINDOW, text);
 			return message(draft.error(Field.LIMIT_WINDOW));
 		});
-		windowField.onChange(text -> changed());
+		windowField.onChange(text -> edited());
+		windowField.onCommit(this::commit);
 		seconds = new SculptText(Component.translatable("soundsculptor.limit.seconds"));
 		Component perSourceLabel = Component.translatable("soundsculptor.limit.per_source");
 		perSourceToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(perSourceLabel), perSourceLabel, draft.perSource(), value -> {
 			draft.setPerSource(value);
-			changed();
+			edited();
+			commit();
 		}), Component.translatable("soundsculptor.limit.per_source.tip"));
 		// The fields are narrow: their messages use the room under the row, from the count to the row's end. The count's
 		// comes first; the window's shows when the count has none, so the two never overlap (the outline says which).
@@ -124,14 +133,40 @@ public final class LimitControls {
 		}
 	}
 
-	/** Turns the limit on or off, as pressing the toggle does. */
+	/** Turns the limit on or off, as pressing the toggle does; takes effect at once. */
 	public void setOn(boolean on) {
 		draft.setLimitOn(on);
-		// Through the field, so its text, error and the draft agree; its change handler then reports the change.
-		countField.setValue(draft.text(Field.LIMIT_COUNT));
+		quiet = true;
+		try {
+			// Turning it on may have filled in the starting count.
+			countField.setValue(draft.text(Field.LIMIT_COUNT));
+		} finally {
+			quiet = false;
+		}
+		syncState();
 		if (on && !draft.limitValid()) {
-			countField.revealError();
-			windowField.revealError();
+			revealErrors();
+		}
+		edited();
+		commit();
+	}
+
+	/**
+	 * Hands the limit to {@code onChange} if it is complete and valid and differs from the last one: what Enter, focus
+	 * leaving a field and closing a pop-up do. An invalid value keeps its error showing and changes nothing.
+	 */
+	public void commit() {
+		if (quiet) {
+			return;
+		}
+		if (!draft.limitValid()) {
+			revealErrors();
+			return;
+		}
+		Limit limit = draft.limit();
+		if (!Objects.equals(limit, committed)) {
+			committed = limit;
+			onChange.accept(limit);
 		}
 	}
 
@@ -139,10 +174,8 @@ public final class LimitControls {
 	public void show(Limit limit) {
 		quiet = true;
 		try {
-			if (limit == null) {
-				draft.setLimitOn(false);
-				countField.setValue("");
-			} else {
+			draft.setLimitOn(limit != null);
+			if (limit != null) {
 				countField.setValue(Integer.toString(limit.count()));
 				windowField.setValue(EntryDraft.seconds(limit.windowMs()));
 				draft.setPerSource(limit.perSource());
@@ -151,6 +184,7 @@ public final class LimitControls {
 		} finally {
 			quiet = false;
 		}
+		committed = limit;
 		syncState();
 	}
 
@@ -173,22 +207,26 @@ public final class LimitControls {
 		windowField.revealError();
 	}
 
-	/** The toggle follows the count; the window and Per source matter only while the limit is on. */
+	/**
+	 * The toggle shows the draft; the count, window and Per source take input only while the limit is on. Both fields are
+	 * checked again, so turning the limit off clears their errors (outline, message and narration) and turning it back
+	 * on shows any that still apply.
+	 */
 	private void syncState() {
 		boolean on = draft.hasLimit();
 		toggle.setValue(on);
-		windowField.active = on;
-		windowField.setEditable(on);
+		for (SculptTextField field : List.of(countField, windowField)) {
+			field.active = on;
+			field.setEditable(on);
+			field.revalidate();
+		}
 		perSourceToggle.active = on;
 	}
 
-	private void changed() {
-		if (quiet) {
-			return;
-		}
-		afterEdit.run();
-		if (draft.limitValid()) {
-			onChange.accept(draft.limit());
+	/** Any change the player made, valid or not. */
+	private void edited() {
+		if (!quiet) {
+			afterEdit.run();
 		}
 	}
 
@@ -208,5 +246,4 @@ public final class LimitControls {
 	private static Component message(FieldError error) {
 		return error == null ? null : Component.translatable(error.translationKey(), error.args().toArray());
 	}
-
 }

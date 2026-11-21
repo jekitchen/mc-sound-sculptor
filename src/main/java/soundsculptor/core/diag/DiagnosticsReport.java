@@ -51,12 +51,15 @@ public final class DiagnosticsReport {
 	 * window, against that limit ("at most 3 in 1 s, limit 3"), so "never more than 3 in any one second" can be read off.
 	 */
 	public static String limitsLine(RepeatLimiter.Stats s) {
-		if (s.busiestLimit() == null && s.dropped() == 0) {
+		if (s.fullest().isEmpty() && s.dropped() == 0) {
 			return "Repeat limits: none used yet";
 		}
-		String busiest = s.busiestLimit() == null ? "" : String.format(Locale.ROOT, ". Most in one window: %d (limit %d per %s s)",
-				s.busiest(), s.busiestLimit().count(), soundsculptor.core.lists.Numbers.plain(s.busiestLimit().windowMs() / 1000.0, 3));
-		return String.format(Locale.ROOT, "Repeat limits: %d played, %d dropped%s", s.allowed(), s.dropped(), busiest);
+		StringBuilder fullest = new StringBuilder();
+		for (RepeatLimiter.Fullest f : s.fullest()) {
+			fullest.append(fullest.isEmpty() ? ". Most in one window: " : "; ").append(String.format(Locale.ROOT, "%d (limit %d per %s s)",
+					f.most(), f.limit().count(), soundsculptor.core.lists.Numbers.plain(f.limit().windowMs() / 1000.0, 3)));
+		}
+		return String.format(Locale.ROOT, "Repeat limits: %d played, %d dropped%s", s.allowed(), s.dropped(), fullest);
 	}
 
 	private DiagnosticsReport() {

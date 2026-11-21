@@ -11,8 +11,8 @@ import soundsculptor.core.sets.SoundPattern;
 
 /**
  * The rule editor's values (PRD 6.1: pattern, Mute, Volume, Limit with Per source, Cue). Mute and Cue have three
- * states, {@code null} meaning "this rule does not set it"; an empty Volume or Limit count also means "not set".
- * The limit window counts only when a limit count is typed.
+ * states, {@code null} meaning "this rule does not set it"; an empty Volume also means "not set". The limit is set
+ * only while it is on; its count, window and Per source count only then, and an empty count is an error.
  */
 public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 	/** The rule editor's fields, for mapping them to widgets. */
@@ -23,7 +23,9 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 		MUTE(false),
 		/** Percent; empty means not set. */
 		VOLUME(true),
-		/** Plays per window; empty means no limit. */
+		/** Whether the entry sets a repeat limit (FR-6, off by default); the count, window and Per source count only then. */
+		LIMIT_ON(false),
+		/** Plays per window, 1 to 100. */
 		LIMIT_COUNT(true),
 		/** Window in seconds, e.g. "1" or "0.25" (FR-6.1: 0.05 to 10). */
 		LIMIT_WINDOW(true),
@@ -54,8 +56,6 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 	private final int maxVolume;
 	/** FR-7.6: the Cue a rule gets when it is set to mute with no Cue chosen, or null to leave Cue alone. */
 	private Boolean cueDefault;
-	/** The count the limit had before it was turned off, so turning it back on brings it back. */
-	private String countBeforeOff;
 
 	private EntryDraft(String id, boolean boostAvailable, EnumMap<Field, String> original, EnumMap<Field, String> defaults) {
 		super(Field.class, original, defaults);
@@ -84,6 +84,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 		values.put(Field.MUTE, flag(rule.mute()));
 		values.put(Field.VOLUME, rule.volume() == null ? "" : rule.volume().toString());
 		Limit limit = rule.limit();
+		values.put(Field.LIMIT_ON, Boolean.toString(limit != null));
 		values.put(Field.LIMIT_COUNT, limit == null ? "" : Integer.toString(limit.count()));
 		values.put(Field.LIMIT_WINDOW, seconds(limit == null ? DEFAULT_WINDOW_MS : limit.windowMs()));
 		values.put(Field.PER_SOURCE, Boolean.toString(limit != null && limit.perSource()));
@@ -94,6 +95,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 		defaults.put(Field.ENABLED, "true");
 		defaults.put(Field.MUTE, "");
 		defaults.put(Field.VOLUME, "");
+		defaults.put(Field.LIMIT_ON, "false");
 		defaults.put(Field.LIMIT_COUNT, "");
 		defaults.put(Field.LIMIT_WINDOW, seconds(DEFAULT_WINDOW_MS));
 		defaults.put(Field.PER_SOURCE, "false");
@@ -167,7 +169,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 				yield error == null ? null : FieldError.of(error.translationKey());
 			}
 			case VOLUME -> text.isBlank() ? null : Numbers.checkWhole(text, SetEntry.MIN_VOLUME, maxVolume);
-			case LIMIT_COUNT -> text.isBlank() ? null : Numbers.checkWhole(text, Limit.MIN_COUNT, Limit.MAX_COUNT);
+			case LIMIT_COUNT -> Numbers.checkWhole(text, Limit.MIN_COUNT, Limit.MAX_COUNT);
 			case LIMIT_WINDOW -> Numbers.checkDecimal(text, Limit.MIN_WINDOW_MS / 1000.0, Limit.MAX_WINDOW_MS / 1000.0);
 			default -> null;
 		};
@@ -176,7 +178,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 	@Override
 	protected boolean inUse(Field field) {
 		return switch (field) {
-			case LIMIT_WINDOW, PER_SOURCE -> hasLimit();
+			case LIMIT_COUNT, LIMIT_WINDOW, PER_SOURCE -> hasLimit();
 			default -> true;
 		};
 	}
@@ -203,24 +205,22 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 		return !text(Field.VOLUME).isBlank();
 	}
 
-	/** Whether the entry sets a limit: a count is typed (FR-6, off by default). */
+	/** Whether the entry sets a limit (FR-6, off by default). Only the Limit toggle turns it on or off. */
 	public boolean hasLimit() {
-		return !text(Field.LIMIT_COUNT).isBlank();
+		return Boolean.parseBoolean(text(Field.LIMIT_ON));
 	}
 
 	/**
-	 * Turns the limit on or off. Off clears the count (the entry no longer sets a limit); on brings back the count it
-	 * had before it was turned off, or {@value #DEFAULT_LIMIT_COUNT}. The window and Per source are kept either way.
+	 * Turns the limit on or off. The count, window and Per source are kept either way, so turning it back on brings
+	 * them back; a limit turned on with no count typed yet starts at {@value #DEFAULT_LIMIT_COUNT}.
 	 */
 	public void setLimitOn(boolean on) {
 		if (on == hasLimit()) {
 			return;
 		}
-		if (on) {
-			put(Field.LIMIT_COUNT, countBeforeOff != null ? countBeforeOff : Integer.toString(DEFAULT_LIMIT_COUNT));
-		} else {
-			countBeforeOff = text(Field.LIMIT_COUNT);
-			put(Field.LIMIT_COUNT, "");
+		put(Field.LIMIT_ON, Boolean.toString(on));
+		if (on && text(Field.LIMIT_COUNT).isBlank()) {
+			put(Field.LIMIT_COUNT, Integer.toString(DEFAULT_LIMIT_COUNT));
 		}
 	}
 
@@ -236,6 +236,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 
 	/** FR-12.6: the limit back to off, with the default window and a shared count. */
 	public void resetLimit() {
+		resetToDefault(Field.LIMIT_ON);
 		resetToDefault(Field.LIMIT_COUNT);
 		resetToDefault(Field.LIMIT_WINDOW);
 		resetToDefault(Field.PER_SOURCE);
@@ -243,7 +244,7 @@ public final class EntryDraft extends Draft<EntryDraft.Field, SetEntry> {
 
 	/** Whether the limit is off, with the default window and a shared count (its reset button has nothing to do). */
 	public boolean isLimitDefault() {
-		return isDefault(Field.LIMIT_COUNT) && isDefault(Field.LIMIT_WINDOW) && isDefault(Field.PER_SOURCE);
+		return isDefault(Field.LIMIT_ON) && isDefault(Field.LIMIT_COUNT) && isDefault(Field.LIMIT_WINDOW) && isDefault(Field.PER_SOURCE);
 	}
 
 	/** A window in milliseconds as the editor shows it, in seconds: 1000 is "1", 250 is "0.25", 50 is "0.05". */

@@ -165,8 +165,27 @@ class RepeatLimiterTest {
 		RepeatLimiter.Stats stats = limiter.stats();
 		assertEquals(92, stats.allowed(), "90 villagers and 2 others");
 		assertEquals(600 - 90, stats.dropped());
-		assertEquals(3, stats.busiest(), "never more than 3 in one window");
-		assertEquals(THREE_PER_SECOND, stats.busiestLimit());
+		assertEquals(List.of(new RepeatLimiter.Fullest(3, THREE_PER_SECOND), new RepeatLimiter.Fullest(2, new Limit(5, 1000, false))),
+				stats.fullest(), "fullest first: 3 of 3, then 2 of 5");
+	}
+
+	@Test
+	void theFullestThreeLimitsAreShownByHowFullTheyGot() {
+		// Review of #129: with several limits active, each shows its own figure, fullest (most / count) first.
+		Limit tenPerSecond = new Limit(10, 1000, false);
+		Limit twoPerSecond = new Limit(2, 1000, false);
+		Limit fivePerSecond = new Limit(5, 1000, false);
+		Limit hundredPerSecond = new Limit(100, 1000, false);
+		for (int i = 0; i < 6; i++) {
+			start("ten", tenPerSecond, 0, i); // 6 of 10
+			start("hundred", hundredPerSecond, 0, i); // 6 of 100
+		}
+		start("two", twoPerSecond, 0, 0); // 1 of 2
+		for (int i = 0; i < 5; i++) {
+			start("five", fivePerSecond, 0, i); // 5 of 5
+		}
+		assertEquals(List.of(new RepeatLimiter.Fullest(5, fivePerSecond), new RepeatLimiter.Fullest(6, tenPerSecond),
+				new RepeatLimiter.Fullest(1, twoPerSecond)), limiter.stats().fullest(), "100%, 60%, 50%; 6 of 100 is left out");
 	}
 
 	@Test
@@ -174,11 +193,11 @@ class RepeatLimiterTest {
 		start("r", THREE_PER_SECOND, 0, 0);
 		start("r", THREE_PER_SECOND, 0, 1000);
 		start("r", THREE_PER_SECOND, 0, 2000);
-		assertEquals(1, limiter.stats().busiest(), "one play per second never had two in one window");
+		assertEquals(1, limiter.stats().fullest().get(0).most(), "one play per second never had two in one window");
 		start("r", THREE_PER_SECOND, 0, 2500);
-		assertEquals(2, limiter.stats().busiest());
+		assertEquals(2, limiter.stats().fullest().get(0).most());
 		start("r", new Limit(10, 1000, false), 0, 2600);
-		assertEquals(1, limiter.stats().busiest(), "an edited limit starts its busiest window afresh");
+		assertEquals(1, limiter.stats().fullest().get(0).most(), "an edited limit starts its busiest window afresh");
 	}
 
 	@Test
