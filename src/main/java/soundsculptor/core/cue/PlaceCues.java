@@ -32,8 +32,12 @@ public record PlaceCues(Boolean showCues, Boolean withoutSubtitles, Boolean newM
 
 	/** Every setting Unchanged: what a new zone has. */
 	public static final PlaceCues UNCHANGED = new PlaceCues(null, null, null, null, null, null);
-	/** Everywhere's settings until the player changes them: what the app-wide settings defaulted to before. */
-	public static final PlaceCues EVERYWHERE_DEFAULTS = new PlaceCues(true, false, true, DEFAULT_COLOR, DEFAULT_TEXT_SCALE,
+	/**
+	 * Everywhere's settings until the player changes them: what the app-wide settings defaulted to before, except Show
+	 * cues, which is Off (owner decision 2026-11-22), so cues show only where a zone, or the player in Everywhere, turns
+	 * them on.
+	 */
+	public static final PlaceCues EVERYWHERE_DEFAULTS = new PlaceCues(false, false, true, DEFAULT_COLOR, DEFAULT_TEXT_SCALE,
 			Offset.ZERO);
 
 	/** The cue box offset, in GUI pixels: positive x is right, positive y is down. Each part is clamped. */
@@ -115,14 +119,16 @@ public record PlaceCues(Boolean showCues, Boolean withoutSubtitles, Boolean newM
 	}
 
 	/**
-	 * Migration from the app-wide cue settings of earlier versions (decided 2026-11-21): these settings with the five
-	 * that were app-wide (show, without subtitles, color, text size, box position) taken from {@code appWide} where it
-	 * sets them. "New mutes get Cue" was already per profile, so it is kept.
+	 * Migration from the app-wide cue settings of earlier versions (decided 2026-11-21): these settings with four of the
+	 * five that were app-wide (without subtitles, color, text size, box position) taken from {@code appWide} where it
+	 * sets them. "New mutes get Cue" was already per profile, so it is kept. Show cues is kept too (decided 2026-11-22):
+	 * the old app-wide switch was on by default, so it says nothing about what the player chose, and Everywhere's is now
+	 * Off by default.
 	 */
 	public PlaceCues seededFrom(PlaceCues appWide) {
 		PlaceCues out = this;
 		for (CueField field : CueField.values()) {
-			if (field != CueField.NEW_MUTES_GET_CUE && appWide.has(field)) {
+			if (field != CueField.NEW_MUTES_GET_CUE && field != CueField.SHOW_CUES && appWide.has(field)) {
 				out = out.copy(field, appWide);
 			}
 		}

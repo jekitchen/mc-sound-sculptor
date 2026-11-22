@@ -1,6 +1,7 @@
 package soundsculptor.gametest;
 
 import soundsculptor.core.boost.BoostSupport;
+import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.diag.DiagnosticsReport;
 import soundsculptor.core.limit.RepeatLimiter;
 import soundsculptor.core.profile.Profile;
@@ -708,7 +709,10 @@ public final class PrecedenceMatrixClientGameTest implements FabricClientGameTes
 				for (SoundSet s : sets) {
 					library = library.put(s);
 				}
+				// Everywhere's Show cues is off by default (2026-11-22); on here, so a case that shows no cue says so for its
+				// own reason.
 				return new Workspace(Profile.empty(ws.profile().name()).withBoostConfirmed(true).withEverywhere(everywhere)
+						.withEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true))
 						.withZones(List.of(zones)), library);
 			});
 			SoundHook.limiter().clear();

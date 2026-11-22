@@ -67,7 +67,7 @@ class AppSettingsTest {
 	@Test
 	void theOldCueSettingsNeverCarryNewMutesGetCue() {
 		// "New mutes get Cue" was a profile setting even before; the profile keeps its own (2026-11-21).
-		AppSettings s = D.withLegacyCues(PlaceCues.EVERYWHERE_DEFAULTS);
+		AppSettings s = D.withLegacyCues(PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true));
 		assertNull(s.legacyCues().newMutesGetCue());
 		assertEquals(true, s.legacyCues().showCues());
 		assertEquals(s.legacyCues(), s.withReducedMotion(true).legacyCues(), "kept through other changes");

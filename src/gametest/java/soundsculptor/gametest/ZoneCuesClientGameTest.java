@@ -49,6 +49,7 @@ import soundsculptor.mc.ui.SculptScreen;
  *   saves at once; Right on the text size slider adds 10%.</li>
  *   <li>Decided 2026-11-21: a mute whose entries leave Cue unset shows a cue; Cue off on an entry in a smaller zone stops
  *   it there; a place with Show cues off shows none.</li>
+ *   <li>Decided 2026-11-22: a fresh profile shows no cue until a zone, or Everywhere (the hotkey), turns Show cues on.</li>
  * </ul>
  */
 public final class ZoneCuesClientGameTest implements FabricClientGameTest {
@@ -70,8 +71,10 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 			context.runOnClient(mc -> {
 				ProfileManager.setBypass(false);
 				mc.options.showSubtitles().set(false);
+				// Everywhere's Show cues is off by default (2026-11-22); these checks start with the player having turned it on.
 				ProfileManager.update(p -> Profile.empty(p.name())
 						.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("q1", EXPLODE).withMute(true).withCue(true))))
+						.withEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true))
 						.withZones(List.of(zone("base", "Main base", 20, key, PlaceCues.UNCHANGED.withShowCues(false)),
 								zone("corner", "Reading corner", 4, key, PlaceCues.UNCHANGED))));
 				CueOverlay.clear();
@@ -94,10 +97,13 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	/** What settings.json held before 2026-11-21: yellow, 150%, moved left, sound IDs on. */
+	/** What settings.json held before 2026-11-21: the old default Show cues on, yellow, 150%, moved left, sound IDs on. */
 	private static final PlaceCues APP_WIDE = new PlaceCues(true, true, null, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
-	/** {@link #APP_WIDE} on Everywhere of a profile whose old file had "New mutes get Cue" off. */
-	private static final PlaceCues MIGRATED = new PlaceCues(true, true, false, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
+	/**
+	 * {@link #APP_WIDE} on Everywhere of a profile whose old file had "New mutes get Cue" off. Show cues stays off: the old
+	 * app-wide on was the old default, so it is not seeded (2026-11-22).
+	 */
+	private static final PlaceCues MIGRATED = new PlaceCues(false, true, false, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
 	private static final String OTHER = "zone-cues-old.example.net";
 
 	/** A profile file from before 2026-11-21: no Everywhere cues, and its old cueDefault off. */
@@ -127,7 +133,8 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 				ProfileManager.flushSaves();
 			});
 			String saved = context.computeOnClient(mc -> read(ProfileManager.store().fileFor(OTHER)));
-			check(saved.contains("\"color\": \"#F0E442\"") && saved.contains("\"textScale\": 150") && saved.contains("\"newMutesGetCue\": false"),
+			check(saved.contains("\"color\": \"#F0E442\"") && saved.contains("\"textScale\": 150") && saved.contains("\"newMutesGetCue\": false")
+					&& saved.contains("\"showCues\": false"),
 					"Rename saves the migrated look: " + saved);
 			// Copy from the other world brings its migrated look.
 			PlaceCues copied = context.computeOnClient(mc -> soundsculptor.core.profile.ProfileOps.copyFrom(ProfileManager.storedProfile(OTHER),
@@ -319,6 +326,8 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 	/**
 	 * Owner decision 2026-11-21: a muted sound shows a cue unless an entry sets Cue off, so a mute made before cues
 	 * existed (no Cue) shows one. A smaller zone's Cue off stops it there; a place's Show cues off is the main switch.
+	 * Owner decision 2026-11-22: a fresh profile's Everywhere has Show cues off, so no cue shows until a zone, or the
+	 * player in Everywhere (here with the hotkey), turns it on.
 	 */
 	private static void checkAMuteWithCueUnsetShowsACue(ClientGameTestContext context, TestSingleplayerContext world, String key) {
 		context.runOnClient(mc -> {
@@ -334,13 +343,33 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 		});
 		check(context.computeOnClient(mc -> soundsculptor.core.quick.QuickActions.isCueOn(ProfileManager.workspace(), PlaceRef.EVERYWHERE, EXPLODE)),
 				"the Sounds tab shows Cue on for a mute that leaves Cue unset");
+		check(!context.computeOnClient(mc -> ProfileManager.profile().everywhereCues().showCues()), "a fresh profile has Show cues off");
 		stand(context, world, IN_BASE_ONLY);
 		check(!play(context), "the explosion is muted");
-		check(shown(context).size() == 1, "a muted sound with Cue unset shows a cue, was " + shown(context));
+		check(shown(context).isEmpty(), "a fresh profile shows no cue in a zone that leaves Show cues Unchanged, was " + shown(context));
+		stand(context, world, OUTSIDE);
+		play(context);
+		check(shown(context).isEmpty(), "nor out in Everywhere, was " + shown(context));
+		// A zone turns Show cues on: the cue shows there, and only there.
+		context.runOnClient(mc -> ProfileManager.update(p -> p.withCues(PlaceRef.zone("base"), PlaceCues.UNCHANGED.withShowCues(true))));
+		stand(context, world, IN_BASE_ONLY);
+		context.runOnClient(mc -> CueOverlay.clear());
+		check(!play(context), "the explosion is muted");
+		check(shown(context).size() == 1, "where a zone turns Show cues on, a muted sound with Cue unset shows a cue, was " + shown(context));
 		stand(context, world, INSIDE);
 		context.runOnClient(mc -> CueOverlay.clear());
 		check(!play(context), "still muted in the corner");
 		check(shown(context).isEmpty(), "the corner's Cue off wins while you stand in it, was " + shown(context));
+		stand(context, world, OUTSIDE);
+		context.runOnClient(mc -> CueOverlay.clear());
+		play(context);
+		check(shown(context).isEmpty(), "outside the zone Everywhere's Off still applies, was " + shown(context));
+		// The hotkey, with no zone setting it here, turns Everywhere's Show cues on.
+		String message = context.computeOnClient(mc -> CueOverlay.toggleShowCues(mc).getString());
+		check(message.equals("Muted-sound cues: On"), "the hotkey turns Everywhere's on, was " + message);
+		check(context.computeOnClient(mc -> ProfileManager.profile().everywhereCues().showCues()), "Everywhere's Show cues is on");
+		play(context);
+		check(shown(context).size() == 1, "out in Everywhere the cue shows now, was " + shown(context));
 		context.runOnClient(mc -> ProfileManager.update(p -> p.withCues(PlaceRef.zone("base"), PlaceCues.UNCHANGED.withShowCues(false))));
 		stand(context, world, IN_BASE_ONLY);
 		context.runOnClient(mc -> CueOverlay.clear());

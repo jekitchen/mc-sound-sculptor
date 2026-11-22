@@ -59,5 +59,8 @@ class PlaceCuesTest {
 		assertEquals(new PlaceCues(false, true, false, 0xF0E442, 150, new PlaceCues.Offset(-20, 10)), seeded);
 		// Even an app-wide record that carries one does not replace the profile's own.
 		assertEquals(false, everywhere.seededFrom(appWide.withNewMutesGetCue(true)).newMutesGetCue());
+		// The old app-wide Show cues was on by default, so it is not seeded either (decided 2026-11-22).
+		assertEquals(false, everywhere.seededFrom(appWide.withShowCues(true)).showCues());
+		assertEquals(true, everywhere.withShowCues(true).seededFrom(appWide).showCues(), "and Everywhere's own is kept");
 	}
 }

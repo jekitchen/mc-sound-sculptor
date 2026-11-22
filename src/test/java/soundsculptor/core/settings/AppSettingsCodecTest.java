@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
  */
 class AppSettingsCodecTest {
 	private static final AppSettings D = AppSettings.DEFAULTS;
-	/** What the app-wide cue settings defaulted to. */
-	private static final PlaceCues OLD_DEFAULTS = PlaceCues.EVERYWHERE_DEFAULTS.withNewMutesGetCue(null);
+	/** What the app-wide cue settings defaulted to: Show cues was on then (Everywhere's is off since 2026-11-22). */
+	private static final PlaceCues OLD_DEFAULTS = PlaceCues.EVERYWHERE_DEFAULTS.withNewMutesGetCue(null).withShowCues(true);
 
 	private static AppSettingsCodec.Read read(String json) throws AppSettingsFormatException {
 		return AppSettingsCodec.read(json);

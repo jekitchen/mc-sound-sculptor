@@ -103,8 +103,16 @@ public final class CompatSmokeClientGameTest implements FabricClientGameTest {
 				context.setScreen(() -> null);
 				context.waitTicks(2);
 
-				// The muted villager does not start, and its cue shows (a new mute gets Cue on).
+				// The muted villager does not start. Everywhere's Show cues is off by default (2026-11-22): no cue yet.
 				context.runOnClient(mc -> CueOverlay.clear());
+				check(!play(context), "the muted villager does not start");
+				context.waitTicks(FRAMES);
+				check(context.computeOnClient(mc -> CueOverlay.shown()).isEmpty(), "with Show cues off by default, no cue");
+				// With Everywhere's Show cues on, its cue shows (a new mute gets Cue on).
+				context.runOnClient(mc -> {
+					ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withShowCues(true)));
+					CueOverlay.clear();
+				});
 				check(!play(context), "the muted villager does not start");
 				context.waitTicks(FRAMES);
 				List<CueOverlay.Shown> cues = context.computeOnClient(mc -> CueOverlay.shown());

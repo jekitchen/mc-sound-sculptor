@@ -40,6 +40,8 @@ public final class AppSettingsCodec {
 	private static final List<String> OLD_CUE_FIELDS = List.of("showCues", "cuesWithoutSubtitles", "cueColor", "cueTextScale",
 			"cueOffsetX", "cueOffsetY");
 	private static final String LEGACY_CUES = "legacyCues";
+	/** What the app-wide cue settings defaulted to: Everywhere's defaults, but with Show cues on (before 2026-11-22). */
+	private static final PlaceCues OLD_DEFAULTS = PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true);
 	private static final Set<String> FIELDS = Set.of("schemaVersion", "showCues", "cuesWithoutSubtitles", "cueColor",
 			"cueTextScale", "cueOffsetX", "cueOffsetY", LEGACY_CUES, "outlinesThroughBlocks", "reducedMotion", "lastTab");
 
@@ -119,9 +121,12 @@ public final class AppSettingsCodec {
 		return new Read(new AppSettings(throughBlocks, reducedMotion, lastTab, legacy), problems);
 	}
 
-	/** The old app-wide cue settings in {@code json}; one that is missing takes its old default. */
+	/**
+	 * The old app-wide cue settings in {@code json}; one that is missing takes its old default. Show cues is kept only as
+	 * a record: since 2026-11-22 it no longer seeds a profile ({@link PlaceCues#seededFrom}).
+	 */
 	private static PlaceCues legacyCues(JsonObject json, List<String> problems) {
-		PlaceCues d = PlaceCues.EVERYWHERE_DEFAULTS;
+		PlaceCues d = OLD_DEFAULTS;
 		boolean showCues = bool(json, "showCues", d.showCues(), problems);
 		boolean withoutSubtitles = bool(json, "cuesWithoutSubtitles", d.withoutSubtitles(), problems);
 		int color = color(json, "cueColor", d.color(), problems);

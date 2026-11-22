@@ -16,6 +16,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import soundsculptor.core.cue.PlaceCues;
 import soundsculptor.core.sets.SetLibrary;
+import soundsculptor.core.settings.AppSettingsCodec;
+import soundsculptor.core.settings.AppSettingsFormatException;
 
 /**
  * The migration of the app-wide cue settings (decided 2026-11-21) through every way a stored profile is read: joining
@@ -105,10 +107,48 @@ class ProfileCueMigrationTest {
 	}
 
 	@Test
+	void aNewProfilesEverywhereHasShowCuesOff() {
+		// Owner decision 2026-11-22: cues show only where a zone, or the player in Everywhere, turns them on.
+		assertEquals(false, PlaceCues.EVERYWHERE_DEFAULTS.showCues());
+		assertEquals(false, Profile.empty("New").everywhereCues().showCues());
+		assertEquals(false, Profile.empty("New", null).everywhereCues().showCues());
+	}
+
+	@Test
+	void theOldAppWideShowCuesOnDoesNotSeedEverywhere() throws IOException, ProfileFormatException, AppSettingsFormatException {
+		// settings.json from before 2026-11-21, with the old default "showCues": true and a custom look. True was the old
+		// default, not the player's choice, so it is not seeded (2026-11-22); the look still is.
+		PlaceCues appWide = AppSettingsCodec.read("""
+				{"schemaVersion": 1, "showCues": true, "cuesWithoutSubtitles": true, "cueColor": "#F0E442",
+				 "cueTextScale": 150, "cueOffsetX": -20, "cueOffsetY": 0}""").settings().legacyCues();
+		assertEquals(true, appWide.showCues(), "the record keeps what the file said");
+		PlaceCues seeded = new PlaceCues(false, true, false, 0xF0E442, 150, new PlaceCues.Offset(-20, 0));
+		writeOld("world:b");
+		assertEquals(seeded, store().load("world:b", "B", appWide).profile().everywhereCues(),
+				"an old profile: Show cues off, its own cueDefault, the old look");
+		assertEquals(seeded, store().readStored(store().fileFor("world:b"), appWide).everywhereCues());
+		assertEquals(seeded.withNewMutesGetCue(true), store().load("world:new", "New", appWide).profile().everywhereCues(),
+				"a new profile");
+		Files.writeString(store().fileFor("world:broken"), "not json {", StandardCharsets.UTF_8);
+		assertEquals(false, store().load("world:broken", "Broken", appWide).profile().everywhereCues().showCues(),
+				"a broken one");
+	}
+
+	@Test
+	void aProfileThatSavedShowCuesOnKeepsIt() throws IOException, ProfileFormatException {
+		// Written by a version where Everywhere's Show cues was on by default: what it holds is kept, not rewritten.
+		store().save("world:a", Profile.empty("A").withEverywhereCues(PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true)));
+		assertEquals(true, store().load("world:a", "A", APP_WIDE).profile().everywhereCues().showCues());
+		assertEquals(true, store().load("world:a", "A", null).profile().everywhereCues().showCues());
+	}
+
+	@Test
 	void resetGivesPlainDefaults() throws IOException, ProfileFormatException {
 		writeOld("world:b");
 		Profile b = store().readStored(store().fileFor("world:b"), APP_WIDE);
 		assertEquals(PlaceCues.EVERYWHERE_DEFAULTS, ProfileOps.reset(b).everywhereCues());
+		Profile on = b.withEverywhereCues(b.everywhereCues().withShowCues(true));
+		assertEquals(false, ProfileOps.reset(on).everywhereCues().showCues(), "Reset turns Show cues off again");
 	}
 
 	@Test
