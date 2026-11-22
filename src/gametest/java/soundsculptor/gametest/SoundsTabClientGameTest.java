@@ -77,6 +77,7 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			zoneApplyToWritesZoneQuick(context);
 			addToSetCreatesEntryInChosenSet(context);
 			filterStateRememberedAcrossReopen(context);
+			hideMutedLeavesOutWhatIsMutedHere(context);
 			idleRefreshRebuildsNothing(context);
 			holdWhilePointing(context);
 			holdNeedsTheMouse(context);
@@ -754,6 +755,64 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			reopen(context);
 			check(context.computeOnClient(mc -> sounds(mc).recentToggle.value() && sounds(mc).pauseToggle.visible), "turned on again, it stays on");
 		} finally {
+			cleanUp(context);
+		}
+	}
+
+	/**
+	 * Hide muted (FR-1.3): with the filter on, the list leaves out the sounds the rules where the player stands mute,
+	 * an Everywhere set's and a zone's alike, whatever Apply to chose; a sound muted from its row leaves too. With the
+	 * filter off it does nothing and is hidden. It stays on through closing and opening the screen, and a new game run
+	 * starts with it off.
+	 */
+	private static void hideMutedLeavesOutWhatIsMutedHere(ClientGameTestContext context) {
+		SoundSet quietZombies = new SoundSet("sounds-quiet-zombies", "Quiet zombies", List.of(SetEntry.of("e1", ZOMBIE).withMute(true)));
+		SoundSet quietCows = new SoundSet("sounds-quiet-cows", "Quiet cows", List.of(SetEntry.of("e1", COW).withMute(true)));
+		String key = context.computeOnClient(mc -> ProfileManager.key());
+		Vec3 eye = context.computeOnClient(mc -> mc.player.getEyePosition());
+		Zone barn = new Zone("barn", "Barn", true, key, "minecraft:overworld", new Point(eye.x, eye.y, eye.z), new Shape.Box(9, 9, 9),
+				PlaceSets.EMPTY.attach(quietCows.id()));
+		context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name())
+				.withEverywhere(PlaceSets.EMPTY.attach(quietZombies.id())).withZones(List.of(barn)),
+				ws.library().put(quietZombies).put(quietCows))));
+		open(context);
+		try {
+			play(context, VILLAGER, 3.0);
+			play(context, ZOMBIE, 3.0);
+			play(context, COW, 3.0);
+			check(Set.copyOf(keys(context)).equals(Set.of(VILLAGER, ZOMBIE, COW)), "every heard sound is listed, was " + keys(context));
+			check(context.computeOnClient(mc -> !sounds(mc).isHideMuted() && sounds(mc).hideMutedToggle.visible
+					&& !sounds(mc).hideMutedToggle.value()), "Hide muted starts off and shows with the filter on");
+
+			context.runOnClient(mc -> sounds(mc).hideMutedToggle.onPress(null));
+			check(keys(context).equals(List.of(VILLAGER)), "Everywhere's and the Barn's mutes are left out, was " + keys(context));
+			check(context.computeOnClient(mc -> sounds(mc).hiddenMuted()) == 2, "two sounds are left out");
+			context.takeScreenshot("sounds-hide-muted");
+			context.runOnClient(mc -> sounds(mc).setApplyTarget(ApplyTarget.EVERYWHERE));
+			check(keys(context).equals(List.of(VILLAGER)), "Apply to does not change what is muted here, was " + keys(context));
+
+			context.runOnClient(mc -> press(mc, VILLAGER, SoundsPanel.BUTTON_MUTE));
+			context.waitTicks(SETTLE);
+			check(keys(context).isEmpty(), "a sound muted from its row leaves the list, was " + keys(context));
+			check(context.computeOnClient(mc -> sounds(mc).list.emptyText().getString()).contains("Hide muted"),
+					"the empty list says Hide muted left everything out");
+
+			context.runOnClient(mc -> sounds(mc).setRecentOnly(false));
+			search(context, "villager ambient");
+			check(keys(context).contains(VILLAGER), "with the filter off, muted sounds are listed");
+			check(context.computeOnClient(mc -> !sounds(mc).hideMutedToggle.visible), "Hide muted is hidden with the filter off");
+			search(context, "");
+			context.runOnClient(mc -> sounds(mc).setRecentOnly(true));
+			reopen(context);
+			check(context.computeOnClient(mc -> sounds(mc).isHideMuted() && sounds(mc).hideMutedToggle.value()),
+					"Hide muted stays on after closing and opening the screen");
+			check(keys(context).isEmpty(), "and still leaves out what is muted here, was " + keys(context));
+			context.runOnClient(mc -> SoundsPanel.resetRememberedState());
+			reopen(context);
+			check(context.computeOnClient(mc -> !sounds(mc).isHideMuted()), "a new game run starts with Hide muted off");
+		} finally {
+			context.runOnClient(mc -> ProfileManager.change(ws -> new Workspace(Profile.empty(ws.profile().name()),
+					ws.library().remove(quietZombies.id()).remove(quietCows.id()))));
 			cleanUp(context);
 		}
 	}

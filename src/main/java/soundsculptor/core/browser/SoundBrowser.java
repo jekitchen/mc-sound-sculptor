@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import soundsculptor.core.recent.RecentRow;
 import soundsculptor.core.recent.SortOrder;
@@ -45,6 +46,23 @@ public final class SoundBrowser {
 		List<BrowserRow> result = new ArrayList<>(found.size());
 		for (SoundEntry entry : found) {
 			result.add(new BrowserRow(entry.id(), entry.subtitle(), recentById.get(entry.id())));
+		}
+		return result;
+	}
+
+	/**
+	 * The rows without the sounds that are muted where the player stands now: the Sounds tab's Hide muted (FR-1.3), so
+	 * the sounds still left to sort out stand out.
+	 *
+	 * @param mutedHere whether the rules where the player stands now (Everywhere, the zones there and precedence) mute a
+	 *                  sound
+	 */
+	public static List<BrowserRow> withoutMuted(List<BrowserRow> rows, Predicate<String> mutedHere) {
+		List<BrowserRow> result = new ArrayList<>(rows.size());
+		for (BrowserRow row : rows) {
+			if (!mutedHere.test(row.soundId())) {
+				result.add(row);
+			}
 		}
 		return result;
 	}

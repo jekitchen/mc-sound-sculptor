@@ -10,6 +10,7 @@ import soundsculptor.core.start.SoundStart;
 import soundsculptor.core.start.SoundStartDecider;
 import soundsculptor.core.start.SoundStartResult;
 import soundsculptor.core.zones.Precedence;
+import soundsculptor.core.zones.SoundDecision;
 import soundsculptor.core.zones.WhereYouAre;
 import soundsculptor.core.trace.LastPlays;
 import soundsculptor.core.SoundRange;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -280,6 +282,29 @@ public final class SoundHook {
 		if (sync(Minecraft.getInstance())) {
 			DECIDER.previewEverywhereCues(cues);
 		}
+	}
+
+	/**
+	 * Whether the rules where the player stands now mute each sound: what a play of it would get now, from Everywhere,
+	 * the zones there and precedence, as {@link #onSoundStart} decides (muted, or turned down to 0%). Never true outside
+	 * a world or while Sound Sculptor is bypassed. For the Sounds tab's Hide muted (FR-1.3), within one refresh: get a
+	 * new one for the next. Render thread only.
+	 */
+	public static Predicate<String> mutedHereNow() {
+		if (ProfileManager.isBypassed() || !sync(Minecraft.getInstance())) {
+			return soundId -> false;
+		}
+		Precedence precedence = deciderProfile;
+		WhereYouAre where = DECIDER.where();
+		SoundDecision decision = new SoundDecision();
+		return soundId -> {
+			if (where.precedence() != precedence) {
+				// A newer profile snapshot came in since: this one no longer decides.
+				return false;
+			}
+			precedence.decide(soundId, where, decision);
+			return decision.volumePercent() <= 0;
+		};
 	}
 
 	/** Where the player is, for {@link #precedence()} (FR-8.4). Render thread only. */

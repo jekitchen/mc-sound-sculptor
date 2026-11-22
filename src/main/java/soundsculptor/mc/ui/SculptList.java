@@ -80,6 +80,11 @@ public class SculptList extends ContainerObjectSelectionList<SculptList.Row> {
 		this.emptyText = text;
 	}
 
+	/** The text shown when the list has no rows now, or {@code null} if none was set. */
+	public Component emptyText() {
+		return emptyText == null ? null : emptyText.get();
+	}
+
 	public Row findRow(Object key) {
 		for (Row row : children()) {
 			if (Objects.equals(row.key(), key)) {
