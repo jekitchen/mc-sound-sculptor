@@ -151,7 +151,18 @@ class EntryResolverTest {
 		assertNull(res.cue());
 		assertFalse(res.muted());
 		assertEquals(100, res.effectiveVolumePercent());
-		assertFalse(res.cueOn());
+		assertTrue(res.cueOn(), "no entry sets Cue, so it is on (owner decision 2026-11-21)");
+	}
+
+	@Test
+	void cueIsOnUnlessTheWinningEntrySetsCueOff() {
+		assertTrue(resolver(SetEntry.of("r", VILLAGER_AMBIENT).withMute(true)).resolve(VILLAGER_AMBIENT).cueOn(),
+				"a mute that leaves Cue unset shows a cue");
+		assertTrue(resolver(SetEntry.of("r", VILLAGER_AMBIENT).withMute(true).withCue(true)).resolve(VILLAGER_AMBIENT).cueOn());
+		assertFalse(resolver(SetEntry.of("r", VILLAGER_AMBIENT).withMute(true).withCue(false)).resolve(VILLAGER_AMBIENT).cueOn());
+		assertFalse(resolver(SetEntry.of("off", VILLAGER_AMBIENT).withCue(false),
+				SetEntry.of("mute", "minecraft:entity.villager.*").withMute(true)).resolve(VILLAGER_AMBIENT).cueOn(),
+				"Cue off from another entry for the sound still wins the cue");
 	}
 
 	@Test

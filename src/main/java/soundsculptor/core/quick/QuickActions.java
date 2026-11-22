@@ -88,7 +88,7 @@ public final class QuickActions {
 
 	/**
 	 * Whether muting the sound at the place would show a cue now, by any set attached there: the Cue setting that wins
-	 * for it (FR-4.5), off when nothing sets one (FR-9). {@code false} for a zone that no longer exists. For many
+	 * for it (FR-4.5), on when nothing sets one (FR-9). {@code false} for a zone that no longer exists. For many
 	 * sounds at once, use {@link #cueOnAt}.
 	 */
 	public static boolean isCueOn(Workspace ws, PlaceRef where, String soundId) {

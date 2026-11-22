@@ -30,7 +30,7 @@ public final class SoundDecision {
 		limitRule = null;
 		limitSet = null;
 		limitZone = null;
-		cueOn = false;
+		cueOn = true;
 		cueRule = null;
 		cueZone = null;
 	}
@@ -73,6 +73,7 @@ public final class SoundDecision {
 		return limitZone;
 	}
 
+	/** Whether a muted sound shows a cue: on unless the deciding entry sets Cue Off (FR-7.1, FR-9). */
 	public boolean cueOn() {
 		return cueOn;
 	}

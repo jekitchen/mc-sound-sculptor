@@ -362,7 +362,8 @@ public final class TraceScreen extends SculptScreen {
 	/**
 	 * A line's Cue (FR-7, FR-14.4). On the sound's single-sound entry in Quick changes it shows and toggles whether the
 	 * sound shows a cue at the place, from every set attached there, as the Sounds tab's Cue does (FR-1.5). On any other
-	 * line it shows the line's own Cue (On, Off, or "-" when the entry does not set it) and turns it on, or off when on.
+	 * line it shows the line's own Cue (On, Off, or "-" when the entry does not set it) and turns it off, or on when off:
+	 * an entry that does not set Cue leaves the cue on (FR-7.1), so its press writes Off.
 	 *
 	 * @param setName the library set's name, or {@code null} for Quick changes
 	 */
@@ -375,9 +376,10 @@ public final class TraceScreen extends SculptScreen {
 					Component.translatable(on ? "soundsculptor.sounds.cue.turn_off" : "soundsculptor.sounds.cue.turn_on"));
 		}
 		Boolean cue = entry.cue();
-		SculptButton button = SculptButton.text(cueLabel(cue), cueWidth(), () -> edit(where, new EntryEdit.Cue(!Boolean.TRUE.equals(cue))));
+		boolean off = Boolean.FALSE.equals(cue);
+		SculptButton button = SculptButton.text(cueLabel(cue), cueWidth(), () -> edit(where, new EntryEdit.Cue(off)));
 		return Tooltips.describe(button, setName == null
-				? Component.translatable(Boolean.TRUE.equals(cue) ? "soundsculptor.trace.edit.cue.turn_off" : "soundsculptor.trace.edit.cue.turn_on")
+				? Component.translatable(off ? "soundsculptor.trace.edit.cue.turn_on" : "soundsculptor.trace.edit.cue.turn_off")
 				: Component.translatable("soundsculptor.trace.edit.cue.linked_tip", setName));
 	}
 

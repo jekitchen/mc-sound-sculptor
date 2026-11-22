@@ -98,20 +98,37 @@ class QuickChangesTest {
 			List.of(SetEntry.of("e1", "minecraft:entity.cow.*").withMute(true).withCue(true)));
 
 	@Test
-	void aQuickMuteHasTheCueDefaultAndCueOffThenUnmuteLeavesNothing() {
+	void aQuickMuteHasTheCueDefaultAndCueOffWritesCueOff() {
 		Workspace start = ws(PlaceSets.EMPTY);
 		Workspace muted = toggle(start, EVERYWHERE, COW);
 		assertTrue(QuickActions.isCueOn(muted, EVERYWHERE, COW), "FR-7.6: a quick mute starts with Cue on");
+		assertEquals(Boolean.TRUE, quickEntry(muted, EVERYWHERE, COW).cue());
 
-		assertEquals(new EntryEdit.Cue(null), QuickActions.toggleCue(muted, EVERYWHERE, COW),
-				"clearing the entry's own Cue already turns the cue off");
+		assertEquals(new EntryEdit.Cue(false), QuickActions.toggleCue(muted, EVERYWHERE, COW),
+				"clearing the entry's own Cue leaves the cue on (unset means on), so Cue off is written");
 		Workspace cueOff = toggleCue(muted, EVERYWHERE, COW);
 		assertFalse(QuickActions.isCueOn(cueOff, EVERYWHERE, COW));
 		assertTrue(QuickActions.isMuted(cueOff, EVERYWHERE, COW), "the sound stays muted");
-		assertNull(quickEntry(cueOff, EVERYWHERE, COW).cue());
+		assertEquals(Boolean.FALSE, quickEntry(cueOff, EVERYWHERE, COW).cue());
 
 		Workspace unmuted = toggle(cueOff, EVERYWHERE, COW);
-		assertNull(unmuted.profile().everywhere().quickChanges(), "Mute, Cue off, Unmute leaves no entry behind");
+		assertFalse(QuickActions.isMuted(unmuted, EVERYWHERE, COW));
+		assertNull(quickEntry(unmuted, EVERYWHERE, COW).mute());
+		assertEquals(Boolean.FALSE, quickEntry(unmuted, EVERYWHERE, COW).cue(), "Unmute keeps the Cue off the player chose");
+	}
+
+	@Test
+	void aMuteWithCueUnsetShowsACue() {
+		// Owner decision 2026-11-21: a muted sound shows a cue unless an entry sets Cue off.
+		SoundSet old = new SoundSet("set-old", "Old mutes", List.of(SetEntry.of("e1", COW).withMute(true)));
+		Workspace start = ws(PlaceSets.EMPTY.attach(old.id()), old);
+		assertTrue(QuickActions.isMuted(start, EVERYWHERE, COW));
+		assertTrue(QuickActions.isCueOn(start, EVERYWHERE, COW), "no entry sets Cue, so the cue is on");
+		assertEquals(new EntryEdit.Cue(false), QuickActions.toggleCue(start, EVERYWHERE, COW),
+				"the button offers Show no cue when muted, and writes Cue off to Quick changes");
+		Workspace off = toggleCue(start, EVERYWHERE, COW);
+		assertFalse(QuickActions.isCueOn(off, EVERYWHERE, COW));
+		assertEquals(Boolean.FALSE, quickEntry(off, EVERYWHERE, COW).cue());
 	}
 
 	@Test
@@ -135,12 +152,27 @@ class QuickChangesTest {
 	}
 
 	@Test
-	void cueOnAfterCueOffWritesCueOn() {
+	void cueOnAfterCueOffClearsTheEntrysCue() {
 		Workspace cueOff = toggleCue(toggle(ws(PlaceSets.EMPTY), EVERYWHERE, COW), EVERYWHERE, COW);
-		assertEquals(new EntryEdit.Cue(true), QuickActions.toggleCue(cueOff, EVERYWHERE, COW));
+		assertEquals(new EntryEdit.Cue(null), QuickActions.toggleCue(cueOff, EVERYWHERE, COW),
+				"with nothing else setting Cue, clearing the entry's Cue off turns the cue back on");
 		Workspace cueOn = toggleCue(cueOff, EVERYWHERE, COW);
 		assertTrue(QuickActions.isCueOn(cueOn, EVERYWHERE, COW));
-		assertEquals(Boolean.TRUE, quickEntry(cueOn, EVERYWHERE, COW).cue());
+		assertNull(quickEntry(cueOn, EVERYWHERE, COW).cue());
+		Workspace unmuted = toggle(cueOn, EVERYWHERE, COW);
+		assertNull(unmuted.profile().everywhere().quickChanges(), "Mute, Cue off, Cue on, Unmute leaves no entry behind");
+	}
+
+	@Test
+	void cueOnOverALibrarySetsCueOffWritesCueOn() {
+		SoundSet quiet = new SoundSet("set-quiet", "Quiet cows",
+				List.of(SetEntry.of("e1", "minecraft:entity.cow.*").withMute(true).withCue(false)));
+		Workspace start = ws(PlaceSets.EMPTY.attach(quiet.id()), quiet);
+		assertFalse(QuickActions.isCueOn(start, EVERYWHERE, COW));
+		assertEquals(new EntryEdit.Cue(true), QuickActions.toggleCue(start, EVERYWHERE, COW));
+		Workspace on = toggleCue(start, EVERYWHERE, COW);
+		assertTrue(QuickActions.isCueOn(on, EVERYWHERE, COW));
+		assertEquals(Boolean.TRUE, quickEntry(on, EVERYWHERE, COW).cue());
 	}
 
 	@Test
@@ -166,11 +198,11 @@ class QuickChangesTest {
 	void cueStateIsPerPlace() {
 		Workspace start = ws(PlaceSets.EMPTY, PlaceSets.EMPTY);
 		Workspace inPen = toggleCue(start, PEN, COW);
-		assertTrue(QuickActions.isCueOn(inPen, PEN, COW));
-		assertFalse(QuickActions.isCueOn(inPen, EVERYWHERE, COW));
+		assertFalse(QuickActions.isCueOn(inPen, PEN, COW), "nothing set Cue, so it was on and the press turns it off");
+		assertTrue(QuickActions.isCueOn(inPen, EVERYWHERE, COW));
 		Predicate<String> cues = QuickActions.cueOnAt(inPen, PEN);
-		assertTrue(cues.test(COW));
-		assertFalse(cues.test(PIG));
+		assertFalse(cues.test(COW));
+		assertTrue(cues.test(PIG));
 	}
 
 	@Test

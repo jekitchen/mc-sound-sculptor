@@ -518,8 +518,17 @@ class SoundStartDeciderTest {
 
 	@Test
 	void noCueWhenTheRuleHasCueOff() {
-		profile(List.of(villagers("g1").withMute(true)));
+		profile(List.of(villagers("g1").withMute(true).withCue(false)));
 		assertFalse(start(villagerAt(0)).cue());
+	}
+
+	@Test
+	void aMuteWithCueUnsetShowsACue() {
+		// Owner decision 2026-11-21: no entry setting Cue means cue on.
+		profile(List.of(villagers("g1").withMute(true)));
+		SoundStartResult r = start(villagerAt(0));
+		assertTrue(r.cue());
+		assertTrue(lastPlays.get(VILLAGER).cueShown());
 	}
 
 	@Test
@@ -609,6 +618,19 @@ class SoundStartDeciderTest {
 		profile(List.of(), cube("a", 0, 10, villagers("z1").withMute(true).withCue(true)));
 		assertTrue(start(villagerAt(0)).cue());
 		assertFalse(start(villagerAt(50)).cue(), "outside the zone the sound plays");
+	}
+
+	@Test
+	void aMuteWithCueUnsetCuesUntilASmallerZoneSetsCueOffOrAPlaceTurnsShowCuesOff() {
+		// Owner decision 2026-11-21: a muted sound shows a cue unless an entry sets Cue off; Show cues is the main switch.
+		Zone big = cube("big", 0, 40);
+		Zone quietPen = cube("pen", 0, 5, villagers("z1").withCue(false));
+		Zone noCues = cube("dark", 100, 5).withCues(PlaceCues.UNCHANGED.withShowCues(false));
+		profile(List.of(villagers("g1").withMute(true)), PlaceCues.EVERYWHERE_DEFAULTS, big, quietPen, noCues);
+		assertTrue(start(villagerAt(20)).cue(), "in the big zone, Everywhere's mute with Cue unset shows a cue");
+		assertTrue(start(villagerAt(60)).cue(), "outside every zone too");
+		assertFalse(start(villagerAt(0)).cue(), "the smaller zone's Cue off wins while you stand in it");
+		assertFalse(start(villagerAt(100)).cue(), "a place with Show cues off shows none");
 	}
 
 	// --- Trace ---
