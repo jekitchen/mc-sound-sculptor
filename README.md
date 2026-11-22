@@ -22,7 +22,7 @@ Sound Sculptor only changes how loud sounds are on the player's own computer. It
 
 **How it is checked.** These limits have automated tests that run on every build, for example that a 200% boost is silent at exactly the distance vanilla is. Before each release they are also tested in game, as described in the [PRD](docs/PRD.md) (section 11).
 
-**Status.** The first alpha, 0.1.0-alpha, has mute, volume (0 to 100%), Sound Sets, zones with outlines, and the Sounds list with its recently played filter and search. Boost, cues and repeat limits, listed above with their safeguards, follow in 1.0. See the [changelog](CHANGELOG.md).
+**Status.** Version 1.0.0, the first release, has every feature in the table above with its safeguards: mute, volume from 0 to 200% (boost asks once per world), repeat limits, cues for muted sounds, Sound Sets, zones with outlines, and the Sounds list with its recently played filter and search. See the [changelog](CHANGELOG.md).
 
 **Questions or concerns.** If you think any feature gives more information than vanilla, please [open an issue](https://github.com/jekitchen/mc-sound-sculptor/issues) and mention "fair play" in the title. We aim to look at these within 7 days.
 

@@ -64,13 +64,6 @@ class WorldKeyTest {
 	}
 
 	@Test
-	void realmKeys() {
-		assertEquals("realms:12345", WorldKey.realm(12345).key());
-		assertEquals(Kind.REALM, WorldKey.realm(12345).kind());
-		assertThrows(IllegalArgumentException.class, () -> WorldKey.realm(-1));
-	}
-
-	@Test
 	void singleplayerKeyUsesTheWorldId() {
 		WorldKey key = WorldKey.world("6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30");
 		assertEquals("world:6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30", key.key());
@@ -93,7 +86,6 @@ class WorldKeyTest {
 			"play.example.net|SERVER|play.example.net",
 			"[::1]:25570|SERVER|[::1]:25570",
 			"default|SERVER|default",
-			"realms:12345|REALM|12345",
 			"world:6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30|WORLD|6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30",
 			"folder:New World|FOLDER|New World",
 	})
@@ -105,7 +97,7 @@ class WorldKeyTest {
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = {"realms:", "realms:abc", "realms:-1", "world:", "world:not-an-id", "folder:", "folder: "})
+	@ValueSource(strings = {"world:", "world:not-an-id", "folder:", "folder: "})
 	void parseNeverThrowsAndReadsAMalformedKeyAsAServerKey(String key) {
 		WorldKey parsed = WorldKey.parse(key);
 		assertEquals(Kind.SERVER, parsed.kind());
@@ -114,7 +106,7 @@ class WorldKeyTest {
 
 	@Test
 	void everyKindRoundTrips() {
-		for (WorldKey key : new WorldKey[] {WorldKey.server("a.example.net:25570").orElseThrow(), WorldKey.realm(7),
+		for (WorldKey key : new WorldKey[] {WorldKey.server("a.example.net:25570").orElseThrow(),
 				WorldKey.world("6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30"), WorldKey.folder("Survival")}) {
 			assertEquals(key, WorldKey.parse(key.key()));
 		}
@@ -122,20 +114,21 @@ class WorldKeyTest {
 
 	@Test
 	void keysWithDifferentKindsNeverCollide() {
-		// A server cannot be called "realms:1" or "world:…": a colon followed by a non-port is not a valid address.
-		assertEquals(Optional.empty(), WorldKey.server("realms:1x"));
+		// A server cannot be called "world:…" or "folder:…": a colon followed by a non-port is not a valid address.
+		assertEquals(Optional.empty(), WorldKey.server("world:1x"));
 		assertEquals(Optional.empty(), WorldKey.server("world:6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30"));
 		assertEquals(Optional.empty(), WorldKey.server("folder:Survival"));
 	}
 
 	@Test
 	void aServerNamedLikeAKindPrefixKeepsATrailingDotSoItCannotBeMistakenForOne() {
-		// "realms." is the same host as "realms" in DNS, so the key still names the right server.
-		assertEquals("realms.:1", server("realms:1"));
+		// "world." is the same host as "world" in DNS, so the key still names the right server.
+		assertEquals("world.:1", server("world:1"));
 		assertEquals("world.:25570", server("WORLD:25570"));
 		assertEquals("folder.:2", server("folder.:2"));
-		assertEquals(Kind.SERVER, WorldKey.parse(server("realms:1")).kind());
-		assertEquals("realms", server("realms:25565"));
-		assertEquals(Kind.SERVER, WorldKey.parse("realms").kind());
+		assertEquals(Kind.SERVER, WorldKey.parse(server("world:1")).kind());
+		assertEquals(Kind.SERVER, WorldKey.parse(server("folder:2")).kind());
+		assertEquals("world", server("world:25565"));
+		assertEquals(Kind.SERVER, WorldKey.parse("world").kind());
 	}
 }

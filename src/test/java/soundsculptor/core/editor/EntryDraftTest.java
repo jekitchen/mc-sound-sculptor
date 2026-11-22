@@ -184,7 +184,7 @@ class EntryDraftTest {
 		assertNull(notMuting.cue(), "only muting brings the default");
 		EntryDraft without = EntryDraft.blank("r1", true);
 		without.setMute(true);
-		assertNull(without.cue(), "without useCueDefault (the alpha, before cues) nothing changes");
+		assertNull(without.cue(), "without useCueDefault (as before cues) nothing changes");
 	}
 
 	@Test

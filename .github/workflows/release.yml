@@ -1,4 +1,4 @@
-# When a version tag (v0.1.0-alpha, ...) is pushed, builds the mod against every supported Minecraft version, checks the
+# When a version tag (v1.0.0, ...) is pushed, builds the mod against every supported Minecraft version, checks the
 # builds are the same jar (one jar ships for all versions, docs/PORTING.md), and creates a DRAFT GitHub release with that
 # jar and the CHANGELOG.md entry. Nothing is published until a maintainer publishes the draft.
 # Uploading to Modrinth and CurseForge stays manual: see docs/RELEASING.md.

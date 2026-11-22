@@ -20,8 +20,7 @@ import net.minecraft.world.level.storage.LevelResource;
  * Picks the profile when the player joins a server or world, and drops it on leaving (PRD FR-11.1).
  *
  * <ul>
- *   <li>Multiplayer: the server address, lowercase, without the default port ({@code play.example.net}). A Realm's
- *   address is used the same way, because the Realm ID is not available to the client.</li>
+ *   <li>Multiplayer: the server address, lowercase, without the default port ({@code play.example.net}).</li>
  *   <li>Singleplayer: {@code world:<id>}, where the ID is kept in {@code soundsculptor_id.txt} in the world's save folder, so
  *   the profile survives folder renames and backups. If that file cannot be written (a read-only save), the folder
  *   name is used instead.</li>
