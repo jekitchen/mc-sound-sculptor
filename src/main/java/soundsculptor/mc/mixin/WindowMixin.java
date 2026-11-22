@@ -12,8 +12,12 @@ import soundsculptor.mc.PointerPresence;
 /**
  * Tells {@link PointerPresence} when the mouse pointer leaves or enters the game window, so the Sounds list is not held
  * after the pointer left it (PRD FR-1.3). Vanilla handles both events the same way and keeps no state for them.
+ *
+ * <p>Priority 500 (the default is 1000) applies it before other mods' injections at the same point, so it sees the
+ * events before one cancels them: Fabric's client game test framework cancels exactly these two, to keep the desktop
+ * pointer out of tests. Sound Sculptor only reads the event and never cancels it.
  */
-@Mixin(Window.class)
+@Mixin(value = Window.class, priority = 500)
 abstract class WindowMixin {
 	@Inject(method = "handleEvent(Lorg/lwjgl/sdl/SDL_Event;)V", at = @At("HEAD"))
 	private void soundsculptor$pointerPresence(SDL_Event event, CallbackInfo ci) {
