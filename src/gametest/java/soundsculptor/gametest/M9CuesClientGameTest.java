@@ -39,8 +39,9 @@ import net.minecraft.world.phys.Vec3;
  * screenshots are kept for the look (italics, the "(muted)" prefix and icon, the color, the place above the subtitles).
  *
  * <ul>
- *   <li>A muted explosion with Cue on shows "(muted) Explosion" with the arrow vanilla's subtitle overlay would show,
- *   worked out every frame; turning the player turns the arrow.</li>
+ *   <li>A fresh profile shows no cue: Everywhere's Show cues is off by default (2026-11-22). With it on, a muted
+ *   explosion with Cue on shows "(muted) Explosion" with the arrow vanilla's subtitle overlay would show, worked out
+ *   every frame; turning the player turns the arrow.</li>
  *   <li>Cue off on the entry (entry editor) shows nothing; Cue on again from the Sounds tab and from the trace.</li>
  *   <li>A muted villager out of vanilla range shows no cue; in range it does.</li>
  *   <li>Ten muted villagers at once: at most 5 lines, repeats merged with a count.</li>
@@ -115,15 +116,22 @@ public final class M9CuesClientGameTest implements FabricClientGameTest {
 				"the cue hotkey is in Sound Sculptor's Controls category");
 	}
 
-	/** FR-7 AC 1: a muted explosion with Cue on shows "(muted) Explosion" with vanilla's arrow. */
+	/** FR-7 AC 1: with Show cues on, a muted explosion with Cue on shows "(muted) Explosion" with vanilla's arrow. */
 	private static void checkExplosion(ClientGameTestContext context) {
 		// A quick Mute, as the Sounds tab's button makes it: Cue comes from "New mutes get Cue" (FR-7.6), on by default.
 		mute(context, EXPLODE);
 		check(context.computeOnClient(mc -> Boolean.TRUE.equals(QuickActions.quickEntry(ProfileManager.workspace(), EVERYWHERE, EXPLODE).cue())),
 				"a quick Mute starts with Cue on");
+		// Owner decision 2026-11-22: a fresh profile's Everywhere has Show cues off, so a muted sound shows no cue until a
+		// zone or Everywhere turns it on. The rest of this test turns it on in Everywhere, as the player does.
+		check(!context.computeOnClient(mc -> ProfileManager.profile().everywhereCues().showCues()), "a fresh profile has Show cues off");
+		check(!play(context, EXPLODE, 10, 0), "the explosion is muted");
+		check(shown(context).isEmpty(), "with Show cues off by default, a muted explosion with Cue on shows no cue");
+		everywhere(context, c -> c.withShowCues(true));
+		clear(context);
 		check(!play(context, EXPLODE, 10, 0), "the explosion is muted");
 		List<CueOverlay.Shown> lines = shown(context);
-		check(lines.size() == 1, "one cue line, was " + lines);
+		check(lines.size() == 1, "with Everywhere's Show cues on, one cue line, was " + lines);
 		CueOverlay.Shown line = lines.get(0);
 		check(line.text().equals("Explosion") && line.count() == 1, "the line reads (muted) Explosion, was " + line);
 		check(line.arrow() == CueDirection.RIGHT, "east of a player facing north is to the right, was " + line.arrow());

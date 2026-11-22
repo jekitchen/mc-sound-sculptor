@@ -1,7 +1,6 @@
 package soundsculptor.core.start;
 
 import static soundsculptor.core.Fixtures.quick;
-import static soundsculptor.core.Fixtures.precedence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,6 +40,11 @@ class SoundStartDeciderTest {
 	private static final String NETHER = "minecraft:the_nether";
 	private static final String VILLAGER = "minecraft:entity.villager.ambient";
 	private static final Limit TWO_PER_SECOND = new Limit(2, 1000, false);
+	/**
+	 * Everywhere's cue settings with Show cues turned on. It is off by default (owner decision 2026-11-22), so the tests
+	 * about cues turn it on, as the player does; {@link #aNewProfileShowsNoCueUntilAPlaceTurnsShowCuesOn} checks the default.
+	 */
+	private static final PlaceCues SHOWN = PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true);
 
 	private final LastPlays lastPlays = new LastPlays();
 	private final SoundStartDecider decider = new SoundStartDecider(lastPlays);
@@ -60,8 +64,9 @@ class SoundStartDeciderTest {
 		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(x, 0, 0), new Shape.Box(2 * half, 2 * half, 2 * half), quick(List.of(rules)));
 	}
 
+	/** Everywhere's Quick changes holding {@code global}, Everywhere's Show cues on ({@link #SHOWN}), and these zones. */
 	private void profile(List<SetEntry> global, Zone... zones) {
-		decider.setProfile(precedence(global, List.of(zones)));
+		profile(global, SHOWN, zones);
 	}
 
 	/**
@@ -551,8 +556,23 @@ class SoundStartDeciderTest {
 	}
 
 	@Test
+	void aNewProfileShowsNoCueUntilAPlaceTurnsShowCuesOn() {
+		// Owner decision 2026-11-22: Everywhere's Show cues is off by default; a zone, or the player in Everywhere, turns it on.
+		Zone room = cube("room", 0, 5).withCues(PlaceCues.UNCHANGED.withShowCues(true));
+		profile(List.of(villagers("g1").withMute(true)), PlaceCues.EVERYWHERE_DEFAULTS, room);
+		SoundStartResult outside = start(villagerAt(50));
+		assertEquals(PlayStatus.MUTED, outside.status(), "the sound is still muted");
+		assertFalse(outside.cue(), "with nothing set, no cue shows");
+		assertFalse(lastPlays.get(VILLAGER).cueShown());
+		assertTrue(start(villagerAt(0)).cue(), "a zone that turns Show cues on shows cues while you stand in it");
+		assertEquals(soundsculptor.core.sets.PlaceRef.zone("room"), decider.cues().source(CueField.SHOW_CUES));
+		profile(List.of(villagers("g1").withMute(true)), PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true), room);
+		assertTrue(start(villagerAt(50)).cue(), "Everywhere's Show cues on shows them everywhere else");
+	}
+
+	@Test
 	void masterSwitchOffHidesAllCues() {
-		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(false));
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), SHOWN.withShowCues(false));
 		assertFalse(start(villagerAt(0)).cue());
 	}
 
@@ -563,7 +583,7 @@ class SoundStartDeciderTest {
 		s.hasSubtitle = false;
 		assertFalse(start(s).cue());
 
-		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS.withWithoutSubtitles(true));
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), SHOWN.withWithoutSubtitles(true));
 		SoundStartResult r = start(s);
 		assertTrue(r.cue());
 		assertTrue(r.cueUsesSoundId());
@@ -573,7 +593,7 @@ class SoundStartDeciderTest {
 	void aZoneThatTurnsCuesOffHidesThemOnlyWhileYouStandInIt() {
 		// The mute is on Everywhere; the zone sets only "Show muted-sound cues: Off" (decided 2026-11-21).
 		Zone quiet = cube("q", 0, 10).withCues(PlaceCues.UNCHANGED.withShowCues(false));
-		profile(List.of(villagers("g1").withMute(true).withCue(true)), PlaceCues.EVERYWHERE_DEFAULTS, quiet);
+		profile(List.of(villagers("g1").withMute(true).withCue(true)), SHOWN, quiet);
 		assertFalse(start(villagerAt(0)).cue(), "inside the zone no cue shows");
 		assertEquals(soundsculptor.core.sets.PlaceRef.zone("q"), decider.cues().source(CueField.SHOW_CUES));
 		assertTrue(start(villagerAt(50)).cue(), "stepping out, Everywhere's On applies again");
@@ -626,7 +646,7 @@ class SoundStartDeciderTest {
 		Zone big = cube("big", 0, 40);
 		Zone quietPen = cube("pen", 0, 5, villagers("z1").withCue(false));
 		Zone noCues = cube("dark", 100, 5).withCues(PlaceCues.UNCHANGED.withShowCues(false));
-		profile(List.of(villagers("g1").withMute(true)), PlaceCues.EVERYWHERE_DEFAULTS, big, quietPen, noCues);
+		profile(List.of(villagers("g1").withMute(true)), SHOWN, big, quietPen, noCues);
 		assertTrue(start(villagerAt(20)).cue(), "in the big zone, Everywhere's mute with Cue unset shows a cue");
 		assertTrue(start(villagerAt(60)).cue(), "outside every zone too");
 		assertFalse(start(villagerAt(0)).cue(), "the smaller zone's Cue off wins while you stand in it");

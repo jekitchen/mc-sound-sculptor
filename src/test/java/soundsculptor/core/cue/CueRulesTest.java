@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 /** PRD FR-7.1, FR-7.2 and FR-7.7: when a muted sound gets a cue, and what it says. */
 class CueRulesTest {
 	private static final CueSettings DEFAULTS = CueSettings.DEFAULT;
+	/** The defaults with Show cues turned on, as a zone or the player in Everywhere does (off by default, 2026-11-22). */
+	private static final CueSettings SHOWN = new CueSettings(true, false, true);
 	private static final String ID = "minecraft:entity.generic.explode";
 
 	/** A sound Sound Sculptor muted, whose deciding rule has Cue on, within vanilla subtitle range. */
@@ -17,29 +19,29 @@ class CueRulesTest {
 
 	@Test
 	void mutedSoundWithCueOnShowsItsSubtitle() {
-		assertEquals("Explosion", cue(0, true, true, true, "Explosion", DEFAULTS));
+		assertEquals("Explosion", cue(0, true, true, true, "Explosion", SHOWN));
 	}
 
 	@Test
 	void soundThatStillPlaysGetsNoCue() {
-		assertNull(cue(0.4F, true, true, true, "Explosion", DEFAULTS));
+		assertNull(cue(0.4F, true, true, true, "Explosion", SHOWN));
 	}
 
 	@Test
 	void ruleWithCueOffGetsNoCue() {
-		assertNull(cue(0, true, false, true, "Explosion", DEFAULTS));
+		assertNull(cue(0, true, false, true, "Explosion", SHOWN));
 	}
 
 	@Test
 	void silenceNotCausedBySoundSculptorGetsNoCue() {
 		// e.g. the player's own category slider at 0%: vanilla's business, not a muted-sound cue.
-		assertNull(cue(0, false, true, true, "Explosion", DEFAULTS));
+		assertNull(cue(0, false, true, true, "Explosion", SHOWN));
 	}
 
 	@Test
 	void soundOutOfVanillaSubtitleRangeGetsNoCue() {
 		// Fair play: a cue shows only what the vanilla subtitle would have shown.
-		assertNull(cue(0, true, true, false, "Explosion", DEFAULTS));
+		assertNull(cue(0, true, true, false, "Explosion", SHOWN));
 	}
 
 	@Test
@@ -50,7 +52,7 @@ class CueRulesTest {
 
 	@Test
 	void soundWithoutSubtitleShowsNothingByDefault() {
-		assertNull(cue(0, true, true, true, null, DEFAULTS));
+		assertNull(cue(0, true, true, true, null, SHOWN));
 	}
 
 	@Test
@@ -62,13 +64,20 @@ class CueRulesTest {
 
 	@Test
 	void defaultsMatchThePrd() {
-		assertEquals(true, DEFAULTS.showCues(), "FR-7.7: master switch on by default");
+		assertEquals(false, DEFAULTS.showCues(), "FR-7.7: master switch off by default in Everywhere (2026-11-22)");
 		assertEquals(false, DEFAULTS.cueSoundsWithoutSubtitles(), "FR-7.2: off by default");
 		assertEquals(true, DEFAULTS.newMuteRulesCueOn(), "FR-7.6: new mute rules have Cue on");
 	}
+
+	@Test
+	void theDefaultsShowNoCueUntilShowCuesIsTurnedOn() {
+		assertNull(cue(0, true, true, true, "Explosion", DEFAULTS));
+		assertEquals("Explosion", cue(0, true, true, true, "Explosion", SHOWN));
+	}
+
 	@Test
 	void shouldCueAgreesWithCueText() {
-		CueSettings[] all = {DEFAULTS, new CueSettings(true, true, true), new CueSettings(false, true, true)};
+		CueSettings[] all = {DEFAULTS, SHOWN, new CueSettings(true, true, true), new CueSettings(false, true, true)};
 		for (CueSettings settings : all) {
 			for (int bits = 0; bits < 32; bits++) {
 				float volume = (bits & 1) == 0 ? 0 : 40;

@@ -876,7 +876,8 @@ public final class AccessibilityClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> mc.gui.setScreen(null));
 		for (int scale : new int[] {PlaceCues.MIN_TEXT_SCALE, PlaceCues.DEFAULT_TEXT_SCALE, PlaceCues.MAX_TEXT_SCALE}) {
 			context.runOnClient(mc -> {
-				ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withTextScale(scale)));
+				// Show cues on in Everywhere: it is off by default (2026-11-22).
+				ProfileManager.update(p -> p.withEverywhereCues(p.everywhereCues().withTextScale(scale).withShowCues(true)));
 				CueOverlay.clear();
 				Vec3 at = mc.getSoundManager().getListenerTransform().position();
 				mc.getSoundManager().play(new SimpleSoundInstance(Identifier.parse(EXPLODE), SoundSource.NEUTRAL, 1.0F, 1.0F,

@@ -399,8 +399,10 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 		// The cue box (FR-5 AC 6): a muted villager with Cue on stops at the same distance.
 		context.runOnClient(mc -> {
 			ProfileManager.setBypass(false);
+			// With Everywhere's Show cues on: it is off by default (2026-11-22).
 			ProfileManager.update(p -> QuickActions.apply(new Workspace(p, ProfileManager.library()), EVERYWHERE, VILLAGER,
-					new soundsculptor.core.trace.EntryEdit.MuteWithCue(true)).after().profile());
+					new soundsculptor.core.trace.EntryEdit.MuteWithCue(true)).after().profile()
+					.withEverywhereCues(p.everywhereCues().withShowCues(true)));
 			mc.options.showSubtitles().set(false);
 		});
 		context.runOnClient(mc -> CueOverlay.clear());
@@ -503,8 +505,10 @@ public final class M10BoostClientGameTest implements FabricClientGameTest {
 		Zone a = new Zone("m10-p8", "A", true, key, OVERWORLD, new Point(player.x, player.y, player.z), new Shape.Box(10, 10, 10),
 				PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("c", VILLAGERS).withCue(true))));
 		context.runOnClient(mc -> {
+			// Show cues on in Everywhere (off by default, 2026-11-22), so "no cue" is because the sound is not muted.
 			ProfileManager.update(p -> Profile.empty(p.name()).withBoostConfirmed(true)
 					.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("v", VILLAGERS).withVolume(150))))
+					.withEverywhereCues(soundsculptor.core.cue.PlaceCues.EVERYWHERE_DEFAULTS.withShowCues(true))
 					.withZones(List.of(a)));
 			CueOverlay.clear();
 		});

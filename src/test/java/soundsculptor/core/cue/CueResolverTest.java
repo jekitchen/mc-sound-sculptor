@@ -27,6 +27,8 @@ class CueResolverTest {
 	private static final String WORLD = "play.example.net";
 	private static final String OVERWORLD = "minecraft:overworld";
 	private static final PlaceCues EVERYWHERE = PlaceCues.EVERYWHERE_DEFAULTS;
+	/** Everywhere with Show cues turned on (it is off by default, 2026-11-22), so a zone that turns it off is seen. */
+	private static final PlaceCues SHOWN = EVERYWHERE.withShowCues(true);
 
 	private static Zone box(String id, double size, PlaceCues cues) {
 		return new Zone(id, "Zone " + id, true, WORLD, OVERWORLD, new Point(0, 0, 0), new Shape.Box(size, size, size),
@@ -40,13 +42,13 @@ class CueResolverTest {
 		for (CueField field : CueField.values()) {
 			assertEquals(PlaceRef.EVERYWHERE, r.source(field), field.name());
 		}
-		assertEquals(new CueSettings(true, false, true, 0xA9BCD0, 100, 0, 0), r.settings(), "today's defaults");
+		assertEquals(new CueSettings(false, false, true, 0xA9BCD0, 100, 0, 0), r.settings(), "today's defaults");
 	}
 
 	@Test
 	void aZoneOverridesOnlyWhatItSets() {
 		Zone base = box("base", 20, PlaceCues.UNCHANGED.withShowCues(false));
-		CueResolution r = CueResolver.resolve(List.of(base), EVERYWHERE.withColor(0xF0E442));
+		CueResolution r = CueResolver.resolve(List.of(base), SHOWN.withColor(0xF0E442));
 		assertEquals(false, r.settings().showCues());
 		assertEquals(PlaceRef.zone("base"), r.source(CueField.SHOW_CUES));
 		assertEquals(0xF0E442, r.settings().color(), "the color is Unchanged in the zone: Everywhere's");
@@ -57,7 +59,7 @@ class CueResolverTest {
 	void theSmallerOfTwoNestedZonesWins() {
 		Zone room = box("room", 4, PlaceCues.UNCHANGED.withTextScale(50));
 		Zone base = box("base", 40, PlaceCues.UNCHANGED.withTextScale(150).withShowCues(false));
-		CueResolution r = CueResolver.resolve(List.of(room, base), EVERYWHERE);
+		CueResolution r = CueResolver.resolve(List.of(room, base), SHOWN);
 		assertEquals(50, r.settings().textScale());
 		assertEquals(PlaceRef.zone("room"), r.source(CueField.TEXT_SCALE));
 		assertEquals(false, r.settings().showCues(), "Unchanged in the room passes on to the base");
@@ -92,7 +94,7 @@ class CueResolverTest {
 		Zone room = box("room", 4, PlaceCues.UNCHANGED.withShowCues(true));
 		Zone base = box("base", 40, PlaceCues.UNCHANGED.withShowCues(false));
 		// Listed base first: the order comes from the sizes, not the list.
-		Precedence p = new Precedence(PlaceSets.EMPTY, EVERYWHERE, List.of(base, room), SetLibrary.EMPTY);
+		Precedence p = new Precedence(PlaceSets.EMPTY, SHOWN, List.of(base, room), SetLibrary.EMPTY);
 		WhereYouAre inRoom = Fixtures.at(p, WORLD, OVERWORLD, 0, 0, 0);
 		assertEquals(true, CueResolver.resolve(p, inRoom).settings().showCues());
 		WhereYouAre inBaseOnly = Fixtures.at(p, WORLD, OVERWORLD, 10, 0, 0);
@@ -109,7 +111,7 @@ class CueResolverTest {
 		Zone base = box("base", 40, PlaceCues.UNCHANGED.withColor(0xE69F00));
 		Zone far = new Zone("far", "Far", true, WORLD, OVERWORLD, new Point(500, 0, 0), new Shape.Box(100, 100, 100),
 				PlaceSets.EMPTY, PlaceCues.UNCHANGED.withShowCues(false));
-		Profile profile = Profile.empty("p").withZones(List.of(room, base, far)).withEverywhereCues(EVERYWHERE.withTextScale(70));
+		Profile profile = Profile.empty("p").withZones(List.of(room, base, far)).withEverywhereCues(SHOWN.withTextScale(70));
 		CueResolution forRoom = CueResolver.inheritedBy(profile, room);
 		assertEquals(0xE69F00, forRoom.settings().color());
 		assertEquals(PlaceRef.zone("base"), forRoom.source(CueField.COLOR));

@@ -19,9 +19,12 @@ Work toward 1.0, after the alpha. Not released yet.
 - **Cue setting on entries:** the entry editor has Cue (Unchanged, On, Off) under Mute. On the Sounds tab, a row's
   Level… button is now **Level and cue…**, and its pop-up has a Cue toggle. Every entry line in "Why does it sound like
   this?" has a Cue button. A new mute gets Cue on, unless New mutes get Cue is off where you stand.
-- **A muted sound shows a cue unless an entry turns it off:** a mute whose entries leave Cue Unchanged, such as one made
-  before cues existed, now shows a cue (it used to show none). Set Cue Off on an entry to hide it, or turn Show cues
-  off for a place.
+- **A muted sound shows a cue unless an entry turns it off:** where Show cues is on, a mute whose entries leave Cue
+  Unchanged, such as one made before cues existed, now shows a cue (it used to show none). Set Cue Off on an entry to
+  hide it, or turn Show cues off for a place.
+- **Cues are off until you turn them on:** Everywhere's Show muted-sound cues starts Off, so cues show only where you
+  turn them on: in Everywhere's Cues… (or with the cues hotkey), or in a zone's Cues…. Reset turns it off again, and
+  the old app-wide Show cues from development builds is not carried over.
 - **Cue settings per place:** Everywhere and every zone have the cue settings: Show muted-sound cues, Cue sounds without
   subtitles (shows the sound's ID instead), New mutes get Cue, the cue text color (four named colors; the default is
   light blue-gray), the text size (50 to 200%) and the cue box position (left/right and up/down, with a button to put
