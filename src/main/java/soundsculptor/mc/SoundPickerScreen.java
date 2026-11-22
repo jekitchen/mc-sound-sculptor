@@ -92,7 +92,8 @@ public final class SoundPickerScreen extends SculptScreen {
 
 	@Override
 	protected void buildTab(int index, Body body) {
-		panel = SoundsPanel.picker(this, picker, this::updateAddButton, this::add);
+		// A rebuild (a resize) hands the old panel over, so a held list stays held (FR-1.3).
+		panel = SoundsPanel.picker(this, picker, this::updateAddButton, this::add, panel);
 		panel.build(body);
 	}
 

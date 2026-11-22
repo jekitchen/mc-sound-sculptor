@@ -72,7 +72,9 @@ import soundsculptor.mc.ui.Tooltips;
  * <p>While the mouse pointer is over the list it is held ({@link HoldOrder}, FR-1.3), so a row does not move away as
  * the player aims at it: no row moves, joins or leaves, the rows' values still update, and the count says "Held" and
  * how many sounds wait. The player's own search, filter, sort and Apply to changes are not held, and a row action
- * rebuilds rows in their place. Leaving the list catches up at the next refresh.
+ * rebuilds rows in their place. Leaving the list, or the game window, catches up at the next refresh. A screen rebuild
+ * (a resize, coming back from Edit) keeps the hold if the pointer is still over the list: the new panel starts from
+ * the old one's rows and scroll position.
  *
  * <p>The filter, search text, sort, pause and Apply to choice are remembered while the game runs, apart for the tab and
  * the picker, so the picker never changes the tab's filter: the filter starts on the first time each opens and then
@@ -172,6 +174,10 @@ public final class SoundsPanel {
 	private int shownPickVersion;
 	/** Whether the last refresh held the list (the pointer was over it). */
 	private boolean shownHeld;
+	/** The panel this one replaces on the same screen, until {@link #build} takes over its pointer state and hold. */
+	private SoundsPanel replaced;
+	/** While the first refresh after a rebuild runs: the rows the old panel held, in its order; else {@code null}. */
+	private List<BrowserRow> heldBefore;
 	/**
 	 * Whether the mouse has moved since the panel was built or the last key press. Vanilla puts the cursor in the middle
 	 * of the window when a screen opens, which is usually over the list: a cursor that only rests there, or that a
@@ -198,17 +204,24 @@ public final class SoundsPanel {
 	private ApplyTarget levelTarget;
 	private Workspace levelBefore;
 
-	/** The Sounds tab. */
-	public SoundsPanel(SculptScreen host) {
-		this(host, TAB_STATE, null, null, null);
+	/**
+	 * The Sounds tab.
+	 *
+	 * @param previous the panel this one replaces when the same screen rebuilds its Sounds tab (a resize, coming back
+	 *                 from Edit), so a held list stays held; {@code null} when the tab was not shown just before
+	 */
+	public SoundsPanel(SculptScreen host, SoundsPanel previous) {
+		this(host, TAB_STATE, null, null, null, previous);
 	}
 
-	private SoundsPanel(SculptScreen host, Remembered state, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks) {
+	private SoundsPanel(SculptScreen host, Remembered state, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks,
+			SoundsPanel previous) {
 		this.host = host;
 		this.state = state;
 		this.picker = picker;
 		this.picksChanged = picksChanged;
 		this.addPicks = addPicks;
+		this.replaced = previous != null && previous.host == host && previous.state == state ? previous : null;
 	}
 
 	/**
@@ -219,9 +232,11 @@ public final class SoundsPanel {
 	 * @param picksChanged runs after every tick or untick
 	 * @param addPicks     adds every pick to the set and closes the picker, as its Add does; returns false if nothing was
 	 *                     added (the set is full), when the picker stays open
+	 * @param previous     the picker's panel before the screen rebuilt (a resize), or {@code null}
 	 */
-	public static SoundsPanel picker(SculptScreen host, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks) {
-		return new SoundsPanel(host, PICKER_STATE, picker, picksChanged, addPicks);
+	public static SoundsPanel picker(SculptScreen host, PickerModel picker, Runnable picksChanged, BooleanSupplier addPicks,
+			SoundsPanel previous) {
+		return new SoundsPanel(host, PICKER_STATE, picker, picksChanged, addPicks, previous);
 	}
 
 	/**
@@ -261,7 +276,16 @@ public final class SoundsPanel {
 	// ---- Building ----
 
 	public void build(SculptScreen.Body body) {
-		restPointer();
+		SoundsPanel before = replaced;
+		replaced = null;
+		if (before != null && before.pointerMoved) {
+			// The same mouse on the same screen: a pointer that had moved still counts as moved.
+			pointerMoved = true;
+			seenKeyPresses = before.seenKeyPresses;
+		} else {
+			// A resting pointer rests where it is now: a resize can move it in the window without the player moving it.
+			restPointer();
+		}
 		Font font = Minecraft.getInstance().font;
 		recentToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(Component.translatable("soundsculptor.sounds.recent_only")),
 				Component.translatable("soundsculptor.sounds.recent_only"), state.recentOnly, this::setRecentOnly),
@@ -292,7 +316,48 @@ public final class SoundsPanel {
 
 		entries = KnownSounds.entries();
 		query = SearchQuery.parse(state.searchText);
-		refresh();
+		boolean keepHold = before != null && keepsHold(before);
+		if (keepHold) {
+			heldBefore = before.shownSources();
+			// What the old rows were built from: the same search, filter and sort (they are remembered), and its Apply to.
+			shownQuery = query;
+			shownRecentOnly = before.shownRecentOnly;
+			shownSort = before.shownSort;
+			shownTarget = before.shownTarget;
+		}
+		try {
+			refresh();
+		} finally {
+			heldBefore = null;
+		}
+		if (keepHold && shownHeld) {
+			list.setScrollAmount(before.list.scrollAmount());
+		}
+	}
+
+	/**
+	 * Whether this new panel keeps the hold of {@code before}, the one it replaces: that list was held, no key was
+	 * pressed since, and the pointer, still in the window, is over the new list. The new list was not drawn yet, so it
+	 * cannot tell whether it is hovered: the pointer's position decides.
+	 */
+	private boolean keepsHold(SoundsPanel before) {
+		if (before.list == null || !before.isHeld() || host.keyPresses() != before.seenKeyPresses || PointerPresence.outside()) {
+			return false;
+		}
+		Minecraft mc = Minecraft.getInstance();
+		return list.isMouseOver(mc.mouseHandler.getScaledXPos(mc.getWindow()), mc.mouseHandler.getScaledYPos(mc.getWindow()));
+	}
+
+	/** What each shown row was built from, in their order. */
+	private List<BrowserRow> shownSources() {
+		List<BrowserRow> sources = new ArrayList<>(list.children().size());
+		for (SculptList.Row row : list.children()) {
+			CachedRow cached = row.key() instanceof String id ? rowCache.get(id) : null;
+			if (cached != null) {
+				sources.add(cached.latest());
+			}
+		}
+		return sources;
 	}
 
 	/** Apply to, Pause and Sort (the Sounds tab only). */
@@ -404,7 +469,7 @@ public final class SoundsPanel {
 			Minecraft mc = Minecraft.getInstance();
 			pointerMoved = mc.mouseHandler.xpos() != restX || mc.mouseHandler.ypos() != restY;
 		}
-		return pointerMoved && list.isHovered();
+		return pointerMoved && list.isHovered() && !PointerPresence.outside();
 	}
 
 	private void restPointer() {
@@ -495,7 +560,8 @@ public final class SoundsPanel {
 		// Held while the pointer is over a list with rows, unless the player changed what it lists: their own search,
 		// filter, sort or Apply to shows at once.
 		boolean ownChange = query != shownQuery || state.recentOnly != shownRecentOnly || state.sort != shownSort || !target.equals(shownTarget);
-		boolean hold = !ownChange && pointing() && !list.children().isEmpty();
+		// The first refresh after a rebuild that keeps the hold starts from the old panel's rows (see build).
+		boolean hold = !ownChange && (heldBefore != null ? !heldBefore.isEmpty() : pointing() && !list.children().isEmpty());
 		// workspace() is a new record each call: compare its parts, which change identity only when changed.
 		// A held list may keep rows that left the fresh list; if the cache is cleared they are rebuilt from their old entry.
 		Map<String, CachedRow> previous = rowCache;
@@ -537,17 +603,36 @@ public final class SoundsPanel {
 		shownAnyRecent = anyRecent;
 		shownHeld = hold;
 		if (hold) {
-			// Rows kept on screen that left the fresh list (their sound left the log) are brought up to date too, from the
-			// data they were built with: a row the player acts on must show its new state (Unmute, a tick).
-			for (SculptList.Row shown : list.children()) {
-				if (shown.key() instanceof String id && !foundIds.contains(id)) {
-					CachedRow old = rowCache.containsKey(id) ? rowCache.get(id) : previous.get(id);
-					if (old != null) {
-						rows.add(cachedRow(old.source(), log).row());
+			List<SculptList.Row> shownList = list.children();
+			if (heldBefore != null) {
+				// After a rebuild: the old panel's rows, in its order, each this panel's own copy. One that left the fresh
+				// list is built from what the old row was built from.
+				Map<Object, SculptList.Row> freshRows = new HashMap<>(rows.size() * 2);
+				for (SculptList.Row row : rows) {
+					freshRows.put(row.key(), row);
+				}
+				shownList = new ArrayList<>(heldBefore.size());
+				for (BrowserRow source : heldBefore) {
+					SculptList.Row row = freshRows.get(source.soundId());
+					if (row == null) {
+						row = cachedRow(source, log).row();
+						rows.add(row);
+					}
+					shownList.add(row);
+				}
+			} else {
+				// Rows kept on screen that left the fresh list (their sound left the log) are brought up to date too, from
+				// the data they were built with: a row the player acts on must show its new state (Unmute, a tick).
+				for (SculptList.Row shown : list.children()) {
+					if (shown.key() instanceof String id && !foundIds.contains(id)) {
+						CachedRow old = rowCache.containsKey(id) ? rowCache.get(id) : previous.get(id);
+						if (old != null) {
+							rows.add(cachedRow(old.latest(), log).row());
+						}
 					}
 				}
 			}
-			HoldOrder.Held<SculptList.Row> held = HoldOrder.hold(list.children(), rows, SculptList.Row::key);
+			HoldOrder.Held<SculptList.Row> held = HoldOrder.hold(shownList, rows, SculptList.Row::key);
 			rows = held.rows();
 			waiting = held.waiting();
 			// A kept row rebuilt with other columns (a first play, a new zone) keeps the height it had, so the row under
@@ -617,6 +702,10 @@ public final class SoundsPanel {
 
 	/** A built row, what it was built from, and its recent values ({@code null} for a row without recent data). */
 	private record CachedRow(Object inputs, SculptList.Row row, LiveRecent live, BrowserRow source) {
+		/** What the row shows now: its source with the latest recent values, which refreshes update in place. */
+		BrowserRow latest() {
+			return live == null || live.row == source.recent() ? source : new BrowserRow(source.soundId(), source.subtitle(), live.row);
+		}
 	}
 
 	/** The cached row for a browser row, rebuilt if what it is built from changed. */
@@ -823,10 +912,11 @@ public final class SoundsPanel {
 			statuses.add(IN_SET);
 			seen.add(IN_SET);
 		}
-		// Every label a recent row can show: it leaves the list RecentSounds.WINDOW_MS after its last play.
+		// Every label a recent row can show. A row leaves the list RecentSounds.WINDOW_MS after its last play, but a held
+		// list keeps it on screen, where its time goes on counting up to ">1h ago".
 		List<Component> plays = new ArrayList<>();
-		for (long millis = 0; millis < RecentSounds.WINDOW_MS; millis += 60_000) {
-			plays.add(Component.translatable("soundsculptor.sounds.plays", PLAYS_MEASURED, agoText(TimeAgo.of(millis))));
+		for (long minutes = 0; minutes <= 60; minutes++) {
+			plays.add(Component.translatable("soundsculptor.sounds.plays", PLAYS_MEASURED, agoText(TimeAgo.of(minutes * 60_000))));
 		}
 		widths = new Widths(widthFor(categories), widthFor(statuses), widthFor(seen), widthFor(plays),
 				widthFor(bands), SculptButton.widthFor(Component.translatable("soundsculptor.picker.like_this")));

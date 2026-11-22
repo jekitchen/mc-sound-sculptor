@@ -54,6 +54,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 
 	public SculptToggle bypassToggle;
 	private SoundsPanel soundsPanel;
+	/** The tab the last build showed, so a rebuild of the Sounds tab can hand its panel over; -1 before the first. */
+	private int builtTab = -1;
 	private SetLibraryPanel setsPanel;
 	private ZoneListPanel zonesPanel;
 	private ProfileListPanel profilesPanel;
@@ -119,6 +121,8 @@ public final class SoundSculptorScreen extends SculptScreen {
 
 	@Override
 	protected void buildTab(int index, Body body) {
+		int shownBefore = builtTab;
+		builtTab = index;
 		diagnosticsList = null;
 		if (index != TAB_SETTINGS && index != TAB_PROFILES && !ProfileManager.isLoaded()) {
 			// Opened outside a world (e.g. from Mod Menu on the title screen): sounds, Sound Sets and zones belong to a
@@ -129,7 +133,9 @@ public final class SoundSculptorScreen extends SculptScreen {
 		if (index == TAB_SOUNDS) {
 			// Back from the boost question (FR-5.4) the Level pop-up is put back: keep the panel it belongs to.
 			if (soundsPanel == null || !restoringPopup()) {
-				soundsPanel = new SoundsPanel(this);
+				// A rebuild of the tab that was shown (a resize, back from Edit) hands the old panel over, so a held list
+				// stays held (FR-1.3).
+				soundsPanel = new SoundsPanel(this, shownBefore == TAB_SOUNDS ? soundsPanel : null);
 			}
 			soundsPanel.build(body);
 		} else if (index == TAB_SETS) {

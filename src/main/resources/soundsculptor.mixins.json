@@ -6,10 +6,12 @@
 		"ChannelMixin",
 		"HudAccessor",
 		"MinecraftMixin",
+		"MouseHandlerMixin",
 		"SoundEngineAccessor",
 		"SoundEngineMixin",
 		"SoundManagerAccessor",
-		"SubtitleOverlayAccessor"
+		"SubtitleOverlayAccessor",
+		"WindowMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

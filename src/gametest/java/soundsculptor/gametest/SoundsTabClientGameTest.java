@@ -14,6 +14,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
+import org.lwjgl.sdl.SDLEvents;
+import org.lwjgl.sdl.SDLVideo;
+import org.lwjgl.sdl.SDL_Event;
 import soundsculptor.core.profile.Profile;
 import soundsculptor.core.quick.ApplyTarget;
 import soundsculptor.core.quick.QuickActions;
@@ -26,6 +29,7 @@ import soundsculptor.core.zones.Point;
 import soundsculptor.core.zones.Shape;
 import soundsculptor.core.zones.Zone;
 import soundsculptor.mc.AddToSetScreen;
+import soundsculptor.mc.PointerPresence;
 import soundsculptor.mc.ProfileManager;
 import soundsculptor.mc.RecentLog;
 import soundsculptor.mc.SetNameScreen;
@@ -76,6 +80,8 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			idleRefreshRebuildsNothing(context);
 			holdWhilePointing(context);
 			holdNeedsTheMouse(context);
+			holdKeptThroughRebuild(context);
+			holdEndsOutsideTheWindow(context);
 		}
 		applyToForgottenInAnotherWorld(context);
 	}
@@ -280,8 +286,10 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			play(context, ZOMBIE, 3.0);
 			play(context, VILLAGER, 3.0);
 			// Vanilla moves the cursor before a screen is built, so a screen built with the cursor already over the list is
-			// what opening looks like: here the tab is rebuilt with the cursor resting on it.
+			// what opening looks like: here the tab is built anew, from another tab, with the cursor resting on it. (A
+			// rebuild of the tab that was shown keeps the pointer's state: holdKeptThroughRebuild.)
 			double[] at = listCentre(context);
+			context.runOnClient(mc -> main(mc).selectTab(SoundSculptorScreen.TAB_SETS));
 			context.getInput().setCursorPos(at[0], at[1]);
 			context.waitTicks(2);
 			context.runOnClient(mc -> main(mc).selectTab(SoundSculptorScreen.TAB_SOUNDS));
@@ -300,6 +308,106 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			pointAway(context);
 			cleanUp(context);
 		}
+	}
+
+	/**
+	 * A held list stays held through a rebuild of the screen while the pointer is still over it (#117), here a resize:
+	 * the rows keep their order and new sounds still wait. A key press before the rebuild ends it. Coming back from
+	 * Edit hands the panel over the same way, but is not tested: a screen change reads the system cursor again, which
+	 * in a test is not where the test put it.
+	 */
+	private static void holdKeptThroughRebuild(ClientGameTestContext context) {
+		open(context);
+		try {
+			play(context, ZOMBIE, 3.0);
+			play(context, VILLAGER, 3.0);
+			pointAtList(context);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held while the pointer is over the list");
+			play(context, ZOMBIE, 3.0);
+			play(context, COW, 3.0);
+			List<String> held = keys(context);
+			check(before(context, VILLAGER, ZOMBIE) && rowTexts(context, COW) == null, "held: the zombie stays below, the cow waits, was " + held);
+
+			// A resize rebuilds the screen: the new list starts held, in the same order.
+			context.runOnClient(mc -> mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight()));
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "still held right after a resize");
+			check(keys(context).equals(held), "a resize keeps the held order, was " + keys(context) + ", before " + held);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "still held after the resize settles");
+			check(keys(context).equals(held), "the held order lasts after the resize, was " + keys(context) + ", before " + held);
+			check(context.computeOnClient(mc -> sounds(mc).waiting()) >= 1, "the cow still waits");
+
+			// A key press first: the player switched to the keyboard, so the rebuilt list is not held.
+			context.runOnClient(mc -> mc.gui.screen().keyPressed(KeyEventCompat.of(Keys.DOWN, 0)));
+			context.runOnClient(mc -> mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight()));
+			context.waitTicks(SETTLE);
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "after a key press a rebuild does not keep the hold");
+			check(before(context, COW, VILLAGER) && before(context, ZOMBIE, VILLAGER), "not held: the list catches up, was " + keys(context));
+
+			// A held row whose sound left the log is rebuilt with its latest values, not those it was first built with.
+			play(context, ZOMBIE, 3.0);
+			double[] at = listCentre(context);
+			context.getInput().setCursorPos(at[0] + 3, at[1]);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held again once the mouse moves");
+			check(rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×3")), "the zombie row shows its third play, was "
+					+ rowTexts(context, ZOMBIE));
+			context.runOnClient(mc -> RecentLog.get().sounds().clear());
+			context.waitTicks(SETTLE);
+			context.runOnClient(mc -> mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight()));
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "still held after a resize with the log empty");
+			check(rowTexts(context, ZOMBIE) != null && rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×3")),
+					"a kept row keeps its latest play count through a rebuild, was " + rowTexts(context, ZOMBIE));
+		} finally {
+			pointAway(context);
+			cleanUp(context);
+		}
+	}
+
+	/**
+	 * The window gets no pointer moves once the pointer leaves it, so the list it last pointed at would stay hovered: the
+	 * hold ends when the pointer leaves the window (#117), and starts again when it comes back over the list.
+	 */
+	private static void holdEndsOutsideTheWindow(ClientGameTestContext context) {
+		open(context);
+		try {
+			play(context, ZOMBIE, 3.0);
+			play(context, VILLAGER, 3.0);
+			pointAtList(context);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held while the pointer is over the list");
+			play(context, ZOMBIE, 3.0);
+			check(before(context, VILLAGER, ZOMBIE), "held: the zombie stays below the villager, was " + keys(context));
+
+			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_LEAVE);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> PointerPresence.outside()), "the window's leave event was seen");
+			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held once the pointer left the window");
+			check(before(context, ZOMBIE, VILLAGER), "leaving the window catches up, was " + keys(context));
+
+			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER);
+			context.waitTicks(SETTLE);
+			check(!context.computeOnClient(mc -> PointerPresence.outside()), "the window's enter event was seen");
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held again with the pointer back over the list");
+		} finally {
+			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER);
+			pointAway(context);
+			cleanUp(context);
+		}
+	}
+
+	/** Sends the game window an SDL window event, as the system does when the pointer leaves or enters it. */
+	private static void windowEvent(ClientGameTestContext context, int type) {
+		context.runOnClient(mc -> {
+			try (SDL_Event event = SDL_Event.calloc()) {
+				event.type(type);
+				event.window().windowID(SDLVideo.SDL_GetWindowID(mc.getWindow().handle()));
+				check(SDLEvents.SDL_PushEvent(event), "SDL took the window event");
+			}
+		});
+		context.waitTicks(2);
 	}
 
 	private static double[] listCentre(ClientGameTestContext context) {
