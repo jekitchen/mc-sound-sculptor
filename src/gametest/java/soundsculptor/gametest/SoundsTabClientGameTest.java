@@ -368,7 +368,8 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 
 	/**
 	 * The window gets no pointer moves once the pointer leaves it, so the list it last pointed at would stay hovered: the
-	 * hold ends when the pointer leaves the window (#117), and starts again when it comes back over the list.
+	 * hold ends when the pointer leaves the window (#117), and starts again when it comes back over the list. The events
+	 * go through {@code Window.handleEvent}, where vanilla's event loop sends them.
 	 */
 	private static void holdEndsOutsideTheWindow(ClientGameTestContext context) {
 		open(context);
@@ -381,33 +382,42 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			play(context, ZOMBIE, 3.0);
 			check(before(context, VILLAGER, ZOMBIE), "held: the zombie stays below the villager, was " + keys(context));
 
-			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_LEAVE);
-			context.waitTicks(SETTLE);
-			check(context.computeOnClient(mc -> PointerPresence.outside()), "the window's leave event was seen");
-			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "not held once the pointer left the window");
-			check(before(context, ZOMBIE, VILLAGER), "leaving the window catches up, was " + keys(context));
+			// Each event is handed to the window and the list refreshed in one render-thread task: on CI the system pointer
+			// can be over the window, and the system may send enter or move events of its own at any frame.
+			List<String> afterLeave = context.computeOnClient(mc -> {
+				windowEvent(mc, SDLEvents.SDL_EVENT_WINDOW_MOUSE_LEAVE);
+				check(PointerPresence.outside(), "the window's leave event was seen");
+				sounds(mc).refresh();
+				check(!sounds(mc).isHeld(), "not held once the pointer left the window");
+				return sounds(mc).list.children().stream().map(row -> String.valueOf(row.key())).toList();
+			});
+			check(afterLeave.contains(ZOMBIE) && afterLeave.indexOf(ZOMBIE) < afterLeave.indexOf(VILLAGER),
+					"leaving the window catches up, was " + afterLeave);
 
-			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER);
-			context.waitTicks(SETTLE);
-			check(!context.computeOnClient(mc -> PointerPresence.outside()), "the window's enter event was seen");
-			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held again with the pointer back over the list");
+			context.runOnClient(mc -> {
+				windowEvent(mc, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER);
+				check(!PointerPresence.outside(), "the window's enter event was seen");
+				sounds(mc).refresh();
+				check(sounds(mc).isHeld(), "held again with the pointer back over the list");
+			});
 		} finally {
-			windowEvent(context, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER);
+			context.runOnClient(mc -> windowEvent(mc, SDLEvents.SDL_EVENT_WINDOW_MOUSE_ENTER));
 			pointAway(context);
 			cleanUp(context);
 		}
 	}
 
-	/** Sends the game window an SDL window event, as the system does when the pointer leaves or enters it. */
-	private static void windowEvent(ClientGameTestContext context, int type) {
-		context.runOnClient(mc -> {
-			try (SDL_Event event = SDL_Event.calloc()) {
-				event.type(type);
-				event.window().windowID(SDLVideo.SDL_GetWindowID(mc.getWindow().handle()));
-				check(SDLEvents.SDL_PushEvent(event), "SDL took the window event");
-			}
-		});
-		context.waitTicks(2);
+	/**
+	 * Hands the game window an SDL window event, as its event loop does when the system says the pointer left or entered
+	 * it. Called on the render thread. Fabric's game test framework cancels these two events in the same method, so a
+	 * desktop pointer cannot disturb tests; {@code WindowMixin} runs before it.
+	 */
+	private static void windowEvent(Minecraft mc, int type) {
+		try (SDL_Event event = SDL_Event.calloc()) {
+			event.type(type);
+			event.window().windowID(SDLVideo.SDL_GetWindowID(mc.getWindow().handle()));
+			mc.getWindow().handleEvent(event);
+		}
 	}
 
 	private static double[] listCentre(ClientGameTestContext context) {
