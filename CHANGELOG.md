@@ -3,6 +3,10 @@
 All notable changes to Sound Sculptor. Versions follow `major.minor.patch`, with `-alpha` or `-beta` for test releases.
 Each release ships one jar that runs on every supported Minecraft version.
 
+## 1.1.0 (unreleased)
+
+Nothing yet.
+
 ## 1.0.0 — 2026-11-22
 
 The first release, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-1.0.0+mc26.3.jar`.
