@@ -5,7 +5,8 @@ Each release ships one jar that runs on every supported Minecraft version.
 
 ## 1.1.0 (unreleased)
 
-Nothing yet.
+### Changes
+- A sharper mod icon, drawn smooth instead of pixel by pixel.
 
 ## 1.0.0 — 2026-11-22
 
