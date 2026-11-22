@@ -2,7 +2,7 @@ package soundsculptor.core.sets;
 
 /**
  * The winning entry for each property of one sound ID within one place's Sound Sets (PRD FR-4.5). A {@code null}
- * winner means no entry sets that property, so vanilla behavior applies (FR-9 step 7).
+ * winner means no entry sets that property, so vanilla behavior applies (FR-9 step 7), except Cue, which is then on.
  *
  * <p>Each winner comes with the ID of the set (layer) it won in: {@code ""} for a resolver built by
  * {@link EntryResolver#of}, and {@code null} when there is no winner. The ID is taken from the layer, not looked up
@@ -29,7 +29,11 @@ public record EntryResolution(SetEntry loudness, SetEntry limit, SetEntry cue,
 		return muted() ? 0 : volumePercent();
 	}
 
+	/**
+	 * Whether a muted sound shows a cue (FR-7.1): on unless the winning Cue setting is Off. No entry setting Cue means
+	 * on (owner decision 2026-11-21); the place's Show cues stays the main switch.
+	 */
 	public boolean cueOn() {
-		return cue != null && cue.cue();
+		return cue == null || cue.cue();
 	}
 }

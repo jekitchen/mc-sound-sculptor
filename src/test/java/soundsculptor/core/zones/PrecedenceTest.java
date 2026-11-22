@@ -229,7 +229,7 @@ class PrecedenceTest {
 		SoundDecision d = standingAt(precedence(List.of(), List.of(box("a", 0, 10, 5, 10))), 2);
 		assertEquals(100, d.volumePercent(), 1e-6);
 		assertNull(d.limit());
-		assertFalse(d.cueOn());
+		assertTrue(d.cueOn(), "no entry sets Cue, so it is on (owner decision 2026-11-21)");
 		assertNull(d.loudnessRule());
 	}
 
@@ -245,15 +245,17 @@ class PrecedenceTest {
 
 	@Test
 	void reusingTheDecisionObjectClearsOldResults() {
-		Zone a = box("a", 0, 10, 5, 10, villagers("ra").withMute(true).withLimit(new Limit(2, 1000, false)).withCue(true));
+		Zone a = box("a", 0, 10, 5, 10, villagers("ra").withMute(true).withLimit(new Limit(2, 1000, false)).withCue(false));
 		Precedence p = precedence(List.of(), List.of(a));
 		SoundDecision d = new SoundDecision();
 		p.decide(VILLAGER, at(p, WORLD, OVERWORLD, 2, 1, 1), d);
 		assertSame(a, d.loudnessZone());
+		assertFalse(d.cueOn());
 		p.decide(VILLAGER, at(p, WORLD, OVERWORLD, 50, 1, 1), d);
 		assertNull(d.loudnessZone());
 		assertNull(d.limit());
-		assertFalse(d.cueOn());
+		assertTrue(d.cueOn());
+		assertNull(d.cueRule());
 		assertEquals(100, d.volumePercent(), 1e-6);
 	}
 

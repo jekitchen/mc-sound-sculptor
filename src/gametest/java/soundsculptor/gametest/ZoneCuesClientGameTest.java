@@ -47,6 +47,8 @@ import soundsculptor.mc.ui.SculptScreen;
  *   <li>The zone editor's Cues… pop-up shows what an Unchanged setting gets and from where; a dropdown opened inside it
  *   comes back to the pop-up, and Save keeps the change. Everywhere's pop-up (Zones tab, Settings) has no Unchanged and
  *   saves at once; Right on the text size slider adds 10%.</li>
+ *   <li>Decided 2026-11-21: a mute whose entries leave Cue unset shows a cue; Cue off on an entry in a smaller zone stops
+ *   it there; a place with Show cues off shows none.</li>
  * </ul>
  */
 public final class ZoneCuesClientGameTest implements FabricClientGameTest {
@@ -80,6 +82,7 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 				checkNestedTextSizes(context, world);
 				checkTheZonePopup(context, world);
 				checkEverywheresPopup(context);
+				checkAMuteWithCueUnsetShowsACue(context, world, key);
 			} finally {
 				context.runOnClient(mc -> {
 					mc.gui.setScreen(null);
@@ -311,6 +314,41 @@ public final class ZoneCuesClientGameTest implements FabricClientGameTest {
 		context.runOnClient(mc -> main(mc).closeOverlay());
 		check(context.computeOnClient(mc -> main(mc).getFocused() == main(mc).cuesButton), "closing it puts focus back on the button");
 		context.setScreen(() -> null);
+	}
+
+	/**
+	 * Owner decision 2026-11-21: a muted sound shows a cue unless an entry sets Cue off, so a mute made before cues
+	 * existed (no Cue) shows one. A smaller zone's Cue off stops it there; a place's Show cues off is the main switch.
+	 */
+	private static void checkAMuteWithCueUnsetShowsACue(ClientGameTestContext context, TestSingleplayerContext world, String key) {
+		context.runOnClient(mc -> {
+			mc.gui.setScreen(null);
+			ProfileManager.update(p -> Profile.empty(p.name())
+					.withEverywhere(PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("q1", EXPLODE).withMute(true))))
+					.withZones(List.of(zone("base", "Main base", 20, key, PlaceCues.UNCHANGED),
+							new Zone("corner", "Reading corner", true, key, "minecraft:overworld", new Point(0.5, -60, 0.5),
+									new Shape.Box(4, 4, 4),
+									PlaceSets.EMPTY.withQuickEntries(List.of(SetEntry.of("c1", EXPLODE).withCue(false))),
+									PlaceCues.UNCHANGED))));
+			CueOverlay.clear();
+		});
+		check(context.computeOnClient(mc -> soundsculptor.core.quick.QuickActions.isCueOn(ProfileManager.workspace(), PlaceRef.EVERYWHERE, EXPLODE)),
+				"the Sounds tab shows Cue on for a mute that leaves Cue unset");
+		stand(context, world, IN_BASE_ONLY);
+		check(!play(context), "the explosion is muted");
+		check(shown(context).size() == 1, "a muted sound with Cue unset shows a cue, was " + shown(context));
+		stand(context, world, INSIDE);
+		context.runOnClient(mc -> CueOverlay.clear());
+		check(!play(context), "still muted in the corner");
+		check(shown(context).isEmpty(), "the corner's Cue off wins while you stand in it, was " + shown(context));
+		context.runOnClient(mc -> ProfileManager.update(p -> p.withCues(PlaceRef.zone("base"), PlaceCues.UNCHANGED.withShowCues(false))));
+		stand(context, world, IN_BASE_ONLY);
+		context.runOnClient(mc -> CueOverlay.clear());
+		play(context);
+		check(shown(context).isEmpty(), "a place with Show cues off shows no cue, was " + shown(context));
+		stand(context, world, OUTSIDE);
+		play(context);
+		check(shown(context).size() == 1, "out in Everywhere the cue shows again, was " + shown(context));
 	}
 
 	// ---- Helpers ----

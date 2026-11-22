@@ -76,7 +76,7 @@ class TraceTextTest {
 				"  Volume 60%",
 				"  No repeat limit",
 				"  Last play was allowed",
-				"  Cue off",
+				"  Cue on",
 				"  No cue was shown",
 				""), text);
 	}
