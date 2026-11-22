@@ -62,7 +62,11 @@ def draw_icon():
     ring_radius = S * 0.4
     ring_width = round(S * 0.045)
     dashes = 14
-    gap = 360 / dashes * 0.38
+    # The visible gap between two dashes, as a share of the icon's width; the rounded ends reach into the gap, so the arc
+    # leaves room for them too.
+    visible_gap = S * 0.0387
+    mid_radius = ring_radius - ring_width / 2
+    gap = math.degrees((visible_gap + ring_width) / mid_radius)
     glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     gl = ImageDraw.Draw(glow)
     for i in range(dashes):
