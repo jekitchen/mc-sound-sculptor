@@ -12,7 +12,8 @@ The first release, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-1
   for either, `-` to exclude, `"phrases"` and `*` wildcards (`villager -ambient`, `block.*.step`). Turn on **Recently
   played** to see only what you heard in the last 3 minutes, with its subtitle (or a readable name), category, play
   count, how long ago ("<1m ago", "2m ago"; hover for the exact time), a Close/Near/Far distance band (can be hidden)
-  and its status. The list holds still while you point at it; Pause and Sort. Every row has Mute, **Level, cue and
+  and its status. The list holds still while you point at it, also through a resize, and catches up once the
+  pointer leaves it or the game window; Pause and Sort. Every row has Mute, **Level, cue and
   limit…**, Edit entry, **Add to set…** and Why?. Press <kbd>;</kbd> to open (rebindable).
 - **Sound Sets:** a Sound Set is a named list of entries, each for one sound or a group of sounds
   (`minecraft:entity.villager.*`), that mute them, set their level (0 to 200%), give them a repeat limit or turn their
