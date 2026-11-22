@@ -4,20 +4,19 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Which profile a world uses (PRD FR-11.1). Each multiplayer server, Realm and singleplayer world has its own key:
+ * Which profile a world uses (PRD FR-11.1). Each multiplayer server and singleplayer world has its own key:
  * <ul>
  *   <li>{@link Kind#SERVER}: the server address as typed, in lowercase, without the default port 25565
  *       ({@code play.example.net}, {@code play.example.net:25570}, {@code [::1]}). DNS and SRV records are not looked up,
  *       so the key stays the same wherever the address points.</li>
- *   <li>{@link Kind#REALM}: {@code realms:<realm id>}.</li>
  *   <li>{@link Kind#WORLD}: {@code world:<ID from soundsculptor_id.txt>} (see {@link WorldIds}).</li>
  *   <li>{@link Kind#FOLDER}: {@code folder:<save folder name>}, used when soundsculptor_id.txt cannot be written; the
  *       Profiles tab says so.</li>
  * </ul>
  *
- * <p>Keys of different kinds never collide: a server address cannot contain {@code realms:}, {@code world:} or
- * {@code folder:} followed by anything but a port, and a server whose host is literally {@code realms}, {@code world}
- * or {@code folder} keeps a trailing dot before its port ({@code realms.:1}), which names the same host.
+ * <p>Keys of different kinds never collide: a server address cannot contain {@code world:} or {@code folder:} followed
+ * by anything but a port, and a server whose host is literally {@code world} or {@code folder} keeps a trailing dot
+ * before its port ({@code world.:1}), which names the same host.
  *
  * @param kind  where the key comes from
  * @param value the part after the kind's prefix (the whole key for servers)
@@ -27,7 +26,7 @@ public record WorldKey(Kind kind, String value) {
 	public static final int DEFAULT_PORT = 25565;
 
 	public enum Kind {
-		SERVER(""), REALM("realms:"), WORLD("world:"), FOLDER("folder:");
+		SERVER(""), WORLD("world:"), FOLDER("folder:");
 
 		private final String prefix;
 
@@ -59,14 +58,6 @@ public record WorldKey(Kind kind, String value) {
 	@Override
 	public String toString() {
 		return key();
-	}
-
-	/** The key for a Realm. */
-	public static WorldKey realm(long realmId) {
-		if (realmId < 0) {
-			throw new IllegalArgumentException("realm id " + realmId + " is negative");
-		}
-		return new WorldKey(Kind.REALM, Long.toString(realmId));
 	}
 
 	/** The key for a singleplayer world with the ID from its soundsculptor_id.txt. */
@@ -152,18 +143,13 @@ public record WorldKey(Kind kind, String value) {
 
 	/**
 	 * Reads a stored key back (from a profile file or a fixed zone). Never fails: anything that is not a well-formed
-	 * Realm, world or folder key is read as a server key, which matches only itself.
+	 * world or folder key is read as a server key, which matches only itself.
 	 */
 	public static WorldKey parse(String key) {
 		if (key == null || key.isEmpty()) {
 			throw new IllegalArgumentException("world key is empty");
 		}
-		if (key.startsWith(Kind.REALM.prefix)) {
-			String id = key.substring(Kind.REALM.prefix.length());
-			if (!id.isEmpty() && id.length() <= 19 && id.chars().allMatch(c -> c >= '0' && c <= '9')) {
-				return new WorldKey(Kind.REALM, id);
-			}
-		} else if (key.startsWith(Kind.WORLD.prefix)) {
+		if (key.startsWith(Kind.WORLD.prefix)) {
 			String id = key.substring(Kind.WORLD.prefix.length());
 			if (WorldIds.isValidId(id)) {
 				return new WorldKey(Kind.WORLD, id);

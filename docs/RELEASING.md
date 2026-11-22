@@ -26,7 +26,11 @@ both sites; the steps below prepare everything so that part is uploading files a
    - A vanilla server and singleplayer, with nothing installed on the server.
    - Noisy-farm stress test in game (PRD 11.2) with FPS from F3, and the 30-minute soak:
      `./gradlew runClientGameTest -Psoak=1800`.
-3. `mod_version` in [`gradle.properties`](../gradle.properties) is the version to release (e.g. `0.1.0-alpha`).
+
+   Done for 1.0.0: the owner ran the manual checklist on build 2618423 on 2026-11-22 (keyboard, GUI scales, narrator,
+   grayscale, Sodium and Iris with shader packs, the Sound Physics Remastered boost range, and listening checks), and
+   it passed.
+3. `mod_version` in [`gradle.properties`](../gradle.properties) is the version to release (e.g. `1.0.0`).
 4. [CHANGELOG.md](../CHANGELOG.md) has an entry for it; replace "(unreleased)" with the date.
 5. [MOD_PAGE.md](MOD_PAGE.md) matches what ships.
 6. The mod page screenshots in [`screenshots/`](screenshots/) show the current screens. To make them again (1920 x 1080,
@@ -38,8 +42,8 @@ both sites; the steps below prepare everything so that part is uploading files a
 Push a tag named after the version:
 
 ```sh
-git tag v0.1.0-alpha
-git push origin v0.1.0-alpha
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 One jar runs on every supported Minecraft version. The [release workflow](../.github/workflows/release.yml) builds it
@@ -66,9 +70,9 @@ Upload the jar once, **Versions → Create version**:
 
 | Field | Value |
 | --- | --- |
-| Version number | `0.1.0-alpha+mc26.3` (the jar's version) |
-| Version title | `Sound Sculptor 0.1.0-alpha` |
-| Release channel | Alpha |
+| Version number | `1.0.0+mc26.3` (the jar's version) |
+| Version title | `Sound Sculptor 1.0.0` |
+| Release channel | Release |
 | Loaders | Fabric |
 | Game versions | every supported Minecraft version: 26.3 and its 26.3.x releases |
 | Dependencies | Fabric API: required. Mod Menu: optional |
@@ -83,8 +87,8 @@ Upload the jar once, **Upload file**:
 
 | Field | Value |
 | --- | --- |
-| Display name | `Sound Sculptor 0.1.0-alpha` |
-| Release type | Alpha |
+| Display name | `Sound Sculptor 1.0.0` |
+| Release type | Release |
 | Game versions | every supported Minecraft version (26.3 and its point releases), plus **Fabric** and **Client** |
 | Related projects | Fabric API: required dependency. Mod Menu: optional dependency |
 | Changelog | the CHANGELOG.md entry (Markdown) |

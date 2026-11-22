@@ -42,7 +42,7 @@ class ProfileWorldKeyTest {
 
 	@Test
 	void theKeyIsAKnownFieldSoReadingGivesNoWarning() throws ProfileFormatException {
-		ProfileCodec.Read read = ProfileCodec.read(ProfileCodec.toJson(PROFILE, "realms:12"), version -> { });
+		ProfileCodec.Read read = ProfileCodec.read(ProfileCodec.toJson(PROFILE, "folder:Survival"), version -> { });
 		assertEquals(List.of(), read.warnings());
 		assertEquals(PROFILE, read.profile());
 	}
@@ -76,9 +76,10 @@ class ProfileWorldKeyTest {
 	@Test
 	void listGivesEveryProfileFileWithItsKey() throws IOException {
 		ProfileStore store = new ProfileStore(dir);
+		String world = "world:6f1c2a4e-0b7d-4f3a-9c51-2d8e7f6a1b30";
 		store.save("play.example.net:25570", PROFILE);
-		store.save("realms:12", PROFILE);
-		store.save("realms:12", PROFILE); // leaves a .bak, which is not a profile
+		store.save(world, PROFILE);
+		store.save(world, PROFILE); // leaves a .bak, which is not a profile
 		Files.writeString(dir.resolve("old.json"), ProfileCodec.toJson(PROFILE), StandardCharsets.UTF_8);
 		Files.writeString(dir.resolve("bad.json"), "{oops", StandardCharsets.UTF_8);
 		Files.writeString(dir.resolve("x.json.broken"), "{}", StandardCharsets.UTF_8);
@@ -89,7 +90,7 @@ class ProfileWorldKeyTest {
 				new ProfileStore.Stored(dir.resolve("bad.json"), null),
 				new ProfileStore.Stored(dir.resolve("old.json"), null),
 				new ProfileStore.Stored(store.fileFor("play.example.net:25570"), "play.example.net:25570"),
-				new ProfileStore.Stored(store.fileFor("realms:12"), "realms:12")), store.list());
+				new ProfileStore.Stored(store.fileFor(world), world)), store.list());
 	}
 
 	@Test

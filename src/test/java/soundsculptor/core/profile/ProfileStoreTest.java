@@ -161,7 +161,7 @@ class ProfileStoreTest {
 	void keysBecomeSafeFileNames() {
 		assertEquals("play.example.net", ProfileStore.safeName("play.example.net"));
 		assertEquals("world_1a2b", ProfileStore.safeName("World:1A2B"));
-		assertEquals("realms_123", ProfileStore.safeName("realms:123"));
+		assertEquals("play.example.net_25570", ProfileStore.safeName("play.example.net:25570"));
 		assertEquals("_..", ProfileStore.safeName(".."));
 		assertEquals("_", ProfileStore.safeName(""));
 	}

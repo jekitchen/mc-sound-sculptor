@@ -8,12 +8,12 @@ import org.junit.jupiter.api.Test;
 class DiagnosticsReportTest {
 	@Test
 	void reportNamesVersionsCountsAndTimings() {
-		DiagnosticsReport.Data data = new DiagnosticsReport.Data("0.1.0-alpha", "26.3", false, 5, 4, 12, 3, 2,
+		DiagnosticsReport.Data data = new DiagnosticsReport.Data("1.0.0", "26.3", false, 5, 4, 12, 3, 2,
 				new TimingWindow.Stats(310, 2.4, 41.0), 55.5,
 				new TimingWindow.Stats(20, 80.0, 150.0),
 				new TimingWindow.Stats(60, 120.0, 260.0), 0.987, 4);
 		String text = DiagnosticsReport.format(data);
-		assertTrue(text.contains("Sound Sculptor 0.1.0-alpha"), text);
+		assertTrue(text.contains("Sound Sculptor 1.0.0"), text);
 		assertTrue(text.contains("Minecraft 26.3"), text);
 		assertTrue(text.contains("Bypass: off"), text);
 		assertTrue(text.contains("Sound Sets: 5 in the library, 4 active"), text);
@@ -29,7 +29,7 @@ class DiagnosticsReportTest {
 
 	@Test
 	void bypassAndUnknownHitRateAreShownPlainly() {
-		DiagnosticsReport.Data data = new DiagnosticsReport.Data("0.1.0", "26.2", true, 0, 0, 0, 0, 0,
+		DiagnosticsReport.Data data = new DiagnosticsReport.Data("1.0.0", "26.2", true, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0);
 		String text = DiagnosticsReport.format(data);
 		assertTrue(text.contains("Bypass: on"), text);
@@ -38,7 +38,7 @@ class DiagnosticsReportTest {
 
 	@Test
 	void memoryIsShownAgainstTheBudget() {
-		DiagnosticsReport.Data data = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+		DiagnosticsReport.Data data = new DiagnosticsReport.Data("1.0.0", "26.3", false, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0,
 				3 * 512 * 1024);
 		assertTrue(DiagnosticsReport.format(data).contains("Memory (estimate): 1.5 MB of 8.0 MB"),
@@ -48,10 +48,10 @@ class DiagnosticsReportTest {
 	@Test
 	void repeatLimitsShowPlayedDroppedAndTheBusiestWindow() {
 		// FR-6 AC: "never more than 3 starting in any one second (diagnostics readout)".
-		DiagnosticsReport.Data none = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+		DiagnosticsReport.Data none = new DiagnosticsReport.Data("1.0.0", "26.3", false, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0);
 		assertTrue(DiagnosticsReport.format(none).contains("Repeat limits: none used yet"), DiagnosticsReport.format(none));
-		DiagnosticsReport.Data used = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+		DiagnosticsReport.Data used = new DiagnosticsReport.Data("1.0.0", "26.3", false, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0, -1,
 				new soundsculptor.core.limit.RepeatLimiter.Stats(90, 510, java.util.List.of(
 						new soundsculptor.core.limit.RepeatLimiter.Fullest(3, new soundsculptor.core.sets.Limit(3, 1000, false)),
@@ -62,7 +62,7 @@ class DiagnosticsReportTest {
 
 	@Test
 	void memoryIsNotApplicableWhenNotMeasured() {
-		DiagnosticsReport.Data data = new DiagnosticsReport.Data("0.1.0", "26.3", false, 0, 0, 0, 0, 0,
+		DiagnosticsReport.Data data = new DiagnosticsReport.Data("1.0.0", "26.3", false, 0, 0, 0, 0, 0,
 				TimingWindow.Stats.EMPTY, 0, TimingWindow.Stats.EMPTY, TimingWindow.Stats.EMPTY, Double.NaN, 0);
 		assertTrue(DiagnosticsReport.format(data).contains("Memory (estimate): n/a"), DiagnosticsReport.format(data));
 	}

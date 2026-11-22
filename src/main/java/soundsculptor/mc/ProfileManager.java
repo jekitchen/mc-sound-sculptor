@@ -37,7 +37,7 @@ import net.minecraft.network.chat.Component;
  * The active profile, the Sound Set library and the Bypass switch.
  *
  * <ul>
- *   <li>Each server, Realm and singleplayer world has its own profile, chosen by its world key when the player joins
+ *   <li>Each server and singleplayer world has its own profile, chosen by its world key when the player joins
  *   (FR-11.1) and stored as {@code config/soundsculptor/profiles/<key>.json} (FR-11.8). Outside a world no profile is
  *   loaded and every sound plays as in vanilla.</li>
  *   <li>The library of Sound Sets is shared by every world: loaded once at start from

@@ -3,126 +3,31 @@
 All notable changes to Sound Sculptor. Versions follow `major.minor.patch`, with `-alpha` or `-beta` for test releases.
 Each release ships one jar that runs on every supported Minecraft version.
 
-## 1.0.0 (in progress)
+## 1.0.0 — 2026-11-22
 
-Work toward 1.0, after the alpha. Not released yet.
-
-### Features
-- **Cues for muted sounds:** when a muted sound plays close enough that vanilla would show its subtitle, a line such as
-  "(muted) Explosion" appears in its own box just above the subtitles, bottom right, with vanilla's `<` or `>` arrow.
-  Lines are in italics, start with "(muted)" and a muted-speaker icon, merge repeats ("×4") and stop at 5. Like
-  subtitles, each line follows its latest play in range, hides while you are out of range, and fades over 3 seconds
-  times vanilla's Notification Time. It works with vanilla Subtitles on or off. A play dropped by a repeat limit never
-  shows a cue.
-- **Muted sounds leave vanilla's subtitle box:** a sound Sound Sculptor mutes (or sets to 0%) no longer shows a vanilla
-  subtitle; its cue is the only note, and with Cue off nothing shows. Vanilla's own volume sliders work as before.
-- **Cue setting on entries:** the entry editor has Cue (Unchanged, On, Off) under Mute. On the Sounds tab, a row's
-  Level… button is now **Level and cue…**, and its pop-up has a Cue toggle. Every entry line in "Why does it sound like
-  this?" has a Cue button. A new mute gets Cue on, unless New mutes get Cue is off where you stand.
-- **A muted sound shows a cue unless an entry turns it off:** where Show cues is on, a mute whose entries leave Cue
-  Unchanged, such as one made before cues existed, now shows a cue (it used to show none). Set Cue Off on an entry to
-  hide it, or turn Show cues off for a place.
-- **Cues are off until you turn them on:** Everywhere's Show muted-sound cues starts Off, so cues show only where you
-  turn them on: in Everywhere's Cues… (or with the cues hotkey), or in a zone's Cues…. Reset turns it off again, and
-  the old app-wide Show cues from development builds is not carried over.
-- **Cue settings per place:** Everywhere and every zone have the cue settings: Show muted-sound cues, Cue sounds without
-  subtitles (shows the sound's ID instead), New mutes get Cue, the cue text color (four named colors; the default is
-  light blue-gray), the text size (50 to 200%) and the cue box position (left/right and up/down, with a button to put
-  it back above the subtitles). Everywhere is the base. In a zone each one can stay **Unchanged**, which passes it on to
-  the next bigger zone you stand in and then Everywhere, the same way entries are decided; a smaller zone wins. Whether
-  a muted sound gets a cue is decided when it starts, from where you stand then; the color, size and position follow
-  where you stand now, for the whole box at once. The box always stays on screen.
-- **Cues… pop-up:** the zone editor and the Zones tab's Everywhere row have **Cues…**; in a zone, an Unchanged setting
-  says what it gets and from where ("Unchanged (On, from Main base)"). Settings › General and Accessibility say that
-  cue settings are set per zone and open Everywhere's. Settings › Accessibility (new page) keeps Reduced motion.
-- **Cues hotkey** (optional, in Controls, unbound by default): turns Show muted-sound cues on or off in the place that
-  decides it where you stand, and says which: "Muted-sound cues: Off in Main base".
-- A quick Cue change never turns a switched-off Quick changes entry back on.
-- **Repeat limits:** an entry can cap how often its sounds start, from 1 to 100 plays per 0.05 to 10 seconds, for
-  example "3 per 1 s" for villager mumbles. Plays over the limit are dropped. The count is shared by every matching
-  sound, or with **Per source** kept per block, so each villager can still be heard. Each place counts on its own, also
-  for a set attached in several places. A looping sound counts once, when it starts, and is never cut off. Each
-  per-source entry remembers up to 1,024 positions, and a busy entry never pushes out another's.
-- **Limit in the entry editor:** a new row under Level: Limit (Off by default), the count, "per", the window in seconds
-  and Per source, with a reset button. Cue moved beside Level to make room.
-- **Limited on the Sounds tab:** a row whose plays were dropped shows "⏸ Limited ×12" (the dropped count over the last 3
-  minutes; the play count counts only plays that started). Its **Level, cue and limit…** pop-up (was Level and cue…)
-  shows the sound's limit at the place and changes it in Quick changes. A typed count or window takes effect on Enter,
-  when you leave the field or when the pop-up closes; an empty or wrong value shows its error and changes nothing.
-- **Limit in "Why does it sound like this?":** the result says "Repeat limit: at most 3 per 1 s, shared" and whether
-  the last play was Limited. Each entry line's Level… panel has the entry's limit too.
-- **Settings › Diagnostics:** "Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit 3 per 1 s)", for the
-  three limits that came closest to their count, also in Copy report. Limits count afresh when you join another world
-  or server.
-- **Volume boost to 200%:** every level control (the entry editor, the Sounds row's pop-up and the Level… panel in "Why
-  does it sound like this?") now goes from 0 to 200%. Above 100% a warning icon and "May distort. Protect your
-  hearing." show under the slider, and the narrator reads it. The final loudness never goes above twice vanilla's full
-  volume, and Master at 0% still silences everything.
-- **Boost never adds range:** a boosted sound is louder only where vanilla already plays it. It fades to silence at
-  the same distance as in vanilla, and subtitles, cues and the Sounds list stop at the same distance too.
-- **Asked once per world:** the first time a change adds a level above 100% to a world or server (setting one or
-  raising one, attaching a set that has one, importing or copying one in), a dialog explains distortion and hearing
-  safety. Allow boost goes on, and is saved only with that change; Cancel changes nothing. Lowering a boost, or any
-  other change, never asks. A shared set made louder in another world plays at 100% here until you allow boost here:
-  the Sound Sculptor screen asks when it next opens.
-- **Audio devices that cannot boost:** if your audio device does not accept a gain above 1.0, levels above 100% play
-  at 100%, and the level controls say so.
-- "Why does it sound like this?" says "Above 100%: boost applied." or, when boost is off, that it plays at 100%.
-
-### Tests and compatibility
-- **Zone precedence matrix:** every case of PRD 11.4 (P1 to P20) runs as one client game test,
-  `PrecedenceMatrixClientGameTest`. Each case checks the level, mute and repeat limit, the zone named for the sound and
-  the deciding place, set and entry in "Why does it sound like this?", and prints a `MATRIX` line.
-- **Compatibility smoke test:** `./gradlew runClientGameTest -Pcompat=true` starts the game with Sodium, Iris (no
-  shader pack) and Sound Physics Remastered, pinned to their 26.3 builds. It opens the screen, mutes a sound from the
-  Sounds tab, checks its cue and a zone outline in a screenshot, and fails on any error from Sound Sculptor in the log.
-  CI runs it on every push.
-- `-Pgametests=<name>,<name>` runs only the named client game tests.
-- `./gradlew build` checks that the jar stays under 1 MB and holds only Sound Sculptor's own files.
-- The mod's description in `fabric.mod.json` now says it can boost and rate-limit sounds too.
-
-### Accessibility and translations
-- **Reduced motion** (Settings › Accessibility): messages at the bottom of the screen appear at once instead of
-  sliding in. It is saved with your other settings.
-- **Lists fit small windows and longer languages:** a list row that does not fit first hides less important text (a
-  profile's world key, a zone's size), then moves text onto another line, and puts its buttons on their own line when
-  even its name would be cut. Hidden text is in the row's tooltip, in its buttons' tooltips when you Tab to them, and
-  in what the narrator reads. On/Off and other states are never hidden. Rows without buttons wrap long text instead.
-  While the Sounds list holds still under the pointer, rows keep their height too.
-- **Settings › Diagnostics** scrolls instead of running past the bottom of a small window, with Copy report at the top;
-  long lines wrap.
-- **Easier to read over a bright sky:** every screen now darkens the world behind it more, the highlight on the row
-  with keyboard focus is softer, and the cue colors bluish green and reddish purple are no longer offered, so all text
-  keeps a contrast of at least 4.5:1. A color you already chose is kept, shown as "Bluish green (low contrast)" or
-  "Reddish purple (low contrast)".
-- **Ready for translation:** every text comes from the language file, including percentages, lists of names, the "Off"
-  in a zone's row and the names "Farm (copy)" and "Farm (imported)", and none is built from sentence pieces, so a
-  translation can put words in its own order.
-
-## 0.1.0-alpha (unreleased)
-
-First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-<version>+mc26.3.jar`.
+The first release, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-1.0.0+mc26.3.jar`.
 
 ### Features
 - **Sounds tab:** every sound the game knows, mods and resource packs included, narrowing as you type: plain words, `|`
   for either, `-` to exclude, `"phrases"` and `*` wildcards (`villager -ambient`, `block.*.step`). Turn on **Recently
   played** to see only what you heard in the last 3 minutes, with its subtitle (or a readable name), category, play
   count, how long ago ("<1m ago", "2m ago"; hover for the exact time), a Close/Near/Far distance band (can be hidden)
-  and its status. The list holds still while you point at it; Pause and Sort. Every row has Mute, Level…, Edit entry,
-  **Add to set…** and Why?. Press <kbd>;</kbd> to open (rebindable).
+  and its status. The list holds still while you point at it; Pause and Sort. Every row has Mute, **Level, cue and
+  limit…**, Edit entry, **Add to set…** and Why?. Press <kbd>;</kbd> to open (rebindable).
 - **Sound Sets:** a Sound Set is a named list of entries, each for one sound or a group of sounds
-  (`minecraft:entity.villager.*`), that mutes them or sets their level (0 to 100%). Sets live in a library on the
-  **Sound Sets** tab (New, Duplicate, Rename, Delete) and work in every world. Attach sets to **Everywhere** or to any
-  zone, as many as you like and in the order you choose: the higher set wins where two disagree, and inside a set the
-  more specific entry wins. A set attached in several places is linked: edit it once and every place changes. The set
-  editor's **Attached to** panel shows where a set is used, and Save says which places it will change.
+  (`minecraft:entity.villager.*`), that mute them, set their level (0 to 200%), give them a repeat limit or turn their
+  cue on or off. Sets live in a library on the **Sound Sets** tab (New, Duplicate, Rename, Delete) and work in every
+  world. Attach sets to **Everywhere** or to any zone, as many as you like and in the order you choose: the higher set
+  wins where two disagree, and inside a set the more specific entry wins. A set attached in several places is linked:
+  edit it once and every place changes. The set editor's **Attached to** panel shows where a set is used, and Save says
+  which places it will change.
 - **Building sets:** **Add sounds…** in the set editor opens the same Sounds list with a checkbox on each row. **Like
   this** offers a sound's groups, closest first, each with how many sounds it matches and its own Add. Type plain words
   in an entry's pattern field (`villager hurt`) to find a sound, then pick **This sound** or **Like this**. The entry
-  editor previews the sounds a pattern matches.
-- **Quick changes:** Mute, Level… and Edit entry on the Sounds tab go into the place's own **Quick changes**, a set that
-  belongs to Everywhere or to one zone and always comes first there. **Apply to** chooses the place: Everywhere, or a
-  zone you are standing in. Save Quick changes to the library to reuse them.
+  editor previews the sounds a pattern matches, and has Mute, Level with Cue (Unchanged, On, Off) beside it, and Limit.
+- **Quick changes:** Mute, Level, cue and limit… and Edit entry on the Sounds tab go into the place's own **Quick
+  changes**, a set that belongs to Everywhere or to one zone and always comes first there. **Apply to** chooses the
+  place: Everywhere, or a zone you are standing in. Save Quick changes to the library to reuse them.
 - **Zones:** boxes you draw by marking two corners in the world, then fine-tune side by side (Grow, Shrink), with the
   size shown while you mark. While your feet are in a zone, its Sound Sets decide how every sound you hear plays,
   wherever the sound comes from: mute rain, music and thunder in your base, and they come back as you walk out. Where
@@ -131,11 +36,55 @@ First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-
 - **How sounds are decided:** a sound is decided when it starts, by where you stand then. Looping sounds (a minecart
   rolling, bees, biome ambience) follow you in and out of zones and follow your edits at once. Music, UI clicks and
   Voice/Speech sounds can be changed too; vanilla's sliders still apply first.
+- **Volume boost to 200%:** every level control (the entry editor, the Sounds row's pop-up and the Level… panel in "Why
+  does it sound like this?") goes from 0 to 200%. Above 100% a warning icon and "May distort. Protect your hearing."
+  show under the slider, and the narrator reads it. The final loudness never goes above twice vanilla's full volume,
+  and Master at 0% still silences everything.
+- **Boost never adds range:** a boosted sound is louder only where vanilla already plays it. It fades to silence at
+  the same distance as in vanilla, and subtitles, cues and the Sounds list stop at the same distance too.
+- **Boost is asked once per world:** the first time a change adds a level above 100% to a world or server (setting one
+  or raising one, attaching a set that has one, importing or copying one in), a dialog explains distortion and hearing
+  safety. Allow boost goes on, and is saved only with that change; Cancel changes nothing. Lowering a boost, or any
+  other change, never asks. A shared set made louder in another world plays at 100% here until you allow boost here:
+  the Sound Sculptor screen asks when it next opens. If your audio device does not accept a gain above 1.0, levels
+  above 100% play at 100%, and the level controls say so.
+- **Repeat limits:** an entry can cap how often its sounds start, from 1 to 100 plays per 0.05 to 10 seconds, for
+  example "3 per 1 s" for villager mumbles. Plays over the limit are dropped. The count is shared by every matching
+  sound, or with **Per source** kept per block, so each villager can still be heard. Each place counts on its own, also
+  for a set attached in several places. A looping sound counts once, when it starts, and is never cut off. Each
+  per-source entry remembers up to 1,024 positions, and a busy entry never pushes out another's.
+- **Limits on the Sounds tab:** a row whose plays were dropped shows "⏸ Limited ×12" (the dropped count over the last 3
+  minutes; the play count counts only plays that started). Its **Level, cue and limit…** pop-up shows the sound's
+  limit at the place and changes it in Quick changes. A typed count or window takes effect on Enter, when you leave the
+  field or when the pop-up closes; an empty or wrong value shows its error and changes nothing.
+- **Cues for muted sounds:** when a muted sound plays close enough that vanilla would show its subtitle, a line such as
+  "(muted) Explosion" appears in its own box just above the subtitles, bottom right, with vanilla's `<` or `>` arrow.
+  Lines are in italics, start with "(muted)" and a muted-speaker icon, merge repeats ("×4") and stop at 5. Like
+  subtitles, each line follows its latest play in range, hides while you are out of range, and fades over 3 seconds
+  times vanilla's Notification Time. It works with vanilla Subtitles on or off. A sound Sound Sculptor mutes (or sets
+  to 0%) shows no vanilla subtitle, so its cue is the only note; a play dropped by a repeat limit shows neither.
+- **Cues are off until you turn them on:** Everywhere's Show muted-sound cues starts Off. Turn it on in Everywhere's
+  **Cues…** (on the Zones tab's Everywhere row, or from Settings › General and Accessibility), in a zone's Cues…, or
+  with the **cues hotkey** (optional, in Controls, unbound by default), which switches the place that decides where you
+  stand and says which: "Muted-sound cues: Off in Main base". Reset turns it off again.
+- **Cue settings per place:** Everywhere and every zone have Show muted-sound cues, Cue sounds without subtitles (shows
+  the sound's ID instead), New mutes get Cue, the cue text color (four named colors; the default is light blue-gray),
+  the text size (50 to 200%) and the cue box position (left/right and up/down, with a button to put it back above the
+  subtitles). Everywhere is the base. In a zone each one can stay **Unchanged**, which passes it on to the next bigger
+  zone you stand in and then Everywhere, the same way entries are decided; a smaller zone wins, and the Cues… pop-up
+  says what an Unchanged setting gets and from where ("Unchanged (On, from Main base)"). Whether a muted sound gets a
+  cue is decided when it starts, from where you stand then; the color, size and position follow where you stand now,
+  for the whole box at once. The box always stays on screen.
+- **Cue on each entry:** where Show cues is on, a muted sound shows a cue unless an entry sets Cue Off. The Sounds
+  row's pop-up has a Cue toggle, and every entry line in "Why does it sound like this?" has a Cue button. A new mute
+  gets Cue on, unless New mutes get Cue is off where you stand. A quick Cue change never turns a switched-off Quick
+  changes entry back on.
 - **"Why does it sound like this?"** For any sound: where you stood ("You were in: Pen → Base → Everywhere"), the sets
-  with a matching entry, which entry won and why, how many places use a linked set, and the final volume. Every entry
-  line has On/Off, Mute and Level, and every zone line has On/Off; changes save at once and the trace updates
-  ("Predicted for next play"). **Add to Quick changes** lifts a library set's mute in one place without changing the
-  set. Copy as text.
+  with a matching entry, which entry won and why, how many places use a linked set, the repeat limit ("Repeat limit: at
+  most 3 per 1 s, shared") and whether the last play was Limited, whether boost applied ("Above 100%: boost applied."),
+  and the final volume. Every entry line has On/Off, Mute, Cue and a Level… panel with the entry's level and limit,
+  and every zone line has On/Off; changes save at once and the trace updates ("Predicted for next play"). **Add to
+  Quick changes** lifts a library set's mute in one place without changing the set. Copy as text.
 - **Undo:** quick actions, set and zone list actions, and edits from "Why?" apply at once and show a 5-second toast with
   **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac).
 - **Profiles:** one per server and world, created on first join and kept across restarts. The **Profiles** tab lists
@@ -148,13 +97,37 @@ First public alpha, for Minecraft Java Edition 26.3 with Fabric: `soundsculptor-
   new name when one is taken, and zones made for another server are skipped. A broken file changes nothing.
 - **Bypass** (<kbd>F10</kbd>) puts every sound, playing ones included, back to vanilla at once. A broken setting or an
   error never stops a sound.
-- **Diagnostics:** sounds per second, time per sound, cache hit rate, memory, and Copy report.
+- **Diagnostics** (Settings › Diagnostics): sounds per second, time per sound, cache hit rate, memory, and the three
+  repeat limits that came closest to their count ("Repeat limits: 90 played, 510 dropped. Most in one window: 3 (limit
+  3 per 1 s)"; limits count afresh when you join another world or server). Copy report sits at the top, and the page
+  scrolls in a small window with long lines wrapped.
 - **Mod Menu** (optional) opens the Sound Sculptor screen.
+
+### Accessibility and translations
 - Keyboard-only use, narrator support, and layouts checked at GUI scales 1 to 4, down to 854 × 480.
+- **Reduced motion** (Settings › Accessibility): messages at the bottom of the screen appear at once instead of
+  sliding in. It is saved with your other settings.
+- **Lists fit small windows and longer languages:** a list row that does not fit first hides less important text (a
+  profile's world key, a zone's size), then moves text onto another line, and puts its buttons on their own line when
+  even its name would be cut. Hidden text is in the row's tooltip, in its buttons' tooltips when you Tab to them, and
+  in what the narrator reads. On/Off and other states are never hidden. Rows without buttons wrap long text instead.
+  While the Sounds list holds still under the pointer, rows keep their height too.
+- **Easy to read over a bright sky:** every screen darkens the world behind it, the highlight on the row with keyboard
+  focus is soft, and every cue color keeps a contrast of at least 4.5:1, as all text does.
+- **Ready for translation:** every text comes from the language file, including percentages, lists of names, the "Off"
+  in a zone's row and the names "Farm (copy)" and "Farm (imported)", and none is built from sentence pieces, so a
+  translation can put words in its own order.
 
 ### Fair play
 Sound Sculptor only changes how loud sounds are on your own computer, and never shows more than vanilla sounds and subtitles
-do. It sends nothing to servers. See "For server admins" in the README.
+do: boost never adds range, and cues show only for sounds within vanilla's subtitle range. It sends nothing to servers.
+See "For server admins" in the README.
+
+### Tested with
+Mod Menu (present and absent), Sodium, Iris with a shader pack and Sound Physics Remastered (boost range included); a
+vanilla server and singleplayer. Every case of the zone precedence matrix (PRD 11.4) runs as a client game test, a
+compatibility smoke test with Sodium, Iris and Sound Physics Remastered runs in CI, and the build checks that the jar
+stays under 1 MB and holds only Sound Sculptor's own files.
 
 ### For testers of earlier builds
 - The mod was called Audio Zone during development. Settings now live in `config/soundsculptor/`.
@@ -163,10 +136,8 @@ do. It sends nothing to servers. See "For server admins" in the README.
 - Minecraft 26.2 is no longer supported; earlier test builds ran on 26.2 too.
 - Zones follow where you stand instead of where a sound comes from. Outside mode and fade edges are gone (zones that
   used them load without them), and so are personal bubbles.
-
-### Tested with
-Mod Menu (present and absent), Sodium, Iris with a shader pack and Sound Physics Remastered; a vanilla server and
-singleplayer.
-
-### Not yet included (planned for 1.0)
-Volume boost above 100%, on-screen cues for muted sounds and repeat limits.
+- Cue settings moved from Settings to each place. The app-wide Show cues of earlier builds is not carried over, so
+  Everywhere's starts Off; the other old cue settings are. A mute made before cues existed shows a cue where cues are
+  on; set Cue Off on its entry to hide it.
+- The cue colors bluish green and reddish purple are no longer offered. One you already chose is kept, shown as
+  "Bluish green (low contrast)" or "Reddish purple (low contrast)".
