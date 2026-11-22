@@ -6,9 +6,9 @@ and the README's "For server admins" section.
 
 **Summary** (Modrinth's one-line summary and CurseForge's short description, under 256 characters):
 
-> Mute, turn down, boost or rate-limit any sound, everywhere or only while you stand in zones you draw, without ever
-> hearing more than vanilla allows.
-> Client-only, nothing sent to servers.
+> Draw zones in your world and give each its own soundscape: mute, quiet, boost or rate-limit any sound only while you
+> stand inside, so your farm, base and mine each sound the way you want. Client-only, never more than vanilla lets you
+> hear.
 
 ---
 
