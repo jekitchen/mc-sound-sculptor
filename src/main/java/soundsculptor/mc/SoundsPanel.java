@@ -278,13 +278,12 @@ public final class SoundsPanel {
 	public void build(SculptScreen.Body body) {
 		SoundsPanel before = replaced;
 		replaced = null;
-		if (before != null) {
+		if (before != null && before.pointerMoved) {
 			// The same mouse on the same screen: a pointer that had moved still counts as moved.
-			pointerMoved = before.pointerMoved;
-			restX = before.restX;
-			restY = before.restY;
+			pointerMoved = true;
 			seenKeyPresses = before.seenKeyPresses;
 		} else {
+			// A resting pointer rests where it is now: a resize can move it in the window without the player moving it.
 			restPointer();
 		}
 		Font font = Minecraft.getInstance().font;
@@ -355,7 +354,7 @@ public final class SoundsPanel {
 		for (SculptList.Row row : list.children()) {
 			CachedRow cached = row.key() instanceof String id ? rowCache.get(id) : null;
 			if (cached != null) {
-				sources.add(cached.source());
+				sources.add(cached.latest());
 			}
 		}
 		return sources;
@@ -628,7 +627,7 @@ public final class SoundsPanel {
 					if (shown.key() instanceof String id && !foundIds.contains(id)) {
 						CachedRow old = rowCache.containsKey(id) ? rowCache.get(id) : previous.get(id);
 						if (old != null) {
-							rows.add(cachedRow(old.source(), log).row());
+							rows.add(cachedRow(old.latest(), log).row());
 						}
 					}
 				}
@@ -703,6 +702,10 @@ public final class SoundsPanel {
 
 	/** A built row, what it was built from, and its recent values ({@code null} for a row without recent data). */
 	private record CachedRow(Object inputs, SculptList.Row row, LiveRecent live, BrowserRow source) {
+		/** What the row shows now: its source with the latest recent values, which refreshes update in place. */
+		BrowserRow latest() {
+			return live == null || live.row == source.recent() ? source : new BrowserRow(source.soundId(), source.subtitle(), live.row);
+		}
 	}
 
 	/** The cached row for a browser row, rebuilt if what it is built from changed. */

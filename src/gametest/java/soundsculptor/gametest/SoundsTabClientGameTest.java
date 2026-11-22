@@ -344,6 +344,22 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			context.waitTicks(SETTLE);
 			check(!context.computeOnClient(mc -> sounds(mc).isHeld()), "after a key press a rebuild does not keep the hold");
 			check(before(context, COW, VILLAGER) && before(context, ZOMBIE, VILLAGER), "not held: the list catches up, was " + keys(context));
+
+			// A held row whose sound left the log is rebuilt with its latest values, not those it was first built with.
+			play(context, ZOMBIE, 3.0);
+			double[] at = listCentre(context);
+			context.getInput().setCursorPos(at[0] + 3, at[1]);
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "held again once the mouse moves");
+			check(rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×3")), "the zombie row shows its third play, was "
+					+ rowTexts(context, ZOMBIE));
+			context.runOnClient(mc -> RecentLog.get().sounds().clear());
+			context.waitTicks(SETTLE);
+			context.runOnClient(mc -> mc.gui.screen().resize(mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight()));
+			context.waitTicks(SETTLE);
+			check(context.computeOnClient(mc -> sounds(mc).isHeld()), "still held after a resize with the log empty");
+			check(rowTexts(context, ZOMBIE) != null && rowTexts(context, ZOMBIE).stream().anyMatch(t -> t.contains("×3")),
+					"a kept row keeps its latest play count through a rebuild, was " + rowTexts(context, ZOMBIE));
 		} finally {
 			pointAway(context);
 			cleanUp(context);
