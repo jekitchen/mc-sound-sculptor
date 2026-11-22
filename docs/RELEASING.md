@@ -63,7 +63,7 @@ Sculptor screen.
 ## 3. Modrinth
 
 Project settings (once): client side **required**, server side **unsupported**; license MIT; source and issue links to
-the GitHub repository; icon `src/main/resources/assets/soundsculptor/icon.png`; description from MOD_PAGE.md; gallery
+the GitHub repository; icon `docs/icon-512.png` (512 px; `tools/make_mod_icon.py` draws it and the 128 px in-game `icon.png`); description from MOD_PAGE.md; gallery
 from `docs/screenshots/` (the world view first, as the featured image).
 
 Upload the jar once, **Versions → Create version**:
