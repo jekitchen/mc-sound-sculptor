@@ -777,6 +777,8 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 				ws.library().put(quietZombies).put(quietCows))));
 		open(context);
 		try {
+			// Background music is listed too and may start at any time: show only the three entity sounds.
+			search(context, "entity");
 			play(context, VILLAGER, 3.0);
 			play(context, ZOMBIE, 3.0);
 			play(context, COW, 3.0);
@@ -801,7 +803,7 @@ public final class SoundsTabClientGameTest implements FabricClientGameTest {
 			search(context, "villager ambient");
 			check(keys(context).contains(VILLAGER), "with the filter off, muted sounds are listed");
 			check(context.computeOnClient(mc -> !sounds(mc).hideMutedToggle.visible), "Hide muted is hidden with the filter off");
-			search(context, "");
+			search(context, "entity");
 			context.runOnClient(mc -> sounds(mc).setRecentOnly(true));
 			reopen(context);
 			check(context.computeOnClient(mc -> sounds(mc).isHideMuted() && sounds(mc).hideMutedToggle.value()),
