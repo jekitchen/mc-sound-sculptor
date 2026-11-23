@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
+import java.util.Set;
 
 import soundsculptor.core.recent.DistanceBand;
 import soundsculptor.core.recent.PlayStatus;
@@ -45,6 +46,14 @@ class SoundBrowserTest {
 		assertEquals(List.of(ZOMBIE.id()), ids(recentOnly("zombie", SortOrder.MOST_RECENT)));
 		assertEquals(List.of(AMBIENT.id()), ids(recentOnly("mumbles", SortOrder.MOST_RECENT)));
 		assertEquals(List.of(), ids(recentOnly("hurt", SortOrder.MOST_RECENT)));
+	}
+
+	@Test
+	void hideMutedKeepsTheRestInOrder() {
+		List<BrowserRow> rows = SoundBrowser.rows(RECENT, ALL, SearchQuery.parse(""), true, SortOrder.MOST_RECENT);
+		assertEquals(List.of(AMBIENT.id()), ids(SoundBrowser.withoutMuted(rows, Set.of(ZOMBIE.id())::contains)));
+		assertEquals(List.of(ZOMBIE.id(), AMBIENT.id()), ids(SoundBrowser.withoutMuted(rows, id -> false)));
+		assertEquals(List.of(), ids(SoundBrowser.withoutMuted(rows, id -> true)));
 	}
 
 	@Test

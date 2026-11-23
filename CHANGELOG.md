@@ -5,7 +5,10 @@ Each release ships one jar that runs on every supported Minecraft version.
 
 ## 1.1.0 (unreleased)
 
-Nothing yet.
+### Features
+- **Hide muted** on the Sounds tab: with Recently played on, leave out every sound already muted where you stand, so
+  the rare and left-over sounds are easy to find once most of your sorting is done. A sound you mute from its row
+  leaves the list too. It stays on while the game runs and starts off the next time you play.
 
 ## 1.0.0 — 2026-11-22
 

@@ -76,9 +76,13 @@ import soundsculptor.mc.ui.Tooltips;
  * (a resize, coming back from Edit) keeps the hold if the pointer is still over the list: the new panel starts from
  * the old one's rows and scroll position.
  *
- * <p>The filter, search text, sort, pause and Apply to choice are remembered while the game runs, apart for the tab and
- * the picker, so the picker never changes the tab's filter: the filter starts on the first time each opens and then
- * stays as the player left it. The list refreshes at most 4 times a second
+ * <p>With the filter on, Hide muted (the Sounds tab only) leaves out the sounds the rules where the player stands now
+ * mute, whatever Apply to chose, so the sounds still left to sort out stand out (FR-1.3). It is a quick filter, not a
+ * setting: remembered like the others, never saved.
+ *
+ * <p>The filter, search text, sort, pause, Hide muted and Apply to choice are remembered while the game runs, apart for
+ * the tab and the picker, so the picker never changes the tab's filter: the filter starts on the first time each opens
+ * and then stays as the player left it. The list refreshes at most 4 times a second
  * (FR-1.6), each refresh building one recent snapshot and one mute predicate for every row; search waits 150 ms after
  * typing stops (FR-3.4).
  */
@@ -126,6 +130,8 @@ public final class SoundsPanel {
 	public SculptTextField searchField;
 	public SculptButton helpButton;
 	public SculptToggle recentToggle;
+	/** Hide muted (FR-1.3): shown with the filter on, on the Sounds tab only. */
+	public SculptToggle hideMutedToggle;
 	/** "Apply to" (FR-1.5, FR-3.7), with the filter on or off. */
 	public SculptDropdown<ApplyTarget> applyToDropdown;
 	/** Shown only while the filter is on (FR-1.3). */
@@ -168,6 +174,15 @@ public final class SoundsPanel {
 	private boolean shownDistance;
 	private SearchQuery shownQuery;
 	private boolean shownRecentOnly;
+	private boolean shownHideMuted;
+	/**
+	 * With Hide muted on: where the player stood ({@link soundsculptor.core.zones.WhereYouAre#version}) and whether Sound
+	 * Sculptor was bypassed.
+	 */
+	private long shownWhereVersion = -1;
+	private boolean shownBypassed;
+	/** Rows Hide muted left out of the last refresh. */
+	private int hiddenMuted;
 	private SortOrder shownSort;
 	private long shownSecond;
 	private boolean shownAnyRecent;
@@ -251,6 +266,8 @@ public final class SoundsPanel {
 	/** Remembered while the game runs (FR-1.0, FR-1.3, FR-1.5). */
 	private static final class Remembered {
 		boolean recentOnly;
+		/** Hide muted (FR-1.3); the picker never uses it. */
+		boolean hideMuted;
 		String searchText;
 		SortOrder sort;
 		boolean paused;
@@ -265,6 +282,7 @@ public final class SoundsPanel {
 
 		void reset() {
 			recentOnly = true;
+			hideMuted = false;
 			searchText = "";
 			sort = SortOrder.MOST_RECENT;
 			paused = false;
@@ -311,6 +329,7 @@ public final class SoundsPanel {
 		body.label(this::countText);
 		list = new SculptList(body.width(), 100, Component.translatable("soundsculptor.sounds.list"));
 		list.setEmptyText(() -> Component.translatable(!state.recentOnly ? "soundsculptor.sounds.empty"
+				: hiddenMuted > 0 ? "soundsculptor.sounds.empty_recent_muted"
 				: query.isEmpty() ? "soundsculptor.sounds.empty_recent" : "soundsculptor.sounds.empty_recent_filtered"));
 		body.fill(list);
 
@@ -322,6 +341,7 @@ public final class SoundsPanel {
 			// What the old rows were built from: the same search, filter and sort (they are remembered), and its Apply to.
 			shownQuery = query;
 			shownRecentOnly = before.shownRecentOnly;
+			shownHideMuted = before.shownHideMuted;
 			shownSort = before.shownSort;
 			shownTarget = before.shownTarget;
 		}
@@ -360,7 +380,7 @@ public final class SoundsPanel {
 		return sources;
 	}
 
-	/** Apply to, Pause and Sort (the Sounds tab only). */
+	/** Apply to, Pause, Sort and Hide muted (the Sounds tab only). */
 	private void buildPlaceRow(SculptScreen.Body body) {
 		pauseToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(Component.translatable("soundsculptor.sounds.pause")),
 				Component.translatable("soundsculptor.sounds.pause"), state.paused, this::setPaused),
@@ -368,17 +388,20 @@ public final class SoundsPanel {
 		sortDropdown = Tooltips.describe(new SculptDropdown<>(sortWidth(), Component.translatable("soundsculptor.sounds.sort"),
 				List.of(SortOrder.values()), SoundsPanel::sortName, state.sort, this::setSort),
 				Component.translatable("soundsculptor.sounds.sort.tip"));
+		hideMutedToggle = Tooltips.describe(new SculptToggle(SculptToggle.widthFor(Component.translatable("soundsculptor.sounds.hide_muted")),
+				Component.translatable("soundsculptor.sounds.hide_muted"), state.hideMuted, this::setHideMuted),
+				Component.translatable("soundsculptor.sounds.hide_muted.tip"));
 		applyChoices = computeApplyChoices();
 		Component applyLabel = Component.translatable("soundsculptor.sounds.apply_to");
-		int share = Math.max(MIN_APPLY_TO_WIDTH,
-				Math.min(MAX_APPLY_TO_WIDTH, body.width() - pauseToggle.getWidth() - sortDropdown.getWidth() - 2 * Theme.GAP));
+		int share = Math.max(MIN_APPLY_TO_WIDTH, Math.min(MAX_APPLY_TO_WIDTH,
+				body.width() - pauseToggle.getWidth() - sortDropdown.getWidth() - hideMutedToggle.getWidth() - 3 * Theme.GAP));
 		// Never narrower than "Apply to: Everywhere" in full; a long zone name is cut instead.
 		int applyWidth = Math.max(share, SculptDropdown.widthFor(applyLabel, List.of(applyName(ApplyTarget.EVERYWHERE))));
 		applyToDropdown = Tooltips.describe(new SculptDropdown<>(applyWidth, applyLabel, applyChoices, SoundsPanel::applyName,
 				applyTarget(), this::setApplyTarget), Component.translatable("soundsculptor.sounds.apply_to.tip"));
-		// Pause and Sort keep their place while hidden, so turning the filter on or off moves nothing else. When the
-		// three do not fit on one line (a narrow window, a longer translation), Sort and then Pause move to the next.
-		body.flow(applyToDropdown, pauseToggle, sortDropdown);
+		// Pause, Sort and Hide muted keep their place while hidden, so turning the filter on or off moves nothing else.
+		// When they do not fit on one line (a narrow window, a longer translation), the last ones move to the next.
+		body.flow(applyToDropdown, pauseToggle, sortDropdown, hideMutedToggle);
 		showFilterControls();
 	}
 
@@ -402,6 +425,7 @@ public final class SoundsPanel {
 		if (pauseToggle != null) {
 			pauseToggle.visible = state.recentOnly;
 			sortDropdown.visible = state.recentOnly;
+			hideMutedToggle.visible = state.recentOnly;
 		}
 	}
 
@@ -442,6 +466,27 @@ public final class SoundsPanel {
 			sortDropdown.setValue(value);
 		}
 		refresh();
+	}
+
+	public boolean isHideMuted() {
+		return state.hideMuted;
+	}
+
+	/**
+	 * Hide muted (FR-1.3): with the filter on, leaves out the sounds the rules where the player stands now mute.
+	 * Remembered while the game runs, like the filter; never saved.
+	 */
+	public void setHideMuted(boolean value) {
+		state.hideMuted = value;
+		if (hideMutedToggle != null) {
+			hideMutedToggle.setValue(value);
+		}
+		refresh();
+	}
+
+	/** How many recent sounds Hide muted leaves out now. */
+	public int hiddenMuted() {
+		return hiddenMuted;
 	}
 
 	public String searchText() {
@@ -557,9 +602,15 @@ public final class SoundsPanel {
 		ApplyTarget target = applyTarget();
 		boolean distance = SoundSculptorSettings.showDistance();
 		long second = now / 1000;
+		// Hide muted counts only with the filter on, and only on the Sounds tab. What it hides follows where the player
+		// stands, so a step into or out of a zone refreshes.
+		boolean hideMuted = picker == null && state.recentOnly && state.hideMuted;
+		long whereVersion = hideMuted ? SoundHook.where().version() : -1;
+		boolean bypassed = hideMuted && ProfileManager.isBypassed();
 		// Held while the pointer is over a list with rows, unless the player changed what it lists: their own search,
-		// filter, sort or Apply to shows at once.
-		boolean ownChange = query != shownQuery || state.recentOnly != shownRecentOnly || state.sort != shownSort || !target.equals(shownTarget);
+		// filter, sort, Hide muted or Apply to shows at once.
+		boolean ownChange = query != shownQuery || state.recentOnly != shownRecentOnly || hideMuted != shownHideMuted
+				|| state.sort != shownSort || !target.equals(shownTarget);
 		// The first refresh after a rebuild that keeps the hold starts from the old panel's rows (see build).
 		boolean hold = !ownChange && (heldBefore != null ? !heldBefore.isEmpty() : pointing() && !list.children().isEmpty());
 		// workspace() is a new record each call: compare its parts, which change identity only when changed.
@@ -569,6 +620,7 @@ public final class SoundsPanel {
 			previous = hold ? new HashMap<>(rowCache) : Map.of();
 			rowCache.clear();
 		} else if (log.generation() == shownGeneration && query == shownQuery && state.recentOnly == shownRecentOnly && state.sort == shownSort
+				&& hideMuted == shownHideMuted && whereVersion == shownWhereVersion && bypassed == shownBypassed
 				&& pickVersion == shownPickVersion && hold == shownHeld && (!shownAnyRecent || second == shownSecond)) {
 			return;
 		}
@@ -578,6 +630,9 @@ public final class SoundsPanel {
 		shownDistance = distance;
 		shownQuery = query;
 		shownRecentOnly = state.recentOnly;
+		shownHideMuted = hideMuted;
+		shownWhereVersion = whereVersion;
+		shownBypassed = bypassed;
 		shownSort = state.sort;
 		shownPickVersion = pickVersion;
 		shownSecond = second;
@@ -585,6 +640,12 @@ public final class SoundsPanel {
 		// Read after the snapshot, which drops expired rows.
 		shownGeneration = log.generation();
 		List<BrowserRow> found = SoundBrowser.rows(recent, entries, query, state.recentOnly, state.sort);
+		hiddenMuted = 0;
+		if (hideMuted) {
+			int all = found.size();
+			found = SoundBrowser.withoutMuted(found, SoundHook.mutedHereNow());
+			hiddenMuted = all - found.size();
+		}
 		refreshMuted = null;
 		boolean anyRecent = false;
 		List<SculptList.Row> rows = new ArrayList<>(found.size());

@@ -54,14 +54,14 @@ public final class M4ClientGameTest implements FabricClientGameTest {
 			});
 			check(context.computeOnClient(mc -> screen(mc).getNarrationMessage().getString()).contains("Sound Sculptor"), "screen title");
 
-			// Mute from the list, with the keyboard only: Tab from Sort (the last toolbar control) into the list, Enter on the
-			// row's Mute button.
+			// Mute from the list, with the keyboard only: Tab from Hide muted (the last toolbar control) into the list, Enter on
+			// the row's Mute button.
 			check(play(context, VILLAGER, SoundSource.NEUTRAL, 3.0), "an unmuted villager sound should start");
 			// Background music is listed too (every sound is in scope) and can be the newest row, so show only the villager:
 			// otherwise Tab could land on the music row, whose button also says Mute.
 			context.runOnClient(mc -> screen(mc).sounds().searchField.setValue(VILLAGER));
 			context.waitTicks(SoundsPanel.REFRESH_TICKS + 1);
-			context.runOnClient(mc -> screen(mc).setFocused(screen(mc).sounds().sortDropdown));
+			context.runOnClient(mc -> screen(mc).setFocused(screen(mc).sounds().hideMutedToggle));
 			context.getInput().pressKey(InputConstants.KEY_TAB);
 			context.waitTicks(2);
 			String label = context.computeOnClient(mc -> {

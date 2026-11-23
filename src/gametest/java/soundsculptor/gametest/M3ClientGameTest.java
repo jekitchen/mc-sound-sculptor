@@ -80,9 +80,9 @@ public final class M3ClientGameTest implements FabricClientGameTest {
 			context.runOnClient(mc -> sounds(mc).setPaused(true));
 			play(context, ANVIL, SoundSource.BLOCKS, 2.0);
 			check(rowTexts(context, ANVIL) == null, "a paused list must not change");
-			// Tab order: search field, ?, Recently played, Apply to, Pause, Sort, then the list.
+			// Tab order: search field, ?, Recently played, Apply to, Pause, Sort, Hide muted, then the list.
 			context.runOnClient(mc -> screen(mc).setFocused(sounds(mc).searchField));
-			for (int i = 0; i < 6; i++) {
+			for (int i = 0; i < 7; i++) {
 				context.getInput().pressKey(InputConstants.KEY_TAB);
 			}
 			context.waitTicks(2);
